@@ -1,0 +1,63 @@
+import { ARTICULATION_LISTS } from '../../core/articulation/index.js';
+
+const TEXT_PARTS = ['family', 'size', 'weight', 'leading'] as const;
+
+/** The surface token each elevation draws on; `flat` stays on the base surface */
+const SURFACE: Readonly<Record<(typeof ARTICULATION_LISTS.elevation)[number], string>> = {
+    flat: 'base',
+    raised: 'raised',
+    overlay: 'overlay'
+};
+
+function rule(attribute: string, value: string, declarations: readonly [string, string][]): string {
+    const body = declarations.map(([name, token]) => `    ${name}: var(${token});`).join('\n');
+    return `:host([${attribute}=${value}]) {\n${body}\n}`;
+}
+
+/**
+ * The shared articulation stylesheet, built from the closed lists. Each attribute `<sui-node>` reflects becomes
+ * local custom properties on the host: `tone` gives `--tone`, `--tone-soft` and `--tone-on`; `size` gives
+ * `--control-height` and `--icon-size`; `elevation` gives `--surface` and `--shadow`; `textRole` gives
+ * `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `hidden` removes the host from layout.
+ * `variant` and `density` have no rule here: a variant is painted by the component's own CSS and density has its own
+ * stylesheet. The build prepends this text to every root component's CSS, so the tone table lives only here
+ */
+export function generateSharedSheet(): string {
+    const rules: string[] = [];
+    for (const tone of ARTICULATION_LISTS.tone) {
+        rules.push(
+            rule('tone', tone, [
+                ['--tone', `--ui-color-${tone}-base`],
+                ['--tone-soft', `--ui-color-${tone}-soft`],
+                ['--tone-on', `--ui-color-${tone}-on`]
+            ])
+        );
+    }
+    for (const size of ARTICULATION_LISTS.size) {
+        rules.push(
+            rule('size', size, [
+                ['--control-height', `--ui-size-control-${size}`],
+                ['--icon-size', `--ui-size-icon-${size}`]
+            ])
+        );
+    }
+    for (const elevation of ARTICULATION_LISTS.elevation) {
+        rules.push(
+            rule('elevation', elevation, [
+                ['--surface', `--ui-color-surface-${SURFACE[elevation]}`],
+                ['--shadow', `--ui-elevation-${elevation}-shadow`]
+            ])
+        );
+    }
+    for (const role of ARTICULATION_LISTS.textRole) {
+        rules.push(
+            rule(
+                'text-role',
+                role,
+                TEXT_PARTS.map((part) => [`--text-${part}`, `--ui-text-${role}-${part}`] as [string, string])
+            )
+        );
+    }
+    rules.push(':host([hidden]) {\n    display: none;\n}');
+    return `${rules.join('\n')}\n`;
+}

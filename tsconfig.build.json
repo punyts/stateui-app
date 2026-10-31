@@ -2,7 +2,8 @@
     "extends": "./tsconfig.json",
     "include": [
         "src",
-        "src/core/theme/*.json"
+        "src/core/theme/*.json",
+        "src/core/theme/overlays/*.json"
     ],
     "exclude": [
         "src/**/*.test.ts",

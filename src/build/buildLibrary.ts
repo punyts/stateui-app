@@ -18,6 +18,7 @@ import { loadStateUI } from './dom.js';
 import type { StateUIModule } from './dom.js';
 import { emitIndex, emitIndexTypes, emitModule, emitModuleTypes } from './emit.js';
 import { buildFailure } from './failures.js';
+import { SHARED_SHEET_LINES, prependSharedSheet } from './sharedSheet.js';
 import { emitOverlay, inFile, overlayFileName, readOverlay } from './overlays.js';
 import type { ReadOverlay } from './overlays.js';
 import type { BuildOptions, BuildResult, BuiltComponent } from './types.js';
@@ -31,6 +32,12 @@ async function listFiles(root: string, relative = ''): Promise<string[]> {
         else if (entry.isFile()) paths.push(path);
     }
     return paths.sort();
+}
+
+/** The prepended shared sheet shifts the lines StateUI reports; this puts them back on the lines of the file */
+function withoutSharedSheet(problem: BuildError): BuildError {
+    if (problem.line === undefined) return problem;
+    return { ...problem, line: Math.max(1, problem.line - SHARED_SHEET_LINES) };
 }
 
 interface Compiled {
@@ -85,16 +92,18 @@ async function compileComponent(
         if (problems.length === 0) files.set(overlayFileName(component.name, code), emitOverlay(read.overlay));
     }
 
-    let css = cssSource;
-    if (cssFile !== undefined && cssSource !== undefined) {
-        const context = { component: component.name, file: cssFile };
-        for (const check of options.cssChecks ?? []) errors.push(...check(cssSource, context));
-        for (const transform of options.cssTransforms ?? []) css = transform(css as string, context);
+    // A component without a stylesheet still gets the shared one, under the file name the convention would give it
+    const styleFile = cssFile ?? viewFile.replace(/\.html$/, '.css');
+    let css: string | undefined = cssFile === undefined ? '' : cssSource;
+    if (css !== undefined) {
+        const context = { component: component.name, file: styleFile };
+        if (cssSource !== undefined) for (const check of options.cssChecks ?? []) errors.push(...check(cssSource, context));
+        for (const transform of [prependSharedSheet, ...(options.cssTransforms ?? [])]) css = transform(css, context);
     }
 
-    if (view !== undefined && (cssFile === undefined || css !== undefined)) {
-        const styles = cssFile === undefined ? undefined : { file: cssFile, text: css as string };
-        errors.push(...compileCheck(stateui, { file: viewFile, text: view }, styles));
+    if (view !== undefined && css !== undefined) {
+        const problems = compileCheck(stateui, { file: viewFile, text: view }, { file: styleFile, text: css });
+        errors.push(...problems.map((problem) => (problem.file === styleFile ? withoutSharedSheet(problem) : problem)));
     }
 
     let hasController = false;

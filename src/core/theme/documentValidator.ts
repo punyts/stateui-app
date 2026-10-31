@@ -2,6 +2,9 @@ import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { registerDocumentValidator } from '../validate/registry.js';
 import type { DocumentValidationContext } from '../validate/types.js';
+import { buildOverlayCatalog, hasOverlay } from './overlays/catalog.js';
+import { SYSTEM, SYSTEM_KINDS, isOverlayKind } from './overlays/types.js';
+import { overlayError } from './overlays/validate.js';
 import { validateTokens } from './validate.js';
 
 /** The name the theme validator is registered under; a later story that extends it registers this name again */
@@ -40,4 +43,28 @@ export function validateThemeTokens(context: DocumentValidationContext): BuildEr
     return errors;
 }
 
-registerDocumentValidator(THEME_VALIDATOR, validateThemeTokens);
+/**
+ * Checks the document's overlays: every entry of `themes` (`buildOverlayCatalog`: kind, groups, values, clashes) and
+ * every name in `theme.active`, which must be an overlay of its kind in the shipped set plus `themes`, or `system` for
+ * `mode` and `motion`. An unknown kind or name is `SUI-THEME-OVERLAY`
+ */
+export function validateThemeOverlays(context: DocumentValidationContext): BuildError[] {
+    const { overlays, errors } = buildOverlayCatalog(context.document.themes);
+    const active: unknown = context.document.theme?.active;
+    if (typeof active !== 'object' || active === null || Array.isArray(active)) return errors;
+    for (const [kind, name] of Object.entries(active)) {
+        const statePath = `$.theme.active.${kind}`;
+        if (typeof name !== 'string') continue;
+        if (!isOverlayKind(kind)) errors.push(overlayError('kind', name, kind, statePath, statePath));
+        else if (name === SYSTEM && SYSTEM_KINDS.includes(kind)) continue;
+        else if (!hasOverlay(overlays, kind, name)) errors.push(overlayError('unknown', name, kind, statePath, statePath));
+    }
+    return errors;
+}
+
+/** The registered `theme` validator: the tokens and active names, then the overlays */
+export function validateTheme(context: DocumentValidationContext): BuildError[] {
+    return [...validateThemeTokens(context), ...validateThemeOverlays(context)];
+}
+
+registerDocumentValidator(THEME_VALIDATOR, validateTheme);

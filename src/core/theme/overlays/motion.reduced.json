@@ -1,0 +1,11 @@
+{
+    "tokens": {
+        "motion": {
+            "duration": {
+                "fast": "0ms",
+                "base": "0ms",
+                "slow": "0ms"
+            }
+        }
+    }
+}

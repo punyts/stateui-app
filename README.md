@@ -50,6 +50,10 @@ A component's `*.state.json` is its default state, its validation rules and its 
 - **`buildDefaults(shape)`** returns a fresh default state: every property that has a `default`.
 - **`validateNode(shape, node, statePath)`** returns `SUI-STATE-*` violations with the state path: `SUI-STATE-UNKNOWN` (unknown property or a link to one), `SUI-STATE-SHARED` (an unsupported shared property), `SUI-STATE-REQUIRED`, `SUI-STATE-INVALID` (type, allowed values, validators, URL rule, icon name, slot not a node, map contents), `SUI-STATE-CONDITION`, `SUI-STATE-RUNTIME`, `SUI-LINK-ROW` and `SUI-NODE-NAME` (`$` or `__` keys). The optional fourth argument is `{ isIconName?, insideRow? }`. `<-name` links count as providing `name` and their value is not checked. `component`, `children`, `placement`, `theme` and `on` belong to the tree and are not checked here.
 
+### Shared articulation stylesheet
+
+`generateSharedSheet()` (`src/dom/articulation/`) returns the CSS that turns the reflected attributes into local custom properties: `tone` gives `--tone`, `--tone-soft` and `--tone-on`; `size` gives `--control-height` and `--icon-size`; `elevation` gives `--surface` and `--shadow`; `textRole` (attribute `text-role`) gives `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `hidden` removes the host from layout. The build prepends it to every root component's CSS (a component with no `view.css` gets it alone; style error lines still match the component's file), so component CSS says `background: var(--tone)` and never repeats the tone table. `variant` has no rule here: the component's CSS decides how each variant paints the tone properties. `mountApp` reflects the shared names and `hidden` onto each node's element through `<sui-node>`, so no component code is involved.
+
 ### Layouts and placement
 
 `src/core/layout/` holds the closed list of layout types: `column`, `row`, `grid`, `region` and `adhoc`. A node sets `layout: { "type": "grid", "cols": 3 }`, and each child sets `placement`. Each type has its own settings and placement fields:
@@ -307,6 +311,8 @@ Code is in `src/core/locale/` (exported from `./core`) and `src/dom/locale/`. `m
 
 `validateAppLocale(code, resolvedApp, componentOverlays, appOverrides, options)` returns the errors of the document's own overrides and a `SUI-LOCALE-MISSING` warning for each content path the language does not translate, in tree order, naming the language and state path. It lists at most `MAX_MISSING_PER_LANGUAGE` (50) and adds one `SUI-LOCALE-MORE` warning that counts the rest. Empty text is not counted, and a language with overlays for only some components is allowed. `validateDocument` runs the registered `locale` validator, which checks `document.locales` for `SUI-LOCALE-CONTENT`, `SUI-LOCALE-PATH` and `SUI-LOCALE-LINKED`; it cannot report missing content, because a document does not carry component overlays, so the server calls `validateAppLocale` for that.
 
+**Nodes created later.** `registerLocaleStep(componentOverlays)` registers a mount step. After `mountApp` it builds the overlay of each language (the base overlay for the mounted content, `buildAppOverlay` for the rest) and watches `$.app`. A node written later (a keyed entry added to `children`, a `children` map added to a node, a composed node, a keyed entry such as a static select option) gets its component's overlay for the current `$.locale` in the same write, before it renders. Each language's overlay learns the new content, so `handle.switchTo(code)` keeps it translated and switching back restores the original text; a delete removes the node from the overlays. Text the author wrote that differs from the component default is kept, and the document's `locales` overrides for the path apply. Code that creates nodes itself (list and table rows, modals) calls `handle.nodes.prepare(path, node, instances?)` immediately before writing and writes what it returns; a composed node needs its `ResolveResult.instances`. Writing over an existing node is an update, not a creation, so add nodes under new keys.
+
 ## State snapshot
 
 Code is in `src/core/snapshot/`, exported from `@punyts/stateui-app/core`. The preview host calls it for the `snapshot`
@@ -403,6 +409,38 @@ primitive changes one property in JavaScript; every role that references it foll
 The document's `theme.tokens` is checked by the `theme` document validator (`validateThemeTokens`, registered with
 `validateDocument`): an invalid token stops `mountApp` with `SUI-THEME-NAME`, `-TOKEN`, `-VALUE` or `-REF` before render.
 `DEFAULT_ACTIVE` holds the default `$.theme.active`.
+
+### Overlays and `system`
+An overlay is a sparse token tree of one kind; a kind may touch only some groups, so overlays cannot fight each other.
+Code is in `src/core/theme/overlays/` (exported from `./core`) and `src/dom/theme/`.
+
+| Kind | May touch | Shipped |
+|---|---|---|
+| `mode` | `color`, `elevation` | `light`, `dark`, `contrast` |
+| `brand` | `palette`, `font.family`, `radius`, `icon` | `default` |
+| `motion` | `motion` | `full`, `reduced` (every duration `0ms`) |
+
+- **`SHIPPED_OVERLAYS`** holds them as JSON (`{ tokens }`). `light`, `default` and `full` carry the whole of their kind's groups, so
+  applying one restores what another overlay of the kind changed. Every `mode` overlay merged over the default tree passes the
+  reference and contrast checks.
+- **`applyOverlay(store, kind, name, overlays)`** runs `store.apply('$.theme.tokens', overlay.tokens)` on a copy and sets
+  `$.theme.active.<kind>` to `name`. Going back is applying the other overlay of the kind. An unknown kind or name, and `system`,
+  return `SUI-THEME-OVERLAY` and change nothing. `buildOverlayCatalog(document.themes).overlays` is the shipped set plus the document's.
+- **`validateThemeOverlay(kind, tree, { name?, statePath? })`** returns `SUI-THEME-OVERLAY` with the token path for a token outside the
+  kind's groups, then the `validateTokens` checks on every value, then (for `mode`) `SUI-THEME-CONTRAST` warnings.
+- **`themes`.** `"themes": { "acme": { "kind": "brand", "tokens": { } } }` adds overlays after the same validation. A name that is
+  already a shipped overlay of the same kind (or `system` for `mode` and `motion`) is `SUI-THEME-OVERLAY`. The `theme` document
+  validator (`validateTheme`) also checks that every name in `theme.active` is an overlay of its kind or `system`.
+- **At start.** `mountApp` composes the active overlay of each kind over the default tree and puts the document's `theme.tokens` last,
+  so the document's own values win at start. While mounted, a change to `$.theme.active.<kind>` (`store.set`, not only
+  `applyOverlay`) applies that overlay. An unknown name is reported through `hooks.onError` and changes nothing. Applying an overlay
+  replaces document token values in its groups.
+- **`system`.** `$.theme.active.mode: "system"` applies `light` or `dark` from `prefers-color-scheme` at start and when the query
+  changes; `motion: "system"` applies `reduced` or `full` from `prefers-reduced-motion`. `$.theme.active.<kind>` stays `system`.
+  Setting an explicit name stops following; setting `system` again resumes. The system never selects `contrast`.
+- **Environment.** `src/dom/theme/system.ts` is the only module that reads `matchMedia` (a test scans the source). `mountApp`'s `hooks`
+  accept `matchMedia` (default `window.matchMedia`) so tests can fire a change; `dispose` removes the listeners. Without
+  `matchMedia`, `system` means `light` and `full`.
 
 ## Build and test
 Build `@punyts/state`, `@punyts/expression` and `@punyts/stateui` first.

@@ -1,0 +1,72 @@
+{
+    "tokens": {
+        "color": {
+            "surface": {
+                "base": "{palette.white}",
+                "raised": "{palette.white}",
+                "sunken": "{palette.white}",
+                "overlay": "{palette.white}"
+            },
+            "text": {
+                "base": "{palette.black}",
+                "muted": "{palette.neutral.900}",
+                "inverse": "{palette.white}",
+                "disabled": "{palette.neutral.700}"
+            },
+            "border": {
+                "base": "{palette.black}",
+                "strong": "{palette.black}"
+            },
+            "focus": "{palette.black}",
+            "neutral": {
+                "base": "{palette.neutral.900}",
+                "soft": "{palette.neutral.100}",
+                "on": "{palette.white}"
+            },
+            "accent": {
+                "base": "{palette.blue.800}",
+                "soft": "{palette.blue.100}",
+                "on": "{palette.white}"
+            },
+            "danger": {
+                "base": "{palette.red.800}",
+                "soft": "{palette.red.100}",
+                "on": "{palette.white}"
+            },
+            "warning": {
+                "base": "{palette.amber.300}",
+                "soft": "{palette.amber.100}",
+                "on": "{palette.black}"
+            },
+            "success": {
+                "base": "{palette.green.800}",
+                "soft": "{palette.green.100}",
+                "on": "{palette.white}"
+            },
+            "info": {
+                "base": "{palette.teal.800}",
+                "soft": "{palette.teal.100}",
+                "on": "{palette.white}"
+            },
+            "backdrop": "rgba(0, 0, 0, 0.8)"
+        },
+        "elevation": {
+            "flat": {
+                "shadow": "none",
+                "layer": "0"
+            },
+            "raised": {
+                "shadow": "0 0 0 1px rgba(0, 0, 0, 1)",
+                "layer": "1"
+            },
+            "overlay": {
+                "shadow": "0 0 0 2px rgba(0, 0, 0, 1)",
+                "layer": "10"
+            },
+            "modal": {
+                "shadow": "0 0 0 3px rgba(0, 0, 0, 1)",
+                "layer": "20"
+            }
+        }
+    }
+}

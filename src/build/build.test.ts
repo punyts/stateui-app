@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildError } from '../core/errors/index.js';
+import { generateSharedSheet } from '../dom/articulation/index.js';
 import { buildLibrary } from './index.js';
 import type { BuildOptions } from './index.js';
 
@@ -173,6 +174,30 @@ describe('buildLibrary', () => {
         expect(result.errors).toEqual([]);
         expect(seen).toEqual(['themed:p { color: TOKEN; }']);
         expect(await readFile(join(out, 'themed.js'), 'utf8')).toContain('p { color: red; }');
+    });
+
+    it('should prepend the shared articulation sheet to the component CSS before the other transforms run', async () => {
+        const source = await library(simple('themed', '<p>{{ $.text }}</p>', { 'atoms/themed/themed.view.css': 'p { color: red; }' }));
+        const out = await scratch();
+        const seen: string[] = [];
+
+        const result = await buildLibrary(source, out, { cssTransforms: [(css) => (seen.push(css), css)] });
+
+        expect(result.errors).toEqual([]);
+        expect(seen[0]).toBe(`${generateSharedSheet()}p { color: red; }`);
+        const module = await readFile(join(out, 'themed.js'), 'utf8');
+        expect(module).toContain(':host([tone=danger])');
+        expect(module.indexOf(':host([hidden])')).toBeLessThan(module.indexOf('p { color: red; }'));
+    });
+
+    it('should give a component without a stylesheet the shared sheet', async () => {
+        const source = await library(simple('bare', '<p>{{ $.text }}</p>'));
+        const out = await scratch();
+
+        const result = await buildLibrary(source, out);
+
+        expect(result.errors).toEqual([]);
+        expect(await readFile(join(out, 'bare.js'), 'utf8')).toContain(':host([size=lg])');
     });
 
     it('should fail a component when a cssCheck reports an error and keep its location', async () => {

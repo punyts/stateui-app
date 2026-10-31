@@ -17,3 +17,20 @@ export type { TypeLookup } from './value.js';
 export { mergeOverDefaults, validateTokens } from './validate.js';
 export type { ValidateTokensOptions } from './validate.js';
 export { THEME_VALIDATOR, validateThemeTokens } from './documentValidator.js';
+export { validateTheme, validateThemeOverlays } from './documentValidator.js';
+export {
+    KIND_GROUPS,
+    OVERLAY_KINDS,
+    OVERLAY_REASONS,
+    SHIPPED_OVERLAYS,
+    SYSTEM,
+    SYSTEM_KINDS,
+    buildOverlayCatalog,
+    composeOverlays,
+    hasOverlay,
+    isOverlayKind,
+    mergeTokenTrees,
+    overlayError,
+    validateThemeOverlay
+} from './overlays/index.js';
+export type { OverlayCatalog, OverlayKind, ThemeOverlays, TokenOverlay, ValidateOverlayOptions } from './overlays/index.js';

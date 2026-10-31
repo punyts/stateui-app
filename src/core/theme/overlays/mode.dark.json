@@ -1,0 +1,72 @@
+{
+    "tokens": {
+        "color": {
+            "surface": {
+                "base": "{palette.neutral.950}",
+                "raised": "{palette.neutral.900}",
+                "sunken": "{palette.black}",
+                "overlay": "{palette.neutral.800}"
+            },
+            "text": {
+                "base": "{palette.neutral.50}",
+                "muted": "{palette.neutral.400}",
+                "inverse": "{palette.neutral.950}",
+                "disabled": "{palette.neutral.600}"
+            },
+            "border": {
+                "base": "{palette.neutral.800}",
+                "strong": "{palette.neutral.600}"
+            },
+            "focus": "{color.accent.base}",
+            "neutral": {
+                "base": "{palette.neutral.300}",
+                "soft": "{palette.neutral.800}",
+                "on": "{palette.neutral.950}"
+            },
+            "accent": {
+                "base": "{palette.blue.400}",
+                "soft": "{palette.blue.900}",
+                "on": "{palette.neutral.950}"
+            },
+            "danger": {
+                "base": "{palette.red.400}",
+                "soft": "{palette.red.900}",
+                "on": "{palette.neutral.950}"
+            },
+            "warning": {
+                "base": "{palette.amber.400}",
+                "soft": "{palette.amber.900}",
+                "on": "{palette.neutral.950}"
+            },
+            "success": {
+                "base": "{palette.green.400}",
+                "soft": "{palette.green.900}",
+                "on": "{palette.neutral.950}"
+            },
+            "info": {
+                "base": "{palette.teal.400}",
+                "soft": "{palette.teal.900}",
+                "on": "{palette.neutral.950}"
+            },
+            "backdrop": "rgba(0, 0, 0, 0.7)"
+        },
+        "elevation": {
+            "flat": {
+                "shadow": "none",
+                "layer": "0"
+            },
+            "raised": {
+                "shadow": "0 1px 3px 0 rgba(0, 0, 0, 0.5)",
+                "layer": "1"
+            },
+            "overlay": {
+                "shadow": "0 8px 24px 0 rgba(0, 0, 0, 0.6)",
+                "layer": "10"
+            },
+            "modal": {
+                "shadow": "0 16px 48px 0 rgba(0, 0, 0, 0.7)",
+                "layer": "20"
+            }
+        }
+    }
+}

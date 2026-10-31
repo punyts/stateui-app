@@ -58,6 +58,12 @@ describe('error catalog', () => {
         expect(buildError('SUI-LOCALE-MISSING', { locale: 'de', path: '$.app.a._title' }).severity).toBe('warning');
     });
 
+    it('words SUI-THEME-OVERLAY from the name, kind, path and a fixed reason', () => {
+        const error = buildError('SUI-THEME-OVERLAY', { name: 'acme', other: 'brand', path: 'color.accent.base', key: 'token group outside the kind' });
+
+        expect(error.message).toBe('Theme overlay "acme" of kind "brand" at color.accent.base is not allowed: token group outside the kind');
+    });
+
     it('copies location fields onto the error and nothing else', () => {
         const error = buildError('SUI-BUILD-TOKEN', { file: 'a/a.view.css', token: '--x', line: 3, column: 7 });
 

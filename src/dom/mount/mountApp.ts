@@ -14,6 +14,7 @@ import type { AppDocument, JsonObject, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
 import type { DispatchHooks } from '../on/index.js';
+import type { SystemHooks } from '../theme/system.js';
 import { APP_ROOT_TAG, ensureAppRoot } from '../app/index.js';
 import '../theme/index.js';
 import { mountSteps } from './steps.js';
@@ -82,7 +83,7 @@ export function mountApp(
     host: Element,
     document: AppDocument,
     library: ComponentLibrary,
-    hooks: DispatchHooks = {}
+    hooks: DispatchHooks & SystemHooks = {}
 ): MountedApp {
     const validation = validateDocument(document, library);
     if (!isValid(validation.errors)) return failed(validation.errors);

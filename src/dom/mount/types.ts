@@ -4,6 +4,7 @@ import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { AppDocument, JsonObject, Node } from '../../core/types.js';
 import type { DispatchHooks } from '../on/index.js';
+import type { SystemHooks } from '../theme/system.js';
 
 /** The shape of the store `mountApp` builds */
 export interface AppState {
@@ -37,7 +38,7 @@ export interface MountContext {
     state: AppState;
     /** The options given to `<sui-node>`; `prepare` may add `theme` and extend `reflect` */
     options: NodeOptions;
-    hooks: DispatchHooks;
+    hooks: DispatchHooks & SystemHooks;
 }
 
 /** What a step sees in `start`: the store is there, links are applied, nothing has rendered yet */
