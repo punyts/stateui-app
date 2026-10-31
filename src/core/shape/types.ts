@@ -74,6 +74,11 @@ export interface Shape {
     commands: string[];
     /** True when the component lays out children, so a node may carry `layout` */
     layout: boolean;
+    /**
+     * The placement fields a node under this component may carry, when the component has no `layout` (tabs: `_tab`,
+     * `icon`, `badge`). Absent when the component declares none; a shape cannot have both `layout` and `placement`
+     */
+    placement?: Record<string, PropertyShape>;
 }
 
 /** Longest allowed summary, in characters */

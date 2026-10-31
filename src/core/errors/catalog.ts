@@ -1,6 +1,6 @@
 import type { Severity } from './types.js';
 
-/** The code families. `SUI-LAYOUT` has no sub-codes yet; epic 3 adds the ones it needs */
+/** The code families */
 export const ERROR_PREFIXES = [
     'SUI-DOC',
     'SUI-NODE',
@@ -72,6 +72,24 @@ export const ERROR_CATALOG = {
     },
     'SUI-LOCALE-CONTENT': { template: 'Overlay "{locale}" sets non-content property "{name}" at {path}' },
     'SUI-LOCALE-PATH': { template: 'Overlay "{locale}" has a path that does not exist: {path}' },
+    'SUI-LAYOUT-SHAPE': { template: 'The layout or placement at {path} is not an object' },
+    'SUI-LAYOUT-TYPE': { template: 'The layout at {path} has an unknown or missing type' },
+    'SUI-LAYOUT-SETTING': { template: 'Unknown layout setting "{name}" at {path}' },
+    'SUI-LAYOUT-VALUE': { template: 'Layout setting "{name}" at {path} has a value that is not allowed' },
+    'SUI-LAYOUT-UNSUPPORTED': { template: 'Component "{component}" at {path} does not support a layout' },
+    'SUI-LAYOUT-FIELD': {
+        template: 'Placement field "{name}" at {path} does not fit the layout or placement shape of the parent'
+    },
+    'SUI-LAYOUT-PLACEMENT': { template: 'Placement field "{name}" at {path} has a value that is not allowed' },
+    'SUI-LAYOUT-REQUIRED': { template: 'Placement field "{name}" is required at {path}' },
+    'SUI-LAYOUT-PARENT': {
+        template: 'Placement at {path} sits under "{name}" at {other}, which has neither a layout nor a placement shape'
+    },
+    'SUI-LAYOUT-ROOT': { template: 'The root node at {path} has a placement but no parent' },
+    'SUI-LOCALE-MORE': {
+        template: 'Language "{locale}" has {actual} more untranslated content paths; {limit} are listed',
+        severity: 'warning'
+    },
     'SUI-LOCALE-UNKNOWN': { template: 'No overlay for language "{locale}"' },
     'SUI-LOCALE-LINKED': { template: 'Overlay "{locale}" sets linked property "{name}" at {path}' },
     'SUI-LOCALE-MISSING': { template: 'Language "{locale}" does not translate {path}', severity: 'warning' },

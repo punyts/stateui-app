@@ -25,7 +25,7 @@ describe('error catalog', () => {
         const used = new Set(CODES.map((code) => code.split('-').slice(0, 2).join('-')));
 
         for (const prefix of ERROR_PREFIXES) {
-            if (prefix !== 'SUI-LAYOUT') expect(used.has(prefix)).toBe(true);
+            expect(used.has(prefix)).toBe(true);
         }
         for (const prefix of used) expect(ERROR_PREFIXES).toContain(prefix);
     });
@@ -34,6 +34,7 @@ describe('error catalog', () => {
         for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST', 'SUI-THEME-REF', 'SUI-THEME-VALUE', 'SUI-THEME-TOKEN',
             'SUI-BUILD-TOKEN',
             'SUI-LOCALE-UNKNOWN',
+            'SUI-LOCALE-MORE',
             'SUI-LOCALE-LINKED',
             'SUI-STATE-SHARED',
             'SUI-BUILD-KEY',

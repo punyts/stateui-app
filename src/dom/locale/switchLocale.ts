@@ -9,7 +9,7 @@ const LOCALE_PATH = '$.locale';
 /** The part of a store that switching language needs */
 export interface LocaleStore {
     apply: (path: string, source: unknown) => void;
-    set: (path: string, value: unknown) => boolean;
+    set: (path: string, value: string) => boolean;
 }
 
 /**

@@ -14,7 +14,8 @@ import type { AppDocument, JsonObject, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
 import type { DispatchHooks } from '../on/index.js';
-import { APP_ROOT_TAG, ensureAppRoot } from './appRoot.js';
+import { APP_ROOT_TAG, ensureAppRoot } from '../app/index.js';
+import '../theme/index.js';
 import { mountSteps } from './steps.js';
 import type { AppState, MountContext, MountedApp, StartedContext } from './types.js';
 
@@ -68,7 +69,7 @@ function stepError(name: string): BuildError {
 /**
  * The single way to start an application. It validates the document against the library (a `ComponentLibrary`; the
  * component modules must be registered already, for example with the build's `registerAll`), resolves `composed`,
- * keeps the base-language content overlay (`baseOverlay`, for `switchLocale`), builds the store (`theme`, `data`, `locale`, `app` and the `runtime` branch), applies the `<-` links, gives
+ * keeps the base-language content overlay (`baseOverlay`, for `switchLocale`), builds the store (`theme`: the document's tokens over the default tree and the active names, `data`, `locale`, `app` and the `runtime` branch), applies the `<-` links, gives
  * `<sui-node>` its resolver and options, mounts the store on `host` and renders `<ui-app-root>`, which holds
  * `<sui-node state="$.app">`.
  *

@@ -258,3 +258,93 @@ describe('buildLibrary', () => {
         expect(await readFile(join(out, 'index.js'), 'utf8')).toContain('export const components = [];');
     });
 });
+
+describe('buildLibrary locale overlays', () => {
+    const CONTENT_SHAPE =
+        '{ "summary": "A label", "properties": { "_text": { "type": "string", "kind": "content", "default": "Hello" }, "color": { "type": "string", "default": "black" } } }';
+
+    function label(extra: Record<string, string> = {}): Record<string, string> {
+        return {
+            'atoms/label/label.view.html': '<p>{{ $._text }}</p>',
+            'atoms/label/label.state.json': CONTENT_SHAPE,
+            ...extra
+        };
+    }
+
+    it('should write a valid root overlay to the output and list its language in the catalog', async () => {
+        // Arrange
+        const source = await library(
+            label({
+                'atoms/label/label.locale.de.json': '{ "_text": "Hallo" }',
+                'atoms/label/label.locale.fr.json': '{ "_text": "Bonjour" }'
+            })
+        );
+        const out = await scratch();
+
+        // Act
+        const result = await buildLibrary(source, out);
+
+        // Assert
+        expect(result.errors).toEqual([]);
+        expect(result.files).toContain('label.locale.de.json');
+        expect(JSON.parse(await readFile(join(out, 'label.locale.de.json'), 'utf8'))).toEqual({ _text: 'Hallo' });
+        expect(result.catalog.locales).toEqual(['de', 'fr']);
+        expect(result.catalog.components[0]?.locales).toEqual(['de', 'fr']);
+    });
+
+    it('should report a property that is not content and give the component no module', async () => {
+        // Arrange
+        const source = await library(label({ 'atoms/label/label.locale.de.json': '{ "color": "schwarz", "_text": "Hallo" }' }));
+
+        // Act
+        const result = await buildLibrary(source, await scratch());
+
+        // Assert
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toMatchObject({ code: 'SUI-LOCALE-CONTENT', file: 'atoms/label/label.locale.de.json', statePath: '$.color' });
+        expect(result.built).toEqual([]);
+        expect(result.catalog.locales).toEqual([]);
+    });
+
+    it('should report a name the shape does not have and a file that is not an object', async () => {
+        // Arrange
+        const source = await library({
+            ...label({ 'atoms/label/label.locale.de.json': '{ "_title": "x" }' }),
+            ...simple('other', '<p>{{ $.text }}</p>', { 'atoms/other/other.locale.de.json': '[1]' })
+        });
+
+        // Act
+        const result = await buildLibrary(source, await scratch());
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.file])).toEqual([
+            ['SUI-LOCALE-PATH', 'atoms/label/label.locale.de.json'],
+            ['SUI-BUILD-SHAPE', 'atoms/other/other.locale.de.json']
+        ]);
+    });
+
+    it('should check a composed overlay against the paths of the default tree', async () => {
+        // Arrange
+        const tree = '{ "component": "label", "_text": "Card", "other": { "component": "label", "_text": "More" } }';
+        const source = await library({
+            ...label(),
+            'composites/card/card.composed.json': tree,
+            'composites/card/card.locale.de.json': '{ "_text": "Karte", "other": { "_text": "Mehr" } }',
+            'composites/broken/broken.composed.json': tree,
+            'composites/broken/broken.locale.de.json': '{ "ghost": { "_text": "x" } }'
+        });
+        const out = await scratch();
+
+        // Act
+        const result = await buildLibrary(source, out);
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.file, error.statePath])).toEqual([
+            ['SUI-LOCALE-PATH', 'composites/broken/broken.locale.de.json', '$.ghost']
+        ]);
+        expect(result.catalog.components.map((entry) => entry.name)).toEqual(['card', 'label']);
+        expect(result.files).toContain('card.locale.de.json');
+        expect(result.files).not.toContain('broken.locale.de.json');
+        expect(result.catalog.locales).toEqual(['de']);
+    });
+});

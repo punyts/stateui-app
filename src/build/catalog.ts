@@ -17,7 +17,7 @@ export interface ShapeExtras {
     /** The component tokens the component declares */
     tokens?: JsonValue;
     /** The `placement` shape its children may carry */
-    placement?: JsonValue;
+    placement?: Record<string, PropertyShape>;
     /** The override paths that are the component's intended interface */
     exposes?: JsonValue;
 }
@@ -73,6 +73,8 @@ export type ComponentCatalogEntry = RootCatalogEntry | ComposedCatalogEntry;
 export interface Catalog {
     /** Every component that built, sorted by name */
     components: ComponentCatalogEntry[];
+    /** Every language that a component that built has an overlay for, sorted */
+    locales: string[];
 }
 
 const SIZES: Readonly<Record<string, CatalogSize>> = {
@@ -215,9 +217,10 @@ export function composedEntry(component: ScannedComponent, tree: Node, size: Cat
     };
 }
 
-/** The catalog and the text of `catalog.json`: entries sorted by name, four-space indent, LF newline at the end */
+/** The catalog and the text of `catalog.json`: entries sorted by name, the list of languages sorted, four-space indent, LF newline at the end */
 export function emitCatalog(entries: readonly ComponentCatalogEntry[]): { catalog: Catalog; text: string } {
     const components = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-    const catalog: Catalog = { components };
+    const locales = [...new Set(components.flatMap((entry) => entry.locales))].sort();
+    const catalog: Catalog = { components, locales };
     return { catalog, text: `${JSON.stringify(catalog, null, 4)}\n` };
 }

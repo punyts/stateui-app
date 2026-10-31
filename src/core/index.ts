@@ -103,6 +103,8 @@ export {
     validateReferences,
     validateTokenNames,
     validateTokenValue,
+    THEME_VALIDATOR,
+    validateThemeTokens,
     validateTokens
 } from './theme/index.js';
 export type {
@@ -126,5 +128,28 @@ export {
     isSharedName
 } from './articulation/index.js';
 export type { ArticulationName, SharedName } from './articulation/index.js';
-export { extractBaseOverlay, isContentKey, validateLocaleOverlay } from './locale/index.js';
-export type { LocaleOverlayOptions } from './locale/index.js';
+export {
+    MAX_MISSING_PER_LANGUAGE,
+    buildAppOverlay,
+    extractBaseOverlay,
+    findUntranslated,
+    isContentKey,
+    validateAppLocale,
+    validateComponentOverlay,
+    validateDocumentLocales,
+    validateLocaleOverlay
+} from './locale/index.js';
+export type { AppOverlayOptions, ComponentOverlays, LocaleOverlayOptions } from './locale/index.js';
+export {
+    ALIGNS,
+    COLLAPSE_BELOW,
+    GAPS,
+    LAYOUTS,
+    LAYOUT_TYPES,
+    REGIONS,
+    fitsField,
+    isLayoutType,
+    validateLayouts,
+    validatePlacements
+} from './layout/index.js';
+export type { FieldSpec, LayoutDefinition, LayoutType } from './layout/index.js';

@@ -10,6 +10,6 @@ export { VALIDATORS } from './validators.js';
 export { validateNode } from './validate.js';
 export type { ValidateContext } from './validate.js';
 export { reflectedProperties } from './reflect.js';
-export { typesOf } from './fit.js';
+export { fitsProperty, typesOf } from './fit.js';
 export { nodeChildren } from './children.js';
 export type { NodeChild } from './children.js';

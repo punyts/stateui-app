@@ -33,7 +33,7 @@ A component's `*.state.json` is its default state, its validation rules and its 
 }
 ```
 
-- **Top-level keys.** `shared` (see below), `summary` (required; one line, at most `MAX_SUMMARY_LENGTH` = 120 characters; served by `ui_components_list`), `properties`, `events` and `commands` (lists of lower camel-case names), `layout` (true when the component lays out children, so a node may carry `layout`). Keys are rows in the `SHAPE_KEYS` table (and `PROPERTY_KEYS` for a property): name, JSON type and rule. A later story adds `tokens` or `placement` by adding a row.
+- **Top-level keys.** `shared` (see below), `summary` (required; one line, at most `MAX_SUMMARY_LENGTH` = 120 characters; served by `ui_components_list`), `properties`, `events` and `commands` (lists of lower camel-case names), `layout` (true when the component lays out children, so a node may carry `layout`). Keys are rows in the `SHAPE_KEYS` table (and `PROPERTY_KEYS` for a property): name, JSON type and rule. A later story adds `tokens` by adding a row. `placement` is described under Layouts and placement.
 - **Property keys.** `type` (required: `string`, `number`, `integer`, `boolean`, `array`, `object`, `any`, `url`, `icon`, `node`, `map`, or a list of them when several are allowed, as in `["array", "map"]`), `default`, `required`, `kind` (`content` is the only extra kind), `values` (allowed values), `validators`, `items`, `requiredWhen`, `runtime`, `exposed`, `reflect`, `row`. A `node` property is a slot and must hold an object with a `component` name.
 - **Maps (`type: "map"`, `items`).** `items` is `"string"` (every value is a string, e.g. a `_errors` content map) or a sub-shape: an object of properties each map value may hold (table `columns`, static `select` options). A map type needs `items` and no other type may have it. Nested `_` properties inside `items` must be kind `content` and every other nested property must not (`SUI-BUILD-KIND`). `validateNode` walks maps and reports each violation with the map key in the path, e.g. `$.app.children.t.columns.total._title`.
 - **`requiredWhen`.** `{ "property": "decorative", "equals": false }` or `{ "property": "iconPosition", "notEquals": "start" }` makes the property required while a sibling property (same table, not itself) has, or does not have, that value. The sibling's value is the node's value or its default; if the sibling or the property is a `<-` link the check is skipped. A missing value is `SUI-STATE-CONDITION`, naming both properties.
@@ -48,7 +48,25 @@ A component's `*.state.json` is its default state, its validation rules and its 
 - **URL rule.** A `url` property accepts only `data:` images (`png`, `jpeg`, `gif`, `webp`, `avif`, `bmp`, `svg+xml`), `#` targets and relative targets. Other schemes, `//host`, backslashes, spaces and control characters are refused.
 - **`parseShape(json, file)`** takes the file text or a parsed value and returns `{ shape, errors }`. It reports every problem (unknown keys are `SUI-BUILD-KEY`, a missing or bad summary is `SUI-BUILD-SUMMARY`, a default that does not fit is `SUI-BUILD-DEFAULT`, a bad pattern is `SUI-BUILD-PATTERN`) with the file; `shape` is set only when there are none.
 - **`buildDefaults(shape)`** returns a fresh default state: every property that has a `default`.
-- **`validateNode(shape, node, statePath)`** returns `SUI-STATE-*` violations with the state path: `SUI-STATE-UNKNOWN` (unknown property, a link to one, or `layout` on a component without it), `SUI-STATE-SHARED` (an unsupported shared property), `SUI-STATE-REQUIRED`, `SUI-STATE-INVALID` (type, allowed values, validators, URL rule, icon name, slot not a node, map contents), `SUI-STATE-CONDITION`, `SUI-STATE-RUNTIME`, `SUI-LINK-ROW` and `SUI-NODE-NAME` (`$` or `__` keys). The optional fourth argument is `{ isIconName?, insideRow? }`. `<-name` links count as providing `name` and their value is not checked. `component`, `children`, `placement`, `theme` and `on` belong to the tree and are not checked here.
+- **`validateNode(shape, node, statePath)`** returns `SUI-STATE-*` violations with the state path: `SUI-STATE-UNKNOWN` (unknown property or a link to one), `SUI-STATE-SHARED` (an unsupported shared property), `SUI-STATE-REQUIRED`, `SUI-STATE-INVALID` (type, allowed values, validators, URL rule, icon name, slot not a node, map contents), `SUI-STATE-CONDITION`, `SUI-STATE-RUNTIME`, `SUI-LINK-ROW` and `SUI-NODE-NAME` (`$` or `__` keys). The optional fourth argument is `{ isIconName?, insideRow? }`. `<-name` links count as providing `name` and their value is not checked. `component`, `children`, `placement`, `theme` and `on` belong to the tree and are not checked here.
+
+### Layouts and placement
+
+`src/core/layout/` holds the closed list of layout types: `column`, `row`, `grid`, `region` and `adhoc`. A node sets `layout: { "type": "grid", "cols": 3 }`, and each child sets `placement`. Each type has its own settings and placement fields:
+
+| Type | Container settings | Child placement |
+|------|--------------------|-----------------|
+| `column` | `gap`, `align` | `grow` |
+| `row` | `gap`, `align`, `wrap`, `collapseBelow` | `grow` |
+| `grid` | `cols`, `rows`, `gap`, `collapseBelow` | `col`, `row`, `span`, `rowSpan` |
+| `region` | `gap`, `collapseBelow` | `region` (`n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`, `center`) |
+| `adhoc` | none | `x`, `y`, `width`, `height` |
+
+Allowed values: `gap` is `none`, `sm`, `md` or `lg`; `align` is `start`, `center`, `end` or `stretch`; `wrap` is boolean; `cols`, `rows`, `col`, `row`, `span` and `rowSpan` are integers 1 to 12; `grow` is a number 0 to 12; `collapseBelow` is `sm`, `md`, `lg` or `xl`; `x`, `y`, `width` and `height` are literal dimensions (`4px`, `1.5rem`, `50%`, `0`), never `calc()` or a token reference.
+
+A component that has no `layout` can declare the placement its children carry with a `placement` key in its `*.state.json`: a table of properties like `properties`, where `_` properties are content (tabs: `_tab`, `icon`, `badge`). A shape cannot have both `"layout": true` and `placement`.
+
+`validateDocument` runs the `layout` and `placement` validators, which report `SUI-LAYOUT-TYPE`, `-SETTING`, `-VALUE`, `-FIELD`, `-PLACEMENT` and `-REQUIRED` for unknown or disallowed types, settings and fields, `SUI-LAYOUT-UNSUPPORTED` for a `layout` on a component whose shape does not support it, `SUI-LAYOUT-PARENT` for a `placement` under a parent that has neither a layout nor a placement shape (naming the parent), and `SUI-LAYOUT-ROOT` for a `placement` on the app root. Composed components are checked under `$.composed.<name>`. `validateNode` ignores `layout`; the layout validator reports it.
 
 ## Convention scan
 
@@ -261,14 +279,14 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
    tree, node references are resolved to the exposed runtime properties they reach, and the links become store aliases
    (`applyLinks`) once the store exists. A link that cannot be resolved or applied stops the run.
 3. The store holds `{ theme, data, locale, app, runtime }`:
-   - `theme` is `{ tokens: {}, active: {} }` until a registered step fills it (epic 3).
+   - `theme` is `{ tokens, active }`: the document's `theme.tokens` over the default tree (every token, so a write patches one custom property) and `active` as `{ mode: "light", brand: "default", motion: "full" }` unless the document gives other names. See Token emission below.
    - `data` is a copy of the document's `data`; the document itself is never changed.
    - `locale` is the document's, `"en"` by default.
    - `runtime` is never read from the document: `nodes` (`{}`), `icons` (`{}`, written by the host's `load` message) and
      `empty` (`{}`, the shared empty record). `$.runtime.empty` is protected, so nothing can write into it.
 4. `<sui-node>` gets a resolver (component name to the root component's tag) and options (`reflect(name)` from the shapes'
    `reflect: true` properties). The store is mounted on `host`, the `on` dispatcher is attached and `<ui-app-root>`
-   is appended; it holds `<sui-node state="$.app">`. If the library registers its own `ui-app-root` first, that one is used.
+   is appended; it holds `<sui-node state="$.app">`. If the library registers its own `ui-app-root` first, that one is used (it then carries no token properties).
 5. `dispose()` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and clears the resolver and
    options (only if no later `mountApp` replaced them). It is safe to call twice. The resolver and options are global to
    StateUI, so run one app per page at a time.
@@ -284,6 +302,10 @@ Registering a name again replaces the step and keeps its place; `mountSteps()` l
 Code is in `src/core/locale/` (exported from `./core`) and `src/dom/locale/`. `mountApp` keeps the content of the application as it was mounted: `app.baseOverlay` (every `_` property that is not linked, including keyed-map entries such as `columns.<key>._title`, `placement._tab` and content maps such as `_errors`) and `app.baseLocale`. `switchLocale(store, 'de', { [app.baseLocale]: app.baseOverlay, de: germanOverlay })` applies a copy of the overlay to `$.app` and sets `$.locale`; applying the base overlay switches back. A language without an overlay returns `SUI-LOCALE-UNKNOWN` and changes nothing. `$.data` and `$.theme` are never touched.
 
 `extractBaseOverlay(tree, linkedPaths)` builds that overlay from a resolved tree (arrays are not searched; an overlay cannot address an array item). `validateLocaleOverlay(code, overlay, app, { linkedPaths, library })` rejects a leaf that is not a `_` text property or inside a `_` content map (`SUI-LOCALE-CONTENT`), a linked property (`SUI-LOCALE-LINKED`) and a path the application does not have (`SUI-LOCALE-PATH`); with `library`, each `_` leaf must be a `kind: content` property of its component.
+
+**Component overlays and the application overlay.** A component ships one overlay per language as `<name>.locale.<code>.json`, next to its other files. A root component's overlay holds `_` content properties of its shape, including map items (`options.<key>._label`, `columns.<key>._title`). A composed component's overlay is relative to its default tree and may reach any content path in it (`children.status.options.open._label`, `children.tabs.children.one.placement._tab`). `buildAppOverlay(code, resolvedApp, componentOverlays, appOverrides, { library, composed, instances, linkedPaths })` assembles the overlay for the whole application: each node gets its root component's overlay and the overlay of every composed component it was expanded from, so a composed component used three times is translated once. The document's `locales[code]` wins. With `library`, a component overlay replaces only content that still holds the component's default, so text the author wrote is never overwritten. Without `instances`, composed overlays are not applied.
+
+`validateAppLocale(code, resolvedApp, componentOverlays, appOverrides, options)` returns the errors of the document's own overrides and a `SUI-LOCALE-MISSING` warning for each content path the language does not translate, in tree order, naming the language and state path. It lists at most `MAX_MISSING_PER_LANGUAGE` (50) and adds one `SUI-LOCALE-MORE` warning that counts the rest. Empty text is not counted, and a language with overlays for only some components is allowed. `validateDocument` runs the registered `locale` validator, which checks `document.locales` for `SUI-LOCALE-CONTENT`, `SUI-LOCALE-PATH` and `SUI-LOCALE-LINKED`; it cannot report missing content, because a document does not carry component overlays, so the server calls `validateAppLocale` for that.
 
 ## State snapshot
 
@@ -324,6 +346,7 @@ The build scans the folder, compiles each root component's template and styleshe
 | `<name>.controller.js` | The compiled `controller.ts`, when the component has one |
 | `<name>.d.ts` | Types for the module |
 | `catalog.json` | Every component that built, root and composed, sorted by name: `name`, `tier`, `tag`, `size`, `summary`, `shape`, `content`, `slots`, `events`, `commands`, `layout`, `locales`, `example` (composed entries have `tree` instead of the shape fields) |
+| `<name>.locale.<code>.json` | The validated overlay of a root or composed component, one file per language |
 | `index.js` | `components` (every module in name order) and `registerAll()` |
 
 Composed components have no module; `catalog.json` describes them with their default tree.
@@ -337,8 +360,14 @@ Composed components have no module; `catalog.json` describes them with their def
   `atoms`, `molecules`, `composites` or `composed` parent folder (a component elsewhere is `SUI-BUILD-GROUP`).
   `summary` is the shape's required `summary`. `shape` is what `validateNode` takes, `content` and `slots` list the `_`
   and `node` properties (`map.field` inside map items), and `example` is the component with its required properties.
-  An entry also carries `shared`, `tokens`, `placement` and `exposes` when the shape declares them. The same result is
+  An entry also carries `shared`, `tokens`, `placement` and `exposes` when the shape declares them. `catalog.json` also
+  has a top-level `locales`: every language a built component has an overlay for, sorted. The same result is
   `BuildResult.catalog`.
+- **Locale overlays.** Each `<name>.locale.<code>.json` is checked while building. A root overlay may name only `_`
+  content properties of its shape (and `_` properties inside map items); anything else is `SUI-LOCALE-CONTENT` or
+  `SUI-LOCALE-PATH`. A composed overlay is checked against its resolved default tree. An error names the file; the
+  component with the error gets no module or catalog entry, and a file that is not valid JSON or not an object is
+  `SUI-BUILD-SHAPE`.
 - **Extension points.** `cssTransforms` (CSS text to CSS text, run in order before StateUI compiles the CSS) and
   `cssChecks` (return `SUI-BUILD` errors; they see the CSS as written, so their lines match the file). With none
   registered the output is the same as without the points.
@@ -359,6 +388,21 @@ The token tree, its types, references and value checks. Code is in `src/core/the
 - **Values.** `validateTokenValue(type, text, typeOf?)` returns true when the value fits the type: `color` (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()`, `transparent`), `dimension` (`0`, a number with `px`, `rem` or `%`, or a `calc()` of those and references), `number`, `duration` (`ms` or `s`, the unit is required), `easing` (keywords and `cubic-bezier()` with x values from 0 to 1), `shadow` (`none` or comma-separated `x y blur spread color` groups), `fontFamily`, `fontWeight` (100 to 900, `normal`, `bold`). A value that is one reference passes when the referenced token has the same type (`typeOf` defaults to the default tree); a reference inside a larger value is allowed only in a dimension `calc()`. A value with `url(`, `@`, `;`, `expression` or a brace that is not part of a reference never passes.
 - **`validateTokens(tree, { componentTokens? })`** checks a whole or sparse tree: `SUI-THEME-NAME`, then `SUI-THEME-TOKEN` for a path that is not in the default tree or the component tokens, `SUI-THEME-VALUE` for a wrong or injected value (state path `$.theme.tokens.<path>`), then `SUI-THEME-REF` over the tree merged onto the default tree and the component token defaults. `mergeOverDefaults(tree)` returns that merged tree.
 - **Contrast.** `checkContrast(effectiveTree)` resolves `color.<tone>.base` with `color.<tone>.on` for every tone, and `color.text.base` with `color.surface.base`, through references to opaque literal colours. A pair below 4.5:1 is a `SUI-THEME-CONTRAST` warning naming both state paths; a pair that does not resolve to opaque literals is skipped. `contrastRatio(a, b)` is the WCAG ratio of two opaque colour literals.
+
+### Token emission
+
+`<ui-app-root>` is a generated component. Its static styles declare one custom property per leaf of the default tree
+(`tokenSheet()`), each bound to the store: `--ui-color-text-muted: {{ cssValue($.theme.tokens.color.text.muted) }};`.
+`cssValue` is a controller member that calls `toCssValue`, so a reference value (`{palette.blue.600}`) becomes
+`var(--ui-palette-blue-600)` and the browser resolves the chain. The set is closed: a StateUI style binding needs a
+static property name, so a token outside the default tree is `SUI-THEME-TOKEN`.
+
+A write to `$.theme.tokens.<path>` calls `setProperty` once on the host, synchronously, and reads no layout. Writing a
+primitive changes one property in JavaScript; every role that references it follows in the browser.
+
+The document's `theme.tokens` is checked by the `theme` document validator (`validateThemeTokens`, registered with
+`validateDocument`): an invalid token stops `mountApp` with `SUI-THEME-NAME`, `-TOKEN`, `-VALUE` or `-REF` before render.
+`DEFAULT_ACTIVE` holds the default `$.theme.active`.
 
 ## Build and test
 Build `@punyts/state`, `@punyts/expression` and `@punyts/stateui` first.

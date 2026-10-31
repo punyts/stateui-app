@@ -412,6 +412,9 @@ export function finishShape(shape: Shape, context: RuleContext): void {
             context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `properties.${name}` }));
         }
     }
+    if (shape.layout && shape.placement !== undefined) {
+        context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: 'placement' }));
+    }
     if (context.errors.length > 0) return;
     shape.properties[HIDDEN] = {
         type: 'boolean',
@@ -478,6 +481,19 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
         required: false,
         rule(value, shape) {
             shape.layout = value === true;
+        }
+    },
+    {
+        name: 'placement',
+        type: 'object',
+        required: false,
+        rule(value, shape, context) {
+            const input = asObject(value);
+            if (Object.keys(input).length === 0) {
+                context.errors.push(invalid(context, 'placement'));
+                return;
+            }
+            shape.placement = readProperties(input, { ...context, where: 'placement', nested: true });
         }
     }
 ];

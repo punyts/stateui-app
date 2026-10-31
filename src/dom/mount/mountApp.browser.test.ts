@@ -3,6 +3,7 @@ import { defineComponent } from '@punyts/stateui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { parseShape } from '../../core/shape/index.js';
+import { DEFAULT_TOKENS } from '../../core/theme/index.js';
 import type { Shape } from '../../core/shape/index.js';
 import type { AppDocument } from '../../core/types.js';
 import { mountApp, registerMountStep } from './index.js';
@@ -135,7 +136,7 @@ describe('mountApp in Chromium', () => {
         const store = app.store;
 
         // Assert
-        expect(store?.get('$.theme')).toEqual({ tokens: {}, active: {} });
+        expect(store?.get('$.theme')).toEqual({ tokens: DEFAULT_TOKENS, active: { mode: 'light', brand: 'default', motion: 'full' } });
         expect(store?.get('$.locale')).toBe('en');
         expect(store?.get('$.runtime.nodes')).toEqual({});
         expect(store?.get('$.runtime.icons')).toEqual({});

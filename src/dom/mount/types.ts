@@ -7,7 +7,7 @@ import type { DispatchHooks } from '../on/index.js';
 
 /** The shape of the store `mountApp` builds */
 export interface AppState {
-    /** Token values and the active overlay name per kind; empty until the theme step (E3.4) fills them */
+    /** Every token value (the document's over the default tree) and the active overlay name per kind */
     theme: { tokens: JsonObject; active: Record<string, string> };
     /** A copy of the document's `data` */
     data: JsonObject;
@@ -46,7 +46,7 @@ export interface StartedContext extends MountContext {
 }
 
 /**
- * A plug-in step of `mountApp`. Epic 3 registers the theme (E3.4), reflect (E3.5) and locale (E3.19) steps instead of
+ * A plug-in step of `mountApp`. Epic 3 registers the theme (E3.4) and locale (E3.19) steps instead of
  * `mountApp` knowing them. `prepare` runs before the store exists, `start` after links are applied and before the
  * first render; `start` may return a function that `dispose` calls
  */

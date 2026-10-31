@@ -6,10 +6,14 @@ import type { JsonObject, JsonValue, Node } from '../types.js';
 import { fitsAnyType, fitsProperty, fitsType, typesOf } from './fit.js';
 import type { PropertyShape, Shape } from './types.js';
 
-/** Node keys the tree owns; their content is checked with the document, not against the properties */
+/**
+ * Node keys the tree owns; their content is checked with the document (the `layout` and `placement` validators),
+ * not against the properties
+ */
 const TREE_KEYS: readonly string[] = [
     RESERVED_KEYS.component,
     RESERVED_KEYS.children,
+    RESERVED_KEYS.layout,
     RESERVED_KEYS.placement,
     RESERVED_KEYS.theme,
     RESERVED_KEYS.on
@@ -223,7 +227,7 @@ function scanRow(shape: Shape, node: Node, statePath: string, walk: Walk): void 
             scanOn(value, path, walk);
         } else if (key.startsWith(PREFIXES.link)) {
             if (isRowReference(value)) reportRow(walk, value, path);
-        } else if (!TREE_KEYS.includes(key) && key !== RESERVED_KEYS.layout) {
+        } else if (!TREE_KEYS.includes(key)) {
             const property = Object.hasOwn(shape.properties, key) ? shape.properties[key] : undefined;
             if (property) scanValue(property, value, path, walk);
         }
@@ -232,7 +236,7 @@ function scanRow(shape: Shape, node: Node, statePath: string, walk: Walk): void 
 
 /**
  * Checks one node against its shape and returns the violations, each with the state path of the property.
- * Covers unknown properties, `layout` on a component that does not lay out, required and conditionally required
+ * Covers unknown properties, required and conditionally required
  * properties, runtime properties set by a node, value types, allowed values, validators, the URL rule, icon names
  * (checked with `context.isIconName` when given), node-typed slots and the contents of maps (with the map key in
  * the path). `$row` in a link or an `on` entry of the node, or inside a slot value that is not a `row: true`
@@ -248,10 +252,6 @@ export function validateNode(shape: Shape, node: Node, statePath: string, contex
         if (TREE_KEYS.includes(key)) continue;
         const path = `${statePath}.${key}`;
 
-        if (key === RESERVED_KEYS.layout) {
-            if (!shape.layout) report(walk, 'SUI-STATE-UNKNOWN', key, path);
-            continue;
-        }
         if (key.startsWith('$') || key.startsWith(PREFIXES.reserved)) {
             report(walk, 'SUI-NODE-NAME', key, path);
             continue;

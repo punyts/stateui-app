@@ -58,7 +58,7 @@ function textOf(root: ParentNode): string {
 const documentOf = (): AppDocument => ({
     locale: 'en',
     data: { typed: 'Ada', premium: 'Premium' },
-    theme: { tokens: { color: { primary: 'red' } }, active: {} },
+    theme: { tokens: { color: { accent: { base: '#ff0000' } } }, active: {} },
     app: {
         component: 'panel',
         children: {
@@ -104,6 +104,7 @@ describe('switching language in Chromium', () => {
         const store = app.store;
         const overlays = { [app.baseLocale ?? '']: app.baseOverlay ?? {}, de: DE };
         store?.set('$.data.typed', 'Grace');
+        const themeBefore: unknown = JSON.parse(JSON.stringify(store?.get('$.theme')));
 
         // Act
         const before = textOf(host);
@@ -135,7 +136,7 @@ describe('switching language in Chromium', () => {
         expect(english).toContain('Premium plus');
         expect(dataInGerman).toBe('Grace');
         expect(store?.get('$.data.typed')).toBe('Grace');
-        expect(store?.get('$.theme')).toEqual({ tokens: {}, active: {} });
+        expect(store?.get('$.theme')).toEqual(themeBefore);
         expect(store?.get('$.locale')).toBe('en');
     });
 

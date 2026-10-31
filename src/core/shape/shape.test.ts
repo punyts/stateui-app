@@ -327,11 +327,11 @@ describe('validateNode', () => {
         expect(codes(shape, { value: 'a', children: {}, placement: {}, theme: 'x', on: {} })).toEqual([]);
     });
 
-    it('should accept layout only when the shape supports it', () => {
+    it('should leave layout to the layout validator', () => {
         const flat = shapeOf({ properties: { value: { type: 'string' } } });
 
         expect(codes(shape, { value: 'a', layout: { type: 'grid' } })).toEqual([]);
-        expect(codes(flat, { value: 'a', layout: { type: 'grid' } })).toEqual(['SUI-STATE-UNKNOWN']);
+        expect(codes(flat, { value: 'a', layout: { type: 'grid' } })).toEqual([]);
     });
 
     it.each([

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseShape, validateNode } from '../core/shape/index.js';
-import type { Shape } from '../core/shape/index.js';
+import type { PropertyShape, Shape } from '../core/shape/index.js';
 import type { ScannedComponent } from '../core/convention/index.js';
 import type { Node } from '../core/types.js';
 import { composedEntry, emitCatalog, exampleNode, rootEntry, sizeOf } from './catalog.js';
@@ -107,17 +107,18 @@ describe('rootEntry', () => {
     });
 
     it('should carry tokens, placement and exposes when the shape declares them', () => {
+        const area = parsed({ summary: 'x', properties: { area: { type: 'string' } } }).properties.area as PropertyShape;
         const declared: CatalogShape = {
             ...shape,
             tokens: { '--ui-table-gap': 'space' },
-            placement: { area: { type: 'string' } },
+            placement: { area },
             exposes: { columns: 'The columns' }
         };
 
         const entry = rootEntry(scanned('table'), declared, 'atom');
 
         expect(entry.tokens).toEqual({ '--ui-table-gap': 'space' });
-        expect(entry.placement).toEqual({ area: { type: 'string' } });
+        expect(entry.placement).toEqual({ area });
         expect(entry.exposes).toEqual({ columns: 'The columns' });
         expect(Object.keys(entry.shape)).toEqual(['summary', 'properties', 'shared', 'events', 'commands', 'layout']);
     });
