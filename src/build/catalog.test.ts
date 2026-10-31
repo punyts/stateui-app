@@ -106,6 +106,22 @@ describe('rootEntry', () => {
         expect(exampleNode('t', withDefault)).toEqual({ component: 't', mode: 'a' });
     });
 
+    it('should add a property that requiredWhen makes required to the example', () => {
+        const conditional = parsed({
+            summary: 'x',
+            properties: {
+                decorative: { type: 'boolean', default: false },
+                _alt: { type: 'string', kind: 'content', requiredWhen: { property: 'decorative', equals: false } },
+                _note: { type: 'string', kind: 'content', requiredWhen: { property: 'decorative', equals: true } }
+            }
+        });
+
+        const example = exampleNode('image', conditional);
+
+        expect(example).toEqual({ component: 'image', _alt: 'x' });
+        expect(validateNode(conditional, example, '$.app')).toEqual([]);
+    });
+
     it('should carry tokens, placement and exposes when the shape declares them', () => {
         const area = parsed({ summary: 'x', properties: { area: { type: 'string' } } }).properties.area as PropertyShape;
         const declared: CatalogShape = {

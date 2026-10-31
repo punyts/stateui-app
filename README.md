@@ -399,7 +399,7 @@ Composed components have no module; `catalog.json` describes them with their def
 - **Catalog.** `catalog.json` is the file the minion and the server read; it needs no DOM. `size` comes from the nearest
   `atoms`, `molecules`, `composites` or `composed` parent folder (a component elsewhere is `SUI-BUILD-GROUP`).
   `summary` is the shape's required `summary`. `shape` is what `validateNode` takes, `content` and `slots` list the `_`
-  and `node` properties (`map.field` inside map items), and `example` is the component with its required properties.
+  and `node` properties (`map.field` inside map items), and `example` is the component with its required properties and the ones a `requiredWhen` makes required.
   An entry also carries `shared`, `tokens`, `placement` and `exposes` when the shape declares them. `catalog.json` also
   has a top-level `locales`: every language a built component has an overlay for, sorted. The same result is
   `BuildResult.catalog`.

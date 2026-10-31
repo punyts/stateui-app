@@ -155,11 +155,24 @@ function sampleValue(property: PropertyShape): JsonValue | undefined {
     }
 }
 
-/** The smallest node of a root component: its name and every required property */
+/** True when the sibling the condition names holds (or does not hold) the value that makes the property required */
+function conditionHolds(condition: NonNullable<PropertyShape['requiredWhen']>, node: Node, shape: Shape): boolean {
+    const actual = node[condition.property] ?? shape.properties[condition.property]?.default;
+    const same = (expected: JsonValue): boolean => JSON.stringify(actual) === JSON.stringify(expected);
+    return 'equals' in condition ? same(condition.equals) : !same(condition.notEquals);
+}
+
+/** The smallest node of a root component: its name, every required property and every property a `requiredWhen` makes required */
 export function exampleNode(name: string, shape: Shape): Node {
     const node: Node = { component: name };
     for (const [property, definition] of Object.entries(shape.properties)) {
         if (!definition.required || definition.runtime) continue;
+        const value = sampleValue(definition);
+        if (value !== undefined) node[property] = value;
+    }
+    for (const [property, definition] of Object.entries(shape.properties)) {
+        if (definition.required || definition.runtime || definition.requiredWhen === undefined) continue;
+        if (!conditionHolds(definition.requiredWhen, node, shape)) continue;
         const value = sampleValue(definition);
         if (value !== undefined) node[property] = value;
     }
