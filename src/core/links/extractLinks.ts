@@ -84,15 +84,16 @@ class Extractor {
      * Relative references resolve against the owner of the row template they sit in, not the slot. Undefined when the
      * node does not exist or its shape has no such exposed property. Without a library the reference stays as written
      */
-    private reference(target: string): string | undefined {
-        if (this.options.library === undefined) return target;
+    private reference(target: string): { target: string; exposed?: string } | undefined {
+        if (this.options.library === undefined) return { target };
         const parsed = parseTarget(target);
         const chain =
             this.options.owner ?? (this.rowOwner === undefined ? this.frames : this.frames.slice(0, this.rowOwner + 1));
         const located = parsed ? resolveTarget(parsed, chain, chain[0]?.path ?? ROOT_PATH) : undefined;
         if (located?.kind !== 'property') return undefined;
         if (shapeOf(this.options, located.node.component)?.properties[located.property]?.exposed !== true) return undefined;
-        return [runtimePath(located.path), located.property, ...located.rest].join('.');
+        const exposed = `${runtimePath(located.path)}.${located.property}`;
+        return { target: [exposed, ...located.rest].join('.'), exposed };
     }
 
     private record(path: string, key: string, target: JsonValue): void {
@@ -114,7 +115,13 @@ class Extractor {
             this.errors.push(buildError('SUI-LINK-MISSING', { target, path, statePath: path }));
             return;
         }
-        this.links.push({ statePath: path, key, target: resolved });
+        // The component creates the exposed property after links are applied, so the target may not exist yet
+        this.links.push({
+            statePath: path,
+            key,
+            target: resolved.target,
+            ...(resolved.exposed === undefined ? {} : { allowMissing: true, exposed: resolved.exposed })
+        });
     }
 }
 
@@ -125,8 +132,9 @@ class Extractor {
  *
  * With `options.library` a node reference is resolved against the tree to the runtime path of the property
  * (`^orders.current` gives `$.runtime.nodes.app.…orders.current`); a node that does not exist, or whose shape has no
- * such exposed property, is `SUI-LINK-MISSING`. Inside a row template relative references resolve against the node
- * that owns the template. Without a library node references are returned as written. `$row` targets are returned
+ * such exposed property, is `SUI-LINK-MISSING`. A resolved reference carries `exposed` and `allowMissing`, since the
+ * component creates the property after links are applied (see `applyLinks`). Inside a row template relative references resolve
+ * against the node that owns the template. Without a library node references are returned as written. `$row` targets are returned
  * as written: `resolveRowLinks` points them at the slot. Pure; never throws on a bad tree
  */
 export function extractLinks(resolvedTree: Node, options: ExtractOptions = {}): ExtractResult {

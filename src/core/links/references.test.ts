@@ -57,8 +57,50 @@ describe('extractLinks with node references', () => {
         // Assert
         expect(result.errors).toEqual([]);
         expect(result.links).toEqual([
-            { statePath: '$.app.children.orders.children.detail', key: 'value', target: `${ORDERS}.current.customer` }
+            {
+                statePath: '$.app.children.orders.children.detail',
+                key: 'value',
+                target: `${ORDERS}.current.customer`,
+                allowMissing: true,
+                exposed: `${ORDERS}.current`
+            }
         ]);
+    });
+
+    it('should apply a node reference before the runtime branch exists and follow the property once it is re-pointed', () => {
+        // Arrange
+        const result = extract({
+            component: 'panel',
+            children: {
+                orders: {
+                    component: 'records',
+                    children: {
+                        detail: { component: 'descriptionList', '<-value': '^orders.current.customer', '<-other': '^orders.current' }
+                    }
+                } as Node
+            }
+        });
+        const store = createStore<unknown>({
+            app: result.tree,
+            data: { k1: { customer: 'Ada' } },
+            runtime: { nodes: {}, empty: {} }
+        });
+        store.protect('$.runtime.empty');
+        const detail = '$.app.children.orders.children.detail';
+
+        // Act
+        const errors = applyLinks(store, result.links);
+        const before = store.get(`${detail}.value`);
+        const write = store.set(`${detail}.value`, 'x');
+        store.link(`${ORDERS}.current`, '$.data.k1');
+
+        // Assert
+        expect(result.errors).toEqual([]);
+        expect(errors).toEqual([]);
+        expect(before).toBeUndefined();
+        expect(write).toBe(false);
+        expect(store.get(`${detail}.value`)).toBe('Ada');
+        expect(store.get(`${detail}.other`)).toEqual({ customer: 'Ada' });
     });
 
     it('should resolve .path against the own subtree', () => {

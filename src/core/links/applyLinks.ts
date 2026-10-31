@@ -1,5 +1,6 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
+import { RUNTIME_PATHS } from './runtimePath.js';
 import type { Link, LinkStore } from './types.js';
 
 /** What `applyLinks` created per store, so applying twice does not notify twice */
@@ -11,6 +12,21 @@ function fromPath(link: Link): string {
 
 function isCycle(from: string, target: string): boolean {
     return target === from || target.startsWith(`${from}.`) || from.startsWith(`${target}.`);
+}
+
+/**
+ * Makes the exposed property a node reference reaches exist before the link is made: each missing object of the
+ * node's runtime branch is written (the store creates no parents), and a missing property becomes an alias of
+ * `$.runtime.empty`, which the component re-points when it starts (a list points `current` at the selected record)
+ */
+function prepareExposed(store: LinkStore, exposed: string): void {
+    if (store.set === undefined || store.get(exposed) !== undefined) return;
+    const segments = exposed.split('.');
+    for (let length = 3; length < segments.length; length += 1) {
+        const prefix = segments.slice(0, length).join('.');
+        if (store.get(prefix) === undefined) store.set(prefix, {});
+    }
+    store.link(exposed, RUNTIME_PATHS.empty);
 }
 
 /**
@@ -29,6 +45,7 @@ export function applyLinks(store: LinkStore, links: readonly Link[]): BuildError
         const from = fromPath(link);
         if (done.get(from) === link.target) continue;
 
+        if (link.exposed !== undefined) prepareExposed(store, link.exposed);
         const options = link.allowMissing ? { allowMissing: true } : undefined;
         if (store.link(from, link.target, options)) {
             done.set(from, link.target);

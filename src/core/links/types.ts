@@ -13,6 +13,11 @@ export interface Link {
     target: string;
     /** Set on the `$row.x` links of a slot: a missing field reads as `undefined` instead of failing the link */
     allowMissing?: boolean;
+    /**
+     * Set on a node reference: the runtime path of the exposed property it reaches (`$.runtime.nodes.app.list.current`).
+     * The component creates that property after links are applied, so until then it is an alias of `$.runtime.empty`
+     */
+    exposed?: string;
 }
 
 export interface ExtractResult {
@@ -56,4 +61,6 @@ export interface LinkStore {
     link: (fromPath: string, toPath: string, options?: { allowMissing?: boolean }) => boolean;
     unlink: (fromPath: string) => boolean;
     get: (path: string) => unknown;
+    /** Needed to create the runtime branch an `exposed` link reaches into */
+    set?: (path: string, value: object) => boolean;
 }
