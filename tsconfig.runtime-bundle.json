@@ -1,0 +1,17 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "rootDir": ".",
+        "composite": false,
+        "declaration": false,
+        "declarationMap": false,
+        "noEmit": true,
+        "allowImportingTsExtensions": true,
+        "types": [
+            "node"
+        ]
+    },
+    "include": [
+        "runtime-bundle"
+    ]
+}

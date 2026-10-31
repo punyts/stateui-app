@@ -30,12 +30,14 @@
         "./build": {
             "types": "./dist/build/index.d.ts",
             "default": "./dist/build/index.js"
-        }
+        },
+        "./runtime-bundle/*": "./dist/runtime-bundle/*"
     },
     "scripts": {
         "clean": "bash ../../bin/clean.sh .",
         "typecheck": "tsc -p tsconfig.build.json --noEmit",
         "build": "npm run typecheck && bash ../../bin/build.sh . tsc -b tsconfig.build.json",
+        "build:runtime-bundle": "tsc -p tsconfig.runtime-bundle.json && node runtime-bundle/build.ts",
         "test": "npm run test:run",
         "test:run": "vitest run",
         "test:watch": "vitest --watch",
@@ -54,7 +56,9 @@
         "@punyts/stateui": "^0.2.0"
     },
     "devDependencies": {
+        "@punyts/stateui-components": "^0.1.0",
         "@vitest/browser-playwright": "^4.1.10",
+        "esbuild": "^0.28.1",
         "happy-dom": "^21.0.4",
         "playwright": "^1.61.1",
         "typescript": "^5.9.3",

@@ -395,6 +395,13 @@ Code is in `src/runtime/`. `protocol` holds the closed set of messages and the v
 - `emit` comes from the dispatcher's `onEmit` hook; `error` from `onError`, mount errors, uncaught errors and unhandled rejections (`SUI-RUN-BINDING`). At most 200 errors are posted per runtime.
 - Posting uses target origin `*`, because a frame sandboxed without `allow-same-origin` has an opaque origin; the nonce is the check.
 
+### Runtime bundle
+
+`runtime-bundle/` builds the one script the preview page loads (E7.2); it is not part of `dist/` output of `tsc` and not exported as code.
+- `entry.ts` bundles StateUI, this package, `@punyts/stateui-components` (registered with `register(window)`, its `catalog.json` turned into the library with `libraryFromCatalog`) and every component locale overlay (`<name>.locale.<code>.json`, through the virtual module `virtual:component-overlays`, passed as `componentOverlays`). It reads the per-load nonce from the URL fragment (`page.html#<nonce>`, 16 to 128 of `A-Za-z0-9_-`) and calls `startRuntime(window, window.parent, nonce, library, { componentOverlays })`. Without a well-formed nonce nothing starts.
+- `npm run build:runtime-bundle` type-checks the folder, bundles with esbuild (one minified classic script, `iife`, ES2022) and writes `dist/runtime-bundle/<hash>.js` and `manifest.json` (`{ hash, script }`), removing the files of earlier builds. `<hash>` is the first 16 hex digits of the SHA-256 of the script, so the name changes when the source does. The package export `@punyts/stateui-app/runtime-bundle/*` maps to that folder; the ai-minion API reads the manifest through it. It needs `@punyts/stateui-components` built, so it is not part of `npm run build`: the API build runs it.
+- `buildRuntimeBundle({ entry, outDir })` (`build.ts`) is the function behind the script.
+
 ## Building a component library
 
 `@punyts/stateui-app/build` turns a component folder into registered StateUI components. A developer adds a component by
@@ -528,6 +535,7 @@ Build `@punyts/state`, `@punyts/expression` and `@punyts/stateui` first.
 npm run build
 npm test
 npm run test:browser
+npm run build:runtime-bundle   # needs @punyts/stateui-components built
 ```
 
 ## License

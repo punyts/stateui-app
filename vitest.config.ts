@@ -4,7 +4,7 @@ export default defineConfig({
     test: {
         environment: 'happy-dom',
         globals: true,
-        include: ['src/**/*.test.ts'],
+        include: ['src/**/*.test.ts', 'runtime-bundle/**/*.test.ts'],
         exclude: [...configDefaults.exclude, 'src/**/*.browser.test.ts']
     }
 });
