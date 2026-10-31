@@ -5,6 +5,7 @@ import type { NodeOptions } from '@punyts/stateui';
 import { buildError, isValid } from '../../core/errors/index.js';
 import type { BuildError } from '../../core/errors/index.js';
 import type { Link } from '../../core/links/index.js';
+import { extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
@@ -57,7 +58,7 @@ function removeLinked(tree: Node, links: readonly Link[]): void {
 }
 
 function failed(errors: BuildError[]): MountedApp {
-    return { store: undefined, errors, dispose: () => undefined };
+    return { store: undefined, baseOverlay: undefined, baseLocale: undefined, errors, dispose: () => undefined };
 }
 
 function stepError(name: string): BuildError {
@@ -67,7 +68,7 @@ function stepError(name: string): BuildError {
 /**
  * The single way to start an application. It validates the document against the library (a `ComponentLibrary`; the
  * component modules must be registered already, for example with the build's `registerAll`), resolves `composed`,
- * builds the store (`theme`, `data`, `locale`, `app` and the `runtime` branch), applies the `<-` links, gives
+ * keeps the base-language content overlay (`baseOverlay`, for `switchLocale`), builds the store (`theme`, `data`, `locale`, `app` and the `runtime` branch), applies the `<-` links, gives
  * `<sui-node>` its resolver and options, mounts the store on `host` and renders `<ui-app-root>`, which holds
  * `<sui-node state="$.app">`.
  *
@@ -90,6 +91,7 @@ export function mountApp(
     const extracted = extractLinks(resolved.node, { library, instances: resolved.instances });
     if (!isValid(extracted.errors)) return failed([...errors, ...extracted.errors]);
     removeLinked(extracted.tree, extracted.links);
+    const baseOverlay = extractBaseOverlay(extracted.tree, extracted.linkedPaths);
     const context: MountContext = {
         host,
         document,
@@ -145,6 +147,8 @@ export function mountApp(
     let disposed = false;
     return {
         store,
+        baseOverlay,
+        baseLocale: context.state.locale,
         errors,
         dispose(): void {
             if (disposed) return;

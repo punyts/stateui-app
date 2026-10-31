@@ -39,6 +39,9 @@ export const ERROR_CATALOG = {
     'SUI-NODE-NAME': { template: 'Property name "{name}" at {path} is not allowed' },
     'SUI-STATE-INVALID': { template: 'Property "{name}" at {path} does not fit the shape of "{component}"' },
     'SUI-STATE-UNKNOWN': { template: 'Property "{name}" at {path} is not in the shape of "{component}"' },
+    'SUI-STATE-SHARED': {
+        template: 'Property "{name}" at {path} is a shared property "{component}" does not support; it supports {other}'
+    },
     'SUI-STATE-REQUIRED': { template: 'Property "{name}" at {path} is required by "{component}"' },
     'SUI-STATE-CONDITION': {
         template: 'Property "{name}" at {path} is required by "{component}" under the value of "{other}"'
@@ -58,7 +61,10 @@ export const ERROR_CATALOG = {
     'SUI-ON-COMMAND': { template: 'Component "{component}" at {path} has no command "{command}"' },
     'SUI-ON-SHAPE': { template: '"on" entry at {path} must be one command object or a list of them' },
     'SUI-ON-TARGET': { template: 'Target {target} of "{event}" at {path} does not resolve' },
-    'SUI-THEME-NAME': { template: 'Token name "{name}" at {path} collides with another token after flattening' },
+    'SUI-THEME-NAME': { template: 'Token name "{name}" at {path} must be lower-case letters and digits' },
+    'SUI-THEME-REF': { template: 'Token at {path} has the reference {target}, which is not allowed: {name}' },
+    'SUI-THEME-VALUE': { template: 'Token value at {path} is not a valid "{name}" value' },
+    'SUI-THEME-TOKEN': { template: 'Token path {path} is not in the default tree or the component tokens' },
     'SUI-THEME-OVERLAY': { template: 'Theme overlay "{name}" of kind "{other}" sets a token group outside its kind at {path}' },
     'SUI-THEME-CONTRAST': {
         template: 'Contrast between {token} and {other} is {actual}:1, below {limit}:1',
@@ -66,6 +72,8 @@ export const ERROR_CATALOG = {
     },
     'SUI-LOCALE-CONTENT': { template: 'Overlay "{locale}" sets non-content property "{name}" at {path}' },
     'SUI-LOCALE-PATH': { template: 'Overlay "{locale}" has a path that does not exist: {path}' },
+    'SUI-LOCALE-UNKNOWN': { template: 'No overlay for language "{locale}"' },
+    'SUI-LOCALE-LINKED': { template: 'Overlay "{locale}" sets linked property "{name}" at {path}' },
     'SUI-LOCALE-MISSING': { template: 'Language "{locale}" does not translate {path}', severity: 'warning' },
     'SUI-BUILD-SHAPE': { template: 'Invalid shape file {file}: {name}' },
     'SUI-BUILD-NAME': { template: 'Name "{name}" in {file} is not allowed' },

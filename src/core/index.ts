@@ -81,3 +81,50 @@ export type {
     DocumentValidator,
     ValidateDocumentOptions
 } from './validate/index.js';
+export {
+    DEFAULT_LEAVES,
+    DEFAULT_TOKENS,
+    MIN_CONTRAST,
+    TOKENS_STATE_PATH,
+    TOKEN_TYPES,
+    TokenNameError,
+    checkContrast,
+    componentTypeMap,
+    contrastRatio,
+    cssName,
+    flattenTokens,
+    hasInjection,
+    mergeOverDefaults,
+    parseValue,
+    referencesOf,
+    toCssValue,
+    tokenLayer,
+    tokenTypeOf,
+    validateReferences,
+    validateTokenNames,
+    validateTokenValue,
+    validateTokens
+} from './theme/index.js';
+export type {
+    ComponentToken,
+    TokenLayer,
+    TokenLeaf,
+    TokenTree,
+    TokenType,
+    TypeLookup,
+    ValidateTokensOptions,
+    ValuePart
+} from './theme/index.js';
+export {
+    ARTICULATION_LISTS,
+    ARTICULATION_NAMES,
+    HIDDEN,
+    SHARED_NAMES,
+    attributeName,
+    closedList,
+    isArticulationName,
+    isSharedName
+} from './articulation/index.js';
+export type { ArticulationName, SharedName } from './articulation/index.js';
+export { extractBaseOverlay, isContentKey, validateLocaleOverlay } from './locale/index.js';
+export type { LocaleOverlayOptions } from './locale/index.js';

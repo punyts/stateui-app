@@ -12,8 +12,8 @@ function shapeOf(properties: Record<string, unknown>, extra: Record<string, unkn
 }
 
 const LIBRARY: ComponentLibrary = {
-    text: { tier: 'root', tag: 'ui-text', shape: shapeOf({ _text: { type: 'string', kind: 'content', default: 'Text' }, tone: { type: 'string', default: 'plain' } }) },
-    button: { tier: 'root', tag: 'ui-button', shape: shapeOf({ _title: { type: 'string', kind: 'content', default: 'Go' }, variant: { type: 'string', default: 'solid' } }) },
+    text: { tier: 'root', tag: 'ui-text', shape: shapeOf({ _text: { type: 'string', kind: 'content', default: 'Text' }, mood: { type: 'string', default: 'plain' } }) },
+    button: { tier: 'root', tag: 'ui-button', shape: shapeOf({ _title: { type: 'string', kind: 'content', default: 'Go' }, look: { type: 'string', default: 'solid' } }) },
     toolbar: { tier: 'root', tag: 'ui-toolbar', shape: shapeOf({ align: { type: 'string', default: 'start' } }) },
     modal: {
         tier: 'root',
@@ -53,7 +53,7 @@ describe('resolveNode', () => {
         const result = resolve({ component: 'text', _text: 'Hi' });
 
         expect(result.errors).toEqual([]);
-        expect(result.node).toEqual({ component: 'text', _text: 'Hi', tone: 'plain' });
+        expect(result.node).toEqual({ component: 'text', _text: 'Hi', mood: 'plain' });
     });
 
     it('should override a nested node by path when the component is composed', () => {
@@ -67,9 +67,9 @@ describe('resolveNode', () => {
         const node = result.node as Record<string, any>;
         expect(node.component).toBe('modal');
         expect(node._title).toBe('Are you sure?');
-        expect(node.body).toEqual({ component: 'text', _text: 'Delete order 5?', tone: 'plain' });
+        expect(node.body).toEqual({ component: 'text', _text: 'Delete order 5?', mood: 'plain' });
         expect(node.footer.children.confirm._title).toBe('Remove');
-        expect(node.footer.children.confirm.variant).toBe('solid');
+        expect(node.footer.children.confirm.look).toBe('solid');
         expect(node.footer.children.confirm.on).toEqual({ press: [{ command: 'close', target: '^confirmDialog' }] });
         expect(node.footer.children.cancel._title).toBe('Cancel');
     });
@@ -94,7 +94,7 @@ describe('resolveNode', () => {
 
         const children = (result.node as Record<string, any>).children;
         expect(children.dialog.component).toBe('modal');
-        expect(children.other).toEqual({ component: 'text', _text: 'Text', tone: 'plain' });
+        expect(children.other).toEqual({ component: 'text', _text: 'Text', mood: 'plain' });
         expect(result.instances).toEqual({ '$.app.children.dialog': ['confirmDialog'] });
     });
 

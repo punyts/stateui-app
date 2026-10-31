@@ -31,8 +31,11 @@ describe('error catalog', () => {
     });
 
     it('includes the sub-codes the specs name', () => {
-        for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST',
+        for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST', 'SUI-THEME-REF', 'SUI-THEME-VALUE', 'SUI-THEME-TOKEN',
             'SUI-BUILD-TOKEN',
+            'SUI-LOCALE-UNKNOWN',
+            'SUI-LOCALE-LINKED',
+            'SUI-STATE-SHARED',
             'SUI-BUILD-KEY',
             'SUI-BUILD-VALIDATOR',
             'SUI-BUILD-KIND',

@@ -8,6 +8,7 @@
         "isolatedModules": true
     },
     "include": [
-        "src"
+        "src",
+        "src/core/theme/*.json"
     ]
 }

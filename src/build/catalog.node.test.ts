@@ -36,7 +36,7 @@ describe('catalog.json under plain node', () => {
 
         const { errors } = validateDocument({ data: {}, app }, catalog);
 
-        expect(errors).toEqual([expect.objectContaining({ code: 'SUI-STATE-UNKNOWN', statePath: '$.app.label.size' })]);
+        expect(errors).toEqual([expect.objectContaining({ code: 'SUI-STATE-SHARED', statePath: '$.app.label.size' })]);
     });
 
     it('should accept the example node of every root component', async () => {

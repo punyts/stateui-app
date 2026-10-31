@@ -17,12 +17,28 @@
                         "reflect": false,
                         "row": false,
                         "exposed": false
+                    },
+                    "hidden": {
+                        "type": "boolean",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": true,
+                        "row": false,
+                        "exposed": false
                     }
                 },
+                "shared": [],
                 "events": [],
                 "commands": [],
                 "layout": false
             },
+            "shared": [
+                "hidden"
+            ],
+            "own": [
+                "label"
+            ],
             "content": [],
             "slots": [
                 {
@@ -84,14 +100,31 @@
                         "row": false,
                         "exposed": false,
                         "default": "black"
+                    },
+                    "hidden": {
+                        "type": "boolean",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": true,
+                        "row": false,
+                        "exposed": false
                     }
                 },
+                "shared": [],
                 "events": [
                     "press"
                 ],
                 "commands": [],
                 "layout": false
             },
+            "shared": [
+                "hidden"
+            ],
+            "own": [
+                "_text",
+                "color"
+            ],
             "content": [
                 "_text"
             ],

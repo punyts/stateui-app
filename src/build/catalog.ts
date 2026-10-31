@@ -1,3 +1,4 @@
+import { HIDDEN, isArticulationName } from '../core/articulation/index.js';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import { typesOf } from '../core/shape/index.js';
@@ -13,8 +14,6 @@ export type CatalogSize = 'atom' | 'molecule' | 'composite';
  * when the shape declares it and leaves it out otherwise
  */
 export interface ShapeExtras {
-    /** The shared property sets the component takes part in */
-    shared?: string[];
     /** The component tokens the component declares */
     tokens?: JsonValue;
     /** The `placement` shape its children may carry */
@@ -49,6 +48,10 @@ export interface RootCatalogEntry extends EntryBase {
     summary: string;
     /** What `validateNode` needs; the server validates a node against it without a DOM */
     shape: Shape;
+    /** The shared properties the component supports: the ones its shape declares, then `hidden` */
+    shared: string[];
+    /** The component's own properties, without the shared ones */
+    own: string[];
     /** The content (`_`) properties, with `map.field` for fields inside map items */
     content: string[];
     slots: CatalogSlot[];
@@ -162,7 +165,6 @@ export function exampleNode(name: string, shape: Shape): Node {
 
 function extrasOf(source: ShapeExtras): ShapeExtras {
     return {
-        ...(source.shared === undefined ? {} : { shared: source.shared }),
         ...(source.tokens === undefined ? {} : { tokens: source.tokens }),
         ...(source.placement === undefined ? {} : { placement: source.placement }),
         ...(source.exposes === undefined ? {} : { exposes: source.exposes })
@@ -180,10 +182,13 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
         shape: {
             summary: shape.summary,
             properties: shape.properties,
+            shared: shape.shared,
             events: shape.events,
             commands: shape.commands,
             layout: shape.layout
         },
+        shared: [...shape.shared, HIDDEN],
+        own: Object.keys(shape.properties).filter((name) => !isArticulationName(name)),
         content: contentNames(shape.properties),
         slots: slotsOf(shape.properties),
         events: shape.events,

@@ -23,7 +23,7 @@ const library: ComponentLibrary = {
     label: {
         tier: 'root',
         tag: 'x-mount-label',
-        shape: shapeOf({ text: { type: 'string', default: '' }, tone: { type: 'string', default: 'plain', reflect: true } })
+        shape: shapeOf({ text: { type: 'string', default: '' }, mood: { type: 'string', default: 'plain', reflect: true } })
     },
     button: {
         tier: 'root',
@@ -204,10 +204,10 @@ describe('mountApp in Chromium', () => {
         const host = freshHost();
 
         // Act
-        start(host, { app: panel({ hello: { component: 'label', text: 'x', tone: 'danger' } }) });
+        start(host, { app: panel({ hello: { component: 'label', text: 'x', mood: 'danger' } }) });
 
         // Assert
-        expect(find(host, 'x-mount-label')?.getAttribute('tone')).toBe('danger');
+        expect(find(host, 'x-mount-label')?.getAttribute('mood')).toBe('danger');
     });
 
     it('should unlink, unmount and leave no state for a second app on a fresh host', () => {

@@ -9,7 +9,7 @@ function parse(properties: Record<string, unknown>) {
 describe('exposed', () => {
     it('should mark an exposed runtime property', () => {
         // Arrange
-        const result = parse({ current: { type: 'any', runtime: true, exposed: true, default: {} }, size: { type: 'string' } });
+        const result = parse({ current: { type: 'any', runtime: true, exposed: true, default: {} }, width: { type: 'string' } });
 
         // Act
         const shape = result.shape as Shape;
@@ -17,7 +17,7 @@ describe('exposed', () => {
         // Assert
         expect(result.errors).toEqual([]);
         expect(shape.properties.current?.exposed).toBe(true);
-        expect(shape.properties.size?.exposed).toBe(false);
+        expect(shape.properties.width?.exposed).toBe(false);
     });
 
     it('should refuse exposed on a property that is not runtime', () => {

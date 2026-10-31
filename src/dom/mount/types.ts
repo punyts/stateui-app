@@ -59,6 +59,10 @@ export interface MountStep {
 export interface MountedApp {
     /** The store mounted on the host; undefined when `errors` holds an error and nothing was rendered */
     store: Store<AppState> | undefined;
+    /** The content of the application as mounted, as an overlay of every unlinked `_` property; undefined with `store` */
+    baseOverlay: JsonObject | undefined;
+    /** The language of `baseOverlay`: the document's `locale`, `"en"` when it gives none; undefined with `store` */
+    baseLocale: string | undefined;
     /** Validation warnings, or the errors that stopped the run; empty for a clean document */
     errors: BuildError[];
     /** Unmounts, unlinks and removes listeners. Safe to call more than once */

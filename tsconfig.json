@@ -17,9 +17,11 @@
         "declaration": true,
         "declarationMap": true,
         "composite": true,
+        "resolveJsonModule": true,
         "types": []
     },
     "include": [
-        "src"
+        "src",
+        "src/core/theme/*.json"
     ]
 }

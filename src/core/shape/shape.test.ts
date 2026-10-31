@@ -30,7 +30,7 @@ const FULL = {
     commands: ['focus', 'clear'],
     properties: {
         _label: { type: 'string', kind: 'content', default: 'Label' },
-        size: { type: 'string', values: ['s', 'm', 'l'], default: 'm' },
+        width: { type: 'string', values: ['s', 'm', 'l'], default: 'm' },
         value: { type: 'string', required: true },
         header: { type: 'node' },
         src: { type: 'url', default: '' }
@@ -48,7 +48,7 @@ describe('parseShape', () => {
             events: ['change', 'invalid'],
             commands: ['focus', 'clear']
         });
-        expect(Object.keys(result.shape?.properties ?? {})).toEqual(['_label', 'size', 'value', 'header', 'src']);
+        expect(Object.keys(result.shape?.properties ?? {})).toEqual(['_label', 'width', 'value', 'header', 'src', 'hidden']);
         expect(result.shape?.properties._label).toMatchObject({ kind: 'content', required: false });
         expect(result.shape?.properties.value?.required).toBe(true);
     });
@@ -56,7 +56,7 @@ describe('parseShape', () => {
     it('should default the optional keys when only a summary is given', () => {
         const shape = shapeOf();
 
-        expect(shape).toEqual({ summary: 'A test component', properties: {}, events: [], commands: [], layout: false });
+        expect(shape).toEqual({ summary: 'A test component', properties: { hidden: expect.objectContaining({ type: 'boolean', reflect: true }) }, shared: [], events: [], commands: [], layout: false });
     });
 
     it('should report SUI-BUILD-SHAPE with the file when the text is not JSON or not an object', () => {
@@ -262,7 +262,7 @@ describe('buildDefaults', () => {
     it('should return every property default and omit properties without one', () => {
         const shape = shapeOf(FULL);
 
-        expect(buildDefaults(shape)).toEqual({ _label: 'Label', size: 'm', src: '' });
+        expect(buildDefaults(shape)).toEqual({ _label: 'Label', width: 'm', src: '' });
     });
 
     it('should return an empty state for an empty shape', () => {
@@ -291,7 +291,7 @@ describe('validateNode', () => {
     const shape = shapeOf(FULL);
 
     it('should accept a node that fits its shape', () => {
-        expect(validateNode(shape, { component: 'textField', value: 'a', size: 'l', _label: 'Name' }, '$.app')).toEqual([]);
+        expect(validateNode(shape, { component: 'textField', value: 'a', width: 'l', _label: 'Name' }, '$.app')).toEqual([]);
     });
 
     it('should report a missing required property with the state path', () => {
@@ -373,7 +373,7 @@ describe('validateNode', () => {
     });
 
     it('should report a value outside the allowed values', () => {
-        expect(codes(shape, { value: 'a', size: 'xl' })).toEqual(['SUI-STATE-INVALID']);
+        expect(codes(shape, { value: 'a', width: 'xl' })).toEqual(['SUI-STATE-INVALID']);
     });
 
     it('should report a slot that holds something other than a node', () => {

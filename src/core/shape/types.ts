@@ -66,7 +66,10 @@ export interface PropertyShape {
 export interface Shape {
     /** One line, at most MAX_SUMMARY_LENGTH characters */
     summary: string;
+    /** Own properties and the expanded shared ones (`shared` names, then `hidden`) */
     properties: Record<string, PropertyShape>;
+    /** The shared properties the shape declares (`tone`, `size`, ...) in declaration order; `hidden` is always there and not listed */
+    shared: string[];
     events: string[];
     commands: string[];
     /** True when the component lays out children, so a node may carry `layout` */

@@ -18,6 +18,7 @@
             "types": "./dist/core/index.d.ts",
             "default": "./dist/core/index.js"
         },
+        "./tokens.json": "./dist/core/theme/tokens.default.json",
         "./build": {
             "types": "./dist/build/index.d.ts",
             "default": "./dist/build/index.js"

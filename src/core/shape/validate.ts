@@ -1,3 +1,4 @@
+import { ARTICULATION_NAMES, isArticulationName } from '../articulation/index.js';
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
@@ -47,6 +48,27 @@ interface Walk {
 
 function report(walk: Walk, code: StateCode, name: string, path: string): void {
     walk.errors.push(buildError(code, { name, path, statePath: path, component: walk.component }));
+}
+
+/**
+ * Reports a property the shape does not have. For a shared property (`tone`, `size`, ...) the component does not
+ * support, `other` carries the supported ones so the message can name them
+ */
+function reportUnknown(walk: Walk, shape: Shape, name: string, path: string): void {
+    if (!isArticulationName(name)) {
+        report(walk, 'SUI-STATE-UNKNOWN', name, path);
+        return;
+    }
+    const supported = ARTICULATION_NAMES.filter((entry) => Object.hasOwn(shape.properties, entry));
+    walk.errors.push(
+        buildError('SUI-STATE-SHARED', {
+            name,
+            path,
+            statePath: path,
+            component: walk.component,
+            other: supported.length > 0 ? supported.join(', ') : 'none'
+        })
+    );
 }
 
 /** Reports every required property and every conditionally required property that has no value or link */
@@ -239,14 +261,14 @@ export function validateNode(shape: Shape, node: Node, statePath: string, contex
             present.add(target);
             linked.add(target);
             const linkedProperty = Object.hasOwn(shape.properties, target) ? shape.properties[target] : undefined;
-            if (!linkedProperty) report(walk, 'SUI-STATE-UNKNOWN', target, path);
+            if (!linkedProperty) reportUnknown(walk, shape, target, path);
             else if (linkedProperty.runtime) report(walk, 'SUI-STATE-RUNTIME', target, path);
             continue;
         }
 
         const property = Object.hasOwn(shape.properties, key) ? shape.properties[key] : undefined;
         if (!property) {
-            report(walk, 'SUI-STATE-UNKNOWN', key, path);
+            reportUnknown(walk, shape, key, path);
             continue;
         }
         present.add(key);

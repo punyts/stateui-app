@@ -67,7 +67,7 @@ describe('rootEntry', () => {
                 type: 'map',
                 items: { _header: { type: 'string', kind: 'content' }, cell: { type: 'node', row: true } }
             },
-            size: { type: 'string', values: ['s', 'm'], required: true },
+            width: { type: 'string', values: ['s', 'm'], required: true },
             count: { type: 'integer', required: true, validators: { range: { min: 2 } } }
         }
     });
@@ -90,13 +90,13 @@ describe('rootEntry', () => {
             layout: true,
             locales: ['de', 'fr']
         });
-        expect(entry.shape.properties.size?.values).toEqual(['s', 'm']);
+        expect(entry.shape.properties.width?.values).toEqual(['s', 'm']);
     });
 
     it('should give an example with the required properties that passes validation', () => {
         const example = exampleNode('table', shape);
 
-        expect(example).toEqual({ component: 'table', _title: 'x', size: 's', count: 2 });
+        expect(example).toEqual({ component: 'table', _title: 'x', width: 's', count: 2 });
         expect(validateNode(shape, example, '$.app')).toEqual([]);
     });
 
@@ -106,10 +106,9 @@ describe('rootEntry', () => {
         expect(exampleNode('t', withDefault)).toEqual({ component: 't', mode: 'a' });
     });
 
-    it('should carry shared, tokens, placement and exposes when the shape declares them', () => {
+    it('should carry tokens, placement and exposes when the shape declares them', () => {
         const declared: CatalogShape = {
             ...shape,
-            shared: ['field'],
             tokens: { '--ui-table-gap': 'space' },
             placement: { area: { type: 'string' } },
             exposes: { columns: 'The columns' }
@@ -117,17 +116,39 @@ describe('rootEntry', () => {
 
         const entry = rootEntry(scanned('table'), declared, 'atom');
 
-        expect(entry.shared).toEqual(['field']);
         expect(entry.tokens).toEqual({ '--ui-table-gap': 'space' });
         expect(entry.placement).toEqual({ area: { type: 'string' } });
         expect(entry.exposes).toEqual({ columns: 'The columns' });
-        expect(Object.keys(entry.shape)).toEqual(['summary', 'properties', 'events', 'commands', 'layout']);
+        expect(Object.keys(entry.shape)).toEqual(['summary', 'properties', 'shared', 'events', 'commands', 'layout']);
     });
 
     it('should leave the optional keys out when the shape does not declare them', () => {
         const keys = Object.keys(rootEntry(scanned('table'), shape, 'atom'));
 
-        for (const key of ['shared', 'tokens', 'placement', 'exposes']) expect(keys).not.toContain(key);
+        for (const key of ['tokens', 'placement', 'exposes']) expect(keys).not.toContain(key);
+    });
+});
+
+describe('shared and own properties', () => {
+    it('should list the shared properties and the own ones separately', () => {
+        const declared = parsed({
+            summary: 'x',
+            properties: { width: { type: 'string', values: ['narrow', 'wide'] } },
+            shared: { tone: { default: 'accent' }, size: {} }
+        });
+
+        const entry = rootEntry(scanned('table'), declared, 'atom');
+
+        expect(entry.shared).toEqual(['tone', 'size', 'hidden']);
+        expect(entry.own).toEqual(['width']);
+        expect(Object.keys(entry.shape.properties)).toEqual(['width', 'tone', 'size', 'hidden']);
+    });
+
+    it('should list hidden as the only shared property of a shape that declares none', () => {
+        const entry = rootEntry(scanned('table'), parsed({ summary: 'x' }), 'atom');
+
+        expect(entry.shared).toEqual(['hidden']);
+        expect(entry.own).toEqual([]);
     });
 });
 

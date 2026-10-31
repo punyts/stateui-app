@@ -1,3 +1,5 @@
+import { HIDDEN, closedList, isArticulationName, isSharedName } from '../articulation/index.js';
+import type { SharedName } from '../articulation/index.js';
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
@@ -350,6 +352,78 @@ function readNames(value: JsonValue, context: RuleContext, key: string): string[
     return names as string[];
 }
 
+/** The keys of one `shared` entry */
+const SHARED_ENTRY_KEYS: readonly KeyRule<{ default?: JsonValue }>[] = [
+    {
+        name: 'default',
+        type: 'any',
+        required: false,
+        rule(value, entry) {
+            entry.default = value;
+        }
+    }
+];
+
+/** The property a shared entry expands to: a string with the closed list as its values, written as an attribute */
+function sharedProperty(name: SharedName, fallback: JsonValue | undefined): PropertyShape {
+    return {
+        type: 'string',
+        required: false,
+        ...(fallback === undefined ? {} : { default: fallback }),
+        values: closedList(name),
+        validators: {},
+        runtime: false,
+        reflect: true,
+        row: false,
+        exposed: false
+    };
+}
+
+/** Reads `shared`: each entry names one shared property and may set its default; `hidden` is never declared */
+function readShared(value: { [key: string]: JsonValue }, shape: Shape, context: RuleContext): void {
+    for (const [name, input] of Object.entries(value)) {
+        const where = `shared.${name}`;
+        if (!isSharedName(name) || kindOf(input) !== 'object') {
+            context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: where }));
+            continue;
+        }
+        const entry: { default?: JsonValue } = {};
+        const before = context.errors.length;
+        applyKeys(SHARED_ENTRY_KEYS, asObject(input), entry, { ...context, where });
+        if (context.errors.length > before) continue;
+        if (entry.default !== undefined && !closedList(name).includes(entry.default as string)) {
+            context.errors.push(buildError('SUI-BUILD-DEFAULT', { file: context.file, name }));
+            continue;
+        }
+        // An own property of the same name is reported by `finishShape` and keeps its place
+        if (Object.hasOwn(shape.properties, name)) continue;
+        shape.shared.push(name);
+        shape.properties[name] = sharedProperty(name, entry.default);
+    }
+}
+
+/**
+ * The checks and additions that need the whole shape, run after every key is read: an own property may not use an
+ * articulation name (a modal's width choice is `width`, not `size`), and `hidden` is added to every shape
+ */
+export function finishShape(shape: Shape, context: RuleContext): void {
+    for (const name of Object.keys(shape.properties)) {
+        if (isArticulationName(name) && !shape.shared.includes(name)) {
+            context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `properties.${name}` }));
+        }
+    }
+    if (context.errors.length > 0) return;
+    shape.properties[HIDDEN] = {
+        type: 'boolean',
+        required: false,
+        validators: {},
+        runtime: false,
+        reflect: true,
+        row: false,
+        exposed: false
+    };
+}
+
 /** The top-level keys of a shape file. `summary` is required; the rest are optional */
 export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
     {
@@ -372,6 +446,14 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
         required: false,
         rule(value, shape, context) {
             shape.properties = readProperties(asObject(value), { ...context, where: 'properties' });
+        }
+    },
+    {
+        name: 'shared',
+        type: 'object',
+        required: false,
+        rule(value, shape, context) {
+            readShared(asObject(value), shape, context);
         }
     },
     {

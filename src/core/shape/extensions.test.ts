@@ -161,7 +161,7 @@ describe('requiredWhen', () => {
 describe('runtime and reflect', () => {
     const shape = shapeOf({
         error: { type: 'string', runtime: true, default: '' },
-        size: { type: 'string', reflect: true, default: 'm' },
+        width: { type: 'string', reflect: true, default: 'm' },
         disabled: { type: 'boolean', reflect: true, default: false },
         label: { type: 'string' }
     });
@@ -176,7 +176,7 @@ describe('runtime and reflect', () => {
             expect.objectContaining({ code: 'SUI-STATE-RUNTIME', statePath: `${BASE}.error` })
         ]);
         expect(check(shape, { '<-error': '$.data.e' }).map((error) => error.code)).toEqual(['SUI-STATE-RUNTIME']);
-        expect(check(shape, { size: 'l' })).toEqual([]);
+        expect(check(shape, { width: 'l' })).toEqual([]);
     });
 
     it('should refuse a runtime property without a default, a required one and one inside map items', () => {
@@ -188,8 +188,8 @@ describe('runtime and reflect', () => {
     });
 
     it('should list the reflected properties in shape order', () => {
-        expect(reflectedProperties(shape)).toEqual(['size', 'disabled']);
-        expect(reflectedProperties(shapeOf({}))).toEqual([]);
+        expect(reflectedProperties(shape)).toEqual(['width', 'disabled', 'hidden']);
+        expect(reflectedProperties(shapeOf({}))).toEqual(['hidden']);
     });
 
     it('should refuse reflect on types that are not attribute values', () => {

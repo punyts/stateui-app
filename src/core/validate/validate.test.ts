@@ -19,7 +19,7 @@ const LIBRARY: ComponentLibrary = {
         tag: 'ui-text',
         shape: shapeOf({
             _value: { type: 'string', kind: 'content', default: '' },
-            size: { type: 'string', default: 'm', values: ['s', 'm', 'l'] },
+            width: { type: 'string', default: 'm', values: ['s', 'm', 'l'] },
             label: { type: 'string', default: '' }
         })
     },
@@ -46,7 +46,7 @@ const LIBRARY: ComponentLibrary = {
         shape: shapeOf({
             title: { type: 'string', default: '' },
             current: { type: 'any', runtime: true, exposed: true, default: {} },
-            hidden: { type: 'any', runtime: true, default: {} },
+            concealed: { type: 'any', runtime: true, default: {} },
             columns: {
                 type: 'map',
                 items: { cell: { type: 'node', row: true }, plain: { type: 'node' } },
@@ -240,9 +240,9 @@ describe('validateDocument', () => {
     });
 
     it('should report SUI-STATE-INVALID for a value that does not fit its shape', () => {
-        const errors = validateDocument(doc({ component: 'text', size: 'xl' }), LIBRARY).errors;
+        const errors = validateDocument(doc({ component: 'text', width: 'xl' }), LIBRARY).errors;
 
-        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.app.size']]);
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.app.width']]);
     });
 
     it('should report SUI-STATE-UNKNOWN for a property or a content property the component lacks', () => {
@@ -294,9 +294,9 @@ describe('validateDocument', () => {
     });
 
     it('should validate the nodes of a composed entry of the document', () => {
-        const errors = validateDocument(doc({ component: 'panel' }, { composed: { card: { component: 'text', size: 'xl' } } }), LIBRARY).errors;
+        const errors = validateDocument(doc({ component: 'panel' }, { composed: { card: { component: 'text', width: 'xl' } } }), LIBRARY).errors;
 
-        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.composed.card.size']]);
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.composed.card.width']]);
     });
 
     it('should accept an exposes key on a document composed entry', () => {
@@ -355,7 +355,7 @@ describe('validateDocument', () => {
             children: {
                 a: { component: 'records' },
                 b: { component: 'text', '<-label': '^app.children.a.nope' },
-                c: { component: 'text', '<-label': '^app.children.a.hidden' },
+                c: { component: 'text', '<-label': '^app.children.a.concealed' },
                 d: { component: 'text', '<-label': '^app.children.a.title' }
             }
         });
@@ -483,7 +483,7 @@ describe('validateDocument', () => {
 
     it('should return every error of one run, each with a state path', () => {
         const document = doc(
-            { component: 'panel', children: { x: { component: 'nope' }, 1: { component: 'text', size: 'xl' } } },
+            { component: 'panel', children: { x: { component: 'nope' }, 1: { component: 'text', width: 'xl' } } },
             { extra: 1 }
         );
 
@@ -502,7 +502,7 @@ describe('validateDocument', () => {
         };
 
         expect(Object.keys(libraryFromCatalog(catalog))).toEqual(['text', 'card']);
-        expect(validateDocument(doc({ component: 'card', size: 'xl' }), catalog).errors.map((error) => error.code)).toEqual([
+        expect(validateDocument(doc({ component: 'card', width: 'xl' }), catalog).errors.map((error) => error.code)).toEqual([
             'SUI-STATE-INVALID'
         ]);
     });

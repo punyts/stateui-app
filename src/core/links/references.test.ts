@@ -20,7 +20,7 @@ const LIBRARY: ComponentLibrary = {
         tag: 'ui-records',
         shape: shapeOf({
             current: { type: 'any', runtime: true, exposed: true, default: {} },
-            hidden: { type: 'any', runtime: true, default: {} },
+            concealed: { type: 'any', runtime: true, default: {} },
             title: { type: 'string', default: '' },
             row: { type: 'node', row: true }
         })
@@ -71,7 +71,7 @@ describe('extractLinks with node references', () => {
     it('should report SUI-LINK-MISSING for a property that is not exposed, one that does not exist and a missing node', () => {
         const result = extract({
             component: 'records',
-            '<-title': '.hidden',
+            '<-title': '.concealed',
             children: {
                 a: { component: 'descriptionList', '<-value': '^records.title', '<-other': '^nobody.current' },
                 b: { component: 'descriptionList', '<-value': '^app.nope' }
