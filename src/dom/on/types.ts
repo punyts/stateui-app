@@ -2,6 +2,7 @@ import type { Store } from '@punyts/state';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
+import type { TransferFile } from '../../runtime/fileTransfer.js';
 
 /**
  * What a root component's `commands` object holds for one command: `value` is the command object's `value`
@@ -24,6 +25,11 @@ export interface CommandElement extends Element {
 export interface DispatchHooks {
     /** Called by the system command `emit` with the event name (the command's `target`) and its payload */
     onEmit?(name: string, payload: unknown): void;
+    /**
+     * Hands a file to the host and resolves with the reference of the stored file (E8.39). Set by the runtime inside
+     * the preview frame; absent when the app is mounted without a host that takes files
+     */
+    transferFile?: TransferFile;
     /** Called with every `SUI-RUN` error the dispatcher reports, after it is reported through `@punyts/core` */
     onError?(error: BuildError): void;
 }

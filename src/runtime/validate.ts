@@ -2,13 +2,17 @@ import { isIconsMap } from './icons.js';
 import {
     MAX_ERROR_TEXT,
     MAX_ERRORS,
+    MAX_FILE_BYTES,
+    MAX_FILE_ID_LENGTH,
+    MAX_FILE_NAME_LENGTH,
+    MAX_FILE_TYPE_LENGTH,
     MAX_NAME_LENGTH,
     MAX_NONCE_LENGTH,
     MAX_PATH_LENGTH,
     MAX_WRITES,
     MESSAGE_BYTE_LIMITS
 } from './limits.js';
-import { MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
 
 /** Why a message was dropped */
@@ -78,6 +82,40 @@ function isInteger(value: unknown): boolean {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+function isPositiveInteger(value: unknown): value is number {
+    return isInteger(value) && (value as number) > 0;
+}
+
+/** True for an `ArrayBuffer` of any realm (a buffer cloned from the iframe is not `instanceof` the host's constructor) */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+    return Object.prototype.toString.call(value) === '[object ArrayBuffer]';
+}
+
+function isFileReference(value: unknown): boolean {
+    return (
+        isRecord(value) &&
+        Object.keys(value).every((key) => ['id', 'name', 'size', 'type'].includes(key)) &&
+        isText(value['id'], MAX_FILE_ID_LENGTH) &&
+        isText(value['name'], MAX_FILE_NAME_LENGTH) &&
+        isInteger(value['size']) &&
+        (value['size'] as number) <= MAX_FILE_BYTES &&
+        typeof value['type'] === 'string' &&
+        value['type'].length <= MAX_FILE_TYPE_LENGTH
+    );
+}
+
+function isFileResult(m: Record<string, unknown>): boolean {
+    if (!isPositiveInteger(m['requestId'])) return false;
+    if (m['ok'] === true) return hasOnlyKeys(m, ['requestId', 'ok', 'file']) && isFileReference(m['file']);
+    return (
+        m['ok'] === false &&
+        hasOnlyKeys(m, ['requestId', 'ok', 'code', 'message']) &&
+        typeof m['code'] === 'string' &&
+        (FILE_ERROR_CODES as readonly string[]).includes(m['code']) &&
+        isText(m['message'], MAX_ERROR_TEXT)
+    );
+}
+
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
@@ -104,7 +142,24 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
     emit: (m) => hasOnlyKeys(m, ['name', 'payload']) && isText(m['name'], MAX_NAME_LENGTH) && NAME.test(m['name']) && (m['payload'] === undefined || isJson(m['payload'])),
     error: (m) => hasOnlyKeys(m, ['errors']) && Array.isArray(m['errors']) && m['errors'].length > 0 && m['errors'].length <= MAX_ERRORS && m['errors'].every(isProtocolError),
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
-    pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id'])
+    pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
+    file: (m) =>
+        hasOnlyKeys(m, ['requestId', 'name', 'size', 'mediaType', 'data']) &&
+        isPositiveInteger(m['requestId']) &&
+        isText(m['name'], MAX_FILE_NAME_LENGTH) &&
+        typeof m['mediaType'] === 'string' &&
+        m['mediaType'].length <= MAX_FILE_TYPE_LENGTH &&
+        isInteger(m['size']) &&
+        isArrayBuffer(m['data']) &&
+        m['data'].byteLength === m['size'],
+    fileCancel: (m) => hasOnlyKeys(m, ['requestId']) && isPositiveInteger(m['requestId']),
+    fileProgress: (m) =>
+        hasOnlyKeys(m, ['requestId', 'loaded', 'total']) &&
+        isPositiveInteger(m['requestId']) &&
+        isInteger(m['loaded']) &&
+        isInteger(m['total']) &&
+        (m['loaded'] as number) <= (m['total'] as number),
+    fileResult: isFileResult
 };
 
 function isMessageType(value: unknown): value is MessageType {
@@ -133,6 +188,9 @@ export function validateMessage(value: unknown): ValidationResult {
     const size = byteLength(value);
     if (size === undefined) return { ok: false, reason: 'invalid' };
     if (size > MESSAGE_BYTE_LIMITS[value['type']]) return { ok: false, reason: 'oversized' };
+    if (value['type'] === 'file' && isArrayBuffer(value['data']) && value['data'].byteLength > MAX_FILE_BYTES) {
+        return { ok: false, reason: 'oversized' };
+    }
     if (value['v'] !== PROTOCOL_VERSION || !isText(value['nonce'], MAX_NONCE_LENGTH)) return { ok: false, reason: 'invalid' };
     return FIELD_CHECKS[value['type']](value) ? { ok: true, message: value as unknown as RuntimeMessage } : { ok: false, reason: 'invalid' };
 }

@@ -4,10 +4,10 @@ import type { AppDocument, JsonObject, JsonValue } from '../core/types.js';
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'ping'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'ping', 'fileProgress', 'fileResult'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'snapshot', 'emit', 'error', 'pong'] as const;
+export const OUTBOUND_TYPES = ['ready', 'snapshot', 'emit', 'error', 'pong', 'file', 'fileCancel'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -48,6 +48,28 @@ export interface ProtocolError {
     severity?: 'error' | 'warning';
     statePath?: string;
     component?: string;
+}
+
+/** The reasons a file transfer fails: what `fileResult` carries as `code`, and what `transferFile` rejects with */
+export const FILE_ERROR_CODES = [
+    'too_large',
+    'unsupported_type',
+    'quota',
+    'not_found',
+    'unauthorized',
+    'offline',
+    'cancelled',
+    'internal'
+] as const;
+
+export type FileErrorCode = (typeof FILE_ERROR_CODES)[number];
+
+/** What a component keeps of an uploaded file: a reference, never the bytes */
+export interface FileReference {
+    id: string;
+    name: string;
+    size: number;
+    type: string;
 }
 
 interface Envelope<T extends MessageType> {
@@ -113,6 +135,53 @@ export interface ErrorMessage extends Envelope<'error'> {
     errors: ProtocolError[];
 }
 
-export type InboundMessage = LoadMessage | WriteMessage | CommandMessage | LocaleMessage | ThemeMessage | PingMessage;
-export type OutboundMessage = ReadyMessage | SnapshotMessage | EmitMessage | ErrorMessage | PongMessage;
+/**
+ * A file the user gave a component, for the host to upload. `requestId` is a positive integer the runtime makes;
+ * `data` is an `ArrayBuffer` of `size` bytes that travels in the transfer list (moved, not copied)
+ */
+export interface FileMessage extends Envelope<'file'> {
+    requestId: number;
+    name: string;
+    size: number;
+    /** The media type of the file. Not `type`: that is the message type of the envelope */
+    mediaType: string;
+    data: ArrayBuffer;
+}
+
+/** The user removed the file, or the component went away: the host aborts the upload */
+export interface FileCancelMessage extends Envelope<'fileCancel'> {
+    requestId: number;
+}
+
+/** How many bytes of the file the host has uploaded so far */
+export interface FileProgressMessage extends Envelope<'fileProgress'> {
+    requestId: number;
+    loaded: number;
+    total: number;
+}
+
+/** The end of a transfer: the reference of the stored file, or the reason it failed */
+export type FileResultMessage = Envelope<'fileResult'> &
+    (
+        | { requestId: number; ok: true; file: FileReference }
+        | { requestId: number; ok: false; code: FileErrorCode; message: string }
+    );
+
+export type InboundMessage =
+    | LoadMessage
+    | WriteMessage
+    | CommandMessage
+    | LocaleMessage
+    | ThemeMessage
+    | PingMessage
+    | FileProgressMessage
+    | FileResultMessage;
+export type OutboundMessage =
+    | ReadyMessage
+    | SnapshotMessage
+    | EmitMessage
+    | ErrorMessage
+    | PongMessage
+    | FileMessage
+    | FileCancelMessage;
 export type RuntimeMessage = InboundMessage | OutboundMessage;

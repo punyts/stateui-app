@@ -48,6 +48,24 @@ export const MAX_ICON_PATH_LENGTH = 8 * 1024;
 /** Largest icons map, serialised, in UTF-8 bytes */
 export const MAX_ICONS_BYTES = 256 * 1024;
 
+/** Largest file a component can hand to the host: the `data` buffer of a `file` message (10 MiB) */
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/** Largest JSON part of `file`, `fileCancel`, `fileProgress` and `fileResult` (the `data` buffer is not counted) */
+export const MAX_FILE_JSON_BYTES = 2 * 1024;
+
+/** Longest file name, in characters */
+export const MAX_FILE_NAME_LENGTH = 255;
+
+/** Longest media type, in characters */
+export const MAX_FILE_TYPE_LENGTH = 127;
+
+/** Longest file id, in characters */
+export const MAX_FILE_ID_LENGTH = 128;
+
+/** How long `transferFile` waits for the host, in milliseconds: with no `fileProgress` or `fileResult` for this long it rejects with `offline` */
+export const FILE_IDLE_TIMEOUT_MS = 120_000;
+
 /** The byte limit of each message type */
 export const MESSAGE_BYTE_LIMITS = {
     load: MAX_LOAD_BYTES,
@@ -60,5 +78,9 @@ export const MESSAGE_BYTE_LIMITS = {
     emit: MAX_EVENT_BYTES,
     error: MAX_EVENT_BYTES,
     ping: MAX_SMALL_BYTES,
-    pong: MAX_SMALL_BYTES
+    pong: MAX_SMALL_BYTES,
+    file: MAX_FILE_JSON_BYTES,
+    fileCancel: MAX_FILE_JSON_BYTES,
+    fileProgress: MAX_FILE_JSON_BYTES,
+    fileResult: MAX_FILE_JSON_BYTES
 } as const;

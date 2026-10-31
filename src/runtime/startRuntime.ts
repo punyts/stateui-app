@@ -14,10 +14,13 @@ import type { MountedApp } from '../dom/mount/index.js';
 import type { CommandContext } from '../dom/on/commands.js';
 import { applyOverlay } from '../dom/theme/index.js';
 import type { ThemeStore } from '../dom/theme/index.js';
+import { createFileTransfers } from './fileTransfer.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
 import type {
     CommandMessage,
+    FileProgressMessage,
+    FileResultMessage,
     IconsMap,
     InboundMessage,
     LoadMessage,
@@ -41,7 +44,7 @@ const MAX_POSTED_ERRORS = 200;
 
 /** Where the runtime posts: `window.parent` in the iframe, a fake in tests */
 export interface MessageTarget {
-    postMessage(message: unknown, targetOrigin: string): void;
+    postMessage(message: unknown, targetOrigin: string, transfer?: Transferable[]): void;
 }
 
 /** What `startRuntime` needs from the window: the `message` and error events */
@@ -176,15 +179,24 @@ export function startRuntime(
     let postedErrors = 0;
     let disposed = false;
 
-    function post(message: { type: OutboundMessage['type'] } & Record<string, unknown>): void {
+    function post(message: { type: OutboundMessage['type'] } & Record<string, unknown>, transfer?: Transferable[]): boolean {
         const full = { v: PROTOCOL_VERSION, nonce, ...message };
         const result = validateMessage(full);
         if (!result.ok) {
             dropped[result.reason] += 1;
-            return;
+            return false;
         }
-        parent.postMessage(full, '*');
+        if (transfer) parent.postMessage(full, '*', transfer);
+        else parent.postMessage(full, '*');
+        return true;
     }
+
+    const files = createFileTransfers({
+        sendFile: (message) => post({ type: 'file', ...message }, [message.data]),
+        sendCancel: (requestId) => {
+            post({ type: 'fileCancel', requestId });
+        }
+    });
 
     function postErrors(errors: readonly BuildError[]): void {
         const room = MAX_POSTED_ERRORS - postedErrors;
@@ -232,6 +244,7 @@ export function startRuntime(
     }
 
     function teardown(): void {
+        files.cancelAll();
         unwatch();
         mounted?.dispose();
         mounted = undefined;
@@ -259,6 +272,7 @@ export function startRuntime(
         let app: MountedApp;
         try {
             app = mountApp(options.host ?? win.document.body, message.document, library, {
+                transferFile: files.transferFile,
                 onEmit(name, payload) {
                     const json = payload === undefined ? undefined : toJson(payload);
                     post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
@@ -356,6 +370,12 @@ export function startRuntime(
             case 'theme':
                 theme(message);
                 return;
+            case 'fileProgress':
+                files.progress(message as FileProgressMessage);
+                return;
+            case 'fileResult':
+                files.result(message as FileResultMessage);
+                return;
             case 'ping':
                 post({ type: 'pong', id: message.id });
                 return;
@@ -408,6 +428,7 @@ export function startRuntime(
             win.removeEventListener('error', onFailure);
             win.removeEventListener('unhandledrejection', onFailure);
             teardown();
+            files.cancelAll();
             localeStep.unregister();
         }
     };
