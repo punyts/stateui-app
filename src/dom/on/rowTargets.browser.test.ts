@@ -62,8 +62,11 @@ interface Fixture {
     onError: ReturnType<typeof vi.fn>;
 }
 
-/** A record view at `$.app.children.orders` whose slot 3 holds a button (the row template) showing record k1 */
-function mountRows(on: unknown): Fixture {
+/**
+ * A record view at `$.app.children.orders` whose slot 3 holds a button (the row template) showing record k1. With
+ * `renderAt` the button renders there instead, through an alias of the owner's `slots` in `$.app`
+ */
+function mountRows(on: unknown, renderAt: string = SLOT): Fixture {
     setNodeResolver((name) => tags[name]);
     const store = createStore<unknown>({
         app: { component: 'panel', children: { orders: { component: 'records', row: { component: 'button', on } } } },
@@ -71,12 +74,13 @@ function mountRows(on: unknown): Fixture {
         runtime: { nodes: { app: { children: { orders: { slots: { 3: { component: 'button', on } } } } } } }
     });
     store.link(`${SLOT}.row`, '$.data.orders.k1');
+    if (renderAt !== SLOT) store.link(`${OWNER}.slots`, '$.runtime.nodes.app.children.orders.slots');
     const host = document.body.appendChild(document.createElement('div'));
     mount(host, store);
-    for (const path of ['$.app', SLOT]) host.appendChild(document.createElement('sui-node')).setAttribute('state', path);
+    for (const path of ['$.app', renderAt]) host.appendChild(document.createElement('sui-node')).setAttribute('state', path);
     const onError = vi.fn();
     createDispatcher({ host, store, library, hooks: { onError } });
-    const button = find(host, SLOT);
+    const button = find(host, renderAt);
     const owner = find(host, OWNER);
     if (!button || !owner) throw new Error('fixture did not render');
     return { store, button, owner, onError };
@@ -97,6 +101,24 @@ describe('$row and relative targets in a row template in Chromium', () => {
     it('should write the field of the record the slot shows and follow a re-pointed row', () => {
         // Arrange
         const { store, button } = mountRows({ press: { command: 'set', target: '$.data.selected', value: '$row.id' } });
+
+        // Act
+        raise(button, 'press');
+        const first = store.get('$.data.selected');
+        store.link(`${SLOT}.row`, '$.data.orders.k2');
+        raise(button, 'press');
+
+        // Assert
+        expect(first).toBe('k1');
+        expect(store.get('$.data.selected')).toBe('k2');
+    });
+
+    it('should find the slot when it is rendered through its alias in $.app', () => {
+        // Arrange
+        const { store, button } = mountRows(
+            { press: { command: 'set', target: '$.data.selected', value: '$row.id' } },
+            `${OWNER}.slots.3`
+        );
 
         // Act
         raise(button, 'press');

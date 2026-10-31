@@ -120,12 +120,28 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         }
     }
 
+    /**
+     * A component rendered through an alias in `$.app` (`$.app.list.slots.3`, which a record view links to
+     * `runtimePath('$.app.list').slots.3`) reports its alias path. Runtime aliases always mirror the owner's runtime
+     * path, so the runtime node is the first owner on the chain whose runtime path plus the rest of the path is a node
+     */
+    function runtimeTwin(path: string): string | undefined {
+        const chain = chainTo(path);
+        if (!chain) return undefined;
+        for (const frame of chain.slice(0, -1).reverse()) {
+            const candidate = `${runtimePath(frame.path)}${path.slice(frame.path.length)}`;
+            if (isNodeValue(store.get(candidate))) return candidate;
+        }
+        return undefined;
+    }
+
     function handle(event: Event): void {
         const raised = raisedBy(event, componentTags);
         if (!raised) return;
-        const inRuntime = raised.path.startsWith(RUNTIME_NODES);
-        const found = inRuntime ? runtimeChain(raised.path) : undefined;
-        const chain = inRuntime ? found?.chain : chainTo(raised.path);
+        const path = raised.path.startsWith(RUNTIME_NODES) ? raised.path : (runtimeTwin(raised.path) ?? raised.path);
+        const inRuntime = path.startsWith(RUNTIME_NODES);
+        const found = inRuntime ? runtimeChain(path) : undefined;
+        const chain = inRuntime ? found?.chain : chainTo(path);
         const self = chain?.[chain.length - 1];
         if (!chain || !self) return;
 

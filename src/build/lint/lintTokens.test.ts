@@ -56,7 +56,7 @@ describe('lintCss', () => {
     it('should accept a semantic token and a component token of another group', () => {
         const css = 'a { color: var(--ui-color-text-muted); border-radius: var(--ui-button-radius); gap: var(--ui-density-factor); }';
 
-        expect(lintCss(css, { ...context, component: 'card' })).toEqual([]);
+        expect(lintCss(css, context)).toEqual([]);
     });
 
     it('should find a primitive inside a calc()', () => {

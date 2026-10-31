@@ -84,7 +84,7 @@ describe('prependLayoutSheets', () => {
         const css = ':host { color: red; }';
 
         // Act
-        const result = prependLayoutSheets(css, { component: 'a', file: 'a.view.css' });
+        const result = prependLayoutSheets(css, { component: 'a', file: 'a.view.css', tokens: [] });
 
         // Assert
         expect(result).toBe(`${generateLayoutSheets()}${css}`);
