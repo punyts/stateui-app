@@ -83,13 +83,16 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     /**
      * The frames of a node in the runtime branch (a record-view slot or a table cell): the node that owns it, found
      * as the longest proper prefix of its app path that is a node of `$.app`, and then the runtime nodes below it.
-     * `owner` is the owner's chain; `rowPath` is the `row` alias of the nearest slot at or above the node
+     * A prefix that is a node only through a runtime alias (`$.app.list.slots.3`, whose runtime path holds the same
+     * node) is a slot, not the owner. `owner` is the owner's chain; `rowPath` is the `row` alias of the nearest slot at
+     * or above the node
      */
     function runtimeChain(path: string): { chain: Frame[]; owner: Frame[]; rowPath?: string } | undefined {
         let candidate = `$.${path.slice(RUNTIME_NODES.length)}`;
         let owner: Frame[] | undefined;
         while (owner === undefined && candidate.includes('.')) {
             candidate = candidate.slice(0, candidate.lastIndexOf('.'));
+            if (isNodeValue(store.get(runtimePath(candidate)))) continue;
             owner = chainTo(candidate);
         }
         const last = owner?.[owner.length - 1];

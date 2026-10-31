@@ -64,14 +64,16 @@ interface Fixture {
 
 /**
  * A record view at `$.app.children.orders` whose slot 3 holds a button (the row template) showing record k1. With
- * `renderAt` the button renders there instead, through an alias of the owner's `slots` in `$.app`
+ * `renderAt` the button renders there instead, through an alias of the owner's `slots` in `$.app`; with `nested` the
+ * row template is a panel whose child `open` is the button
  */
-function mountRows(on: unknown, renderAt: string = SLOT): Fixture {
+function mountRows(on: unknown, renderAt: string = SLOT, nested = false): Fixture {
+    const row = nested ? { component: 'panel', children: { open: { component: 'button', on } } } : { component: 'button', on };
     setNodeResolver((name) => tags[name]);
     const store = createStore<unknown>({
-        app: { component: 'panel', children: { orders: { component: 'records', row: { component: 'button', on } } } },
+        app: { component: 'panel', children: { orders: { component: 'records', row } } },
         data: { orders: { k1: { id: 'k1', customer: 'Ada' }, k2: { id: 'k2', customer: 'Grace' } }, selected: '' },
-        runtime: { nodes: { app: { children: { orders: { slots: { 3: { component: 'button', on } } } } } } }
+        runtime: { nodes: { app: { children: { orders: { slots: { 3: structuredClone(row) } } } } } }
     });
     store.link(`${SLOT}.row`, '$.data.orders.k1');
     if (renderAt !== SLOT) store.link(`${OWNER}.slots`, '$.runtime.nodes.app.children.orders.slots');
@@ -80,7 +82,7 @@ function mountRows(on: unknown, renderAt: string = SLOT): Fixture {
     for (const path of ['$.app', renderAt]) host.appendChild(document.createElement('sui-node')).setAttribute('state', path);
     const onError = vi.fn();
     createDispatcher({ host, store, library, hooks: { onError } });
-    const button = find(host, renderAt);
+    const button = find(host, nested ? `${renderAt}.children.open` : renderAt);
     const owner = find(host, OWNER);
     if (!button || !owner) throw new Error('fixture did not render');
     return { store, button, owner, onError };
@@ -127,6 +129,26 @@ describe('$row and relative targets in a row template in Chromium', () => {
         raise(button, 'press');
 
         // Assert
+        expect(first).toBe('k1');
+        expect(store.get('$.data.selected')).toBe('k2');
+    });
+
+    it('should find the row of a node nested in a slot rendered through its alias', () => {
+        // Arrange
+        const { store, button, onError } = mountRows(
+            { press: { command: 'set', target: '$.data.selected', value: '$row.id' } },
+            `${OWNER}.slots.3`,
+            true
+        );
+
+        // Act
+        raise(button, 'press');
+        const first = store.get('$.data.selected');
+        store.link(`${SLOT}.row`, '$.data.orders.k2');
+        raise(button, 'press');
+
+        // Assert
+        expect(onError).not.toHaveBeenCalled();
         expect(first).toBe('k1');
         expect(store.get('$.data.selected')).toBe('k2');
     });
