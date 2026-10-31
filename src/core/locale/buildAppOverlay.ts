@@ -58,9 +58,10 @@ class Assembler {
 
     /**
      * The part of `overlay` that applies to `node`: keys the node has that are not linked and, when `check` is set,
-     * still equal the default. A content map is checked entry by entry
+     * still equal the default. A content map is checked entry by entry; `inContent` is set inside one (a content key holding an
+     * object), where every text entry is content whatever its key is called (`_errors.required`)
      */
-    private pick(overlay: JsonObject, node: JsonObject, defaults: JsonValue | undefined, check: boolean, path: string): JsonObject {
+    private pick(overlay: JsonObject, node: JsonObject, defaults: JsonValue | undefined, check: boolean, path: string, inContent = false): JsonObject {
         const picked: JsonObject = {};
         for (const [key, value] of Object.entries(overlay)) {
             const itemPath = `${path}.${key}`;
@@ -68,9 +69,9 @@ class Assembler {
             const current = node[key] as JsonValue;
             const original = isObject(defaults) && Object.hasOwn(defaults, key) ? defaults[key] : undefined;
             if (typeof value === 'string') {
-                if (isContentKey(key) && (!check || current === original)) picked[key] = value;
+                if ((inContent || isContentKey(key)) && (!check || current === original)) picked[key] = value;
             } else if (isObject(value) && isObject(current)) {
-                const inner = this.pick(value, current, original, check, itemPath);
+                const inner = this.pick(value, current, original, check, itemPath, inContent || isContentKey(key));
                 if (Object.keys(inner).length > 0) picked[key] = inner;
             }
         }

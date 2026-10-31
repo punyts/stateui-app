@@ -128,6 +128,26 @@ describe('buildAppOverlay', () => {
         expect(overlay).toEqual({ children: { plain: { _text: 'Textfeld' } } });
     });
 
+    it('should translate the entries of a content map that still hold the default and keep one the author wrote', () => {
+        // Arrange
+        const app: Node = { component: 'text', _errors: { required: 'Required', length: 'Mine' } };
+        const { node } = resolved(app);
+        const components = { text: { de: { _errors: { required: 'Pflicht', length: 'Zu lang' } } } };
+        const library: ComponentLibrary = {
+            text: {
+                tier: 'root',
+                tag: 'ui-text',
+                shape: shapeOf({ _errors: { type: 'map', items: 'string', kind: 'content', default: { required: 'Required', length: 'Too long' } } })
+            }
+        };
+
+        // Act
+        const overlay = buildAppOverlay('de', node, components, {}, { library });
+
+        // Assert
+        expect(overlay).toEqual({ _errors: { required: 'Pflicht' } });
+    });
+
     it('should not add a path the node does not have or a linked one', () => {
         // Arrange
         const node: JsonObject = { component: 'panel', _title: 'T', children: { a: { component: 'text' } } };
