@@ -143,6 +143,28 @@ never throws; problems come back in `errors`.
 const { node, errors, instances } = resolveNode({ component: 'confirmDialog' }, library, document.composed);
 ```
 
+## Links
+
+Code is in `src/core/links/`, exported from `@punyts/stateui-app/core`. A `<-key` property makes the node's `key` a
+store alias (`store.link`) of its target, so reads, writes and change events follow the data.
+
+- **`extractLinks(resolvedTree, { path? })`** returns `{ tree, links, linkedPaths, errors }`. `links` holds
+  `{ statePath, key, target }` for every `<-key` (in nodes and in nested objects such as map items; `on` entries are
+  skipped), `tree` is a copy without them. A target must start with `$.data` or `$row`, or be a node reference
+  (`^name.path`, `.path`) to an exposed runtime property; anything else is `SUI-LINK-TARGET`, an empty key is
+  `SUI-NODE-NAME`. `linkedPaths` lists every linked property path (`statePath.key`); locale overlays and the live-state
+  snapshot exclude them. Node references are returned as written; E2.13 resolves them to runtime paths before apply.
+- **`applyLinks(store, links)`** calls `store.link(statePath.key, target)` and returns errors: `SUI-LINK-CYCLE` when the
+  target is the property, inside it, above it or loops through other links, `SUI-LINK-MISSING` otherwise, each with the
+  node path. It is idempotent per store (the same link twice does nothing; a new target re-points) and tries every link.
+  `disposeLinks(store, links)` unlinks what `applyLinks` created; listeners stay registered.
+- **`runtimePath(appPath)`** is the only place that builds a node's runtime path: `$.app.a.b` gives
+  `$.runtime.nodes.app.a.b`. `RUNTIME_PATHS` names `nodes`, `icons` and `empty`, which are separate keys.
+- **`resolveRowLinks(rowNode, rowPath, { path? })`** is `extractLinks` for one record-view slot: `$row.x` becomes
+  `<rowPath>.x` (for example `$.runtime.nodes.app.orders.slots.3.row.customer`) with `allowMissing: true`, so a missing
+  field reads as `undefined` and updates when it appears. Only `row` is re-pointed. `path` is the row node's state path
+  and defaults to the parent of `rowPath`.
+
 ## Building a component library
 
 `@punyts/stateui-app/build` turns a component folder into registered StateUI components. A developer adds a component by

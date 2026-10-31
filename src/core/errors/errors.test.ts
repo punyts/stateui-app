@@ -41,7 +41,8 @@ describe('error catalog', () => {
             'SUI-BUILD-SUMMARY',
             'SUI-STATE-CONDITION',
             'SUI-STATE-RUNTIME',
-            'SUI-LINK-ROW'
+            'SUI-LINK-ROW',
+            'SUI-LINK-TARGET'
         ]) {
             expect(CODES).toContain(code);
         }

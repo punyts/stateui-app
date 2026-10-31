@@ -46,6 +46,9 @@ export const ERROR_CATALOG = {
     },
     'SUI-LINK-ROW': { template: 'Reference {target} at {path} uses $row outside a row template' },
     'SUI-LINK-MISSING': { template: 'Link target {target} at {path} does not exist' },
+    'SUI-LINK-TARGET': {
+        template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, or be a node reference'
+    },
     'SUI-LINK-CYCLE': { template: 'Link at {path} loops back through {target}' },
     'SUI-ON-EVENT': { template: 'Component "{component}" at {path} has no event "{event}"' },
     'SUI-ON-COMMAND': { template: 'Component "{component}" at {path} has no command "{command}"' },
