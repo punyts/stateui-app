@@ -17,13 +17,23 @@ function isCatalog(source: ComponentLibrary | CatalogSource): source is CatalogS
     return Array.isArray((source as { components?: unknown }).components);
 }
 
-/** The library the resolver and validators read, from the entries of `catalog.json` */
+/**
+ * The library the resolver and validators read, from the entries of `catalog.json`. The catalog keeps a declared
+ * `placement` beside `shape`; it goes back into the shape, where the layout validator reads it
+ */
 export function libraryFromCatalog(catalog: CatalogSource): ComponentLibrary {
     const library: Record<string, LibraryEntry> = {};
     for (const component of catalog.components) {
         library[component.name] =
             component.tier === 'root'
-                ? { tier: 'root', tag: component.tag, shape: component.shape }
+                ? {
+                      tier: 'root',
+                      tag: component.tag,
+                      shape:
+                          component.placement === undefined
+                              ? component.shape
+                              : { ...component.shape, placement: component.placement }
+                  }
                 : { tier: 'composed', tree: component.tree };
     }
     return library;

@@ -12,7 +12,7 @@ export interface DocumentValidation {
 
 /** A component entry of `catalog.json` as far as validation needs it; the build's `Catalog` entries fit it */
 export type CatalogComponent =
-    | { name: string; tier: 'root'; tag: string; shape: Shape }
+    | { name: string; tier: 'root'; tag: string; shape: Shape; placement?: Shape['placement'] }
     | { name: string; tier: 'composed'; tree: Node };
 
 /** The part of `catalog.json` that validation reads */

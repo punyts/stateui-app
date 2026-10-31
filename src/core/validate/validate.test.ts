@@ -531,6 +531,20 @@ describe('validateDocument', () => {
             'SUI-STATE-INVALID'
         ]);
     });
+
+    it('should move a catalog entry placement into its shape', () => {
+        // Arrange
+        const shape = (LIBRARY['text'] as { shape: Shape }).shape;
+        const placement = { _tab: { type: 'string' as const } };
+        const catalog = { components: [{ name: 'text', tier: 'root' as const, tag: 'ui-text', shape, placement }] };
+
+        // Act
+        const entry = libraryFromCatalog(catalog)['text'] as { shape: Shape };
+
+        // Assert
+        expect(entry.shape.placement).toEqual(placement);
+        expect(shape.placement).toBeUndefined();
+    });
 });
 
 describe('validateDocument limits', () => {
