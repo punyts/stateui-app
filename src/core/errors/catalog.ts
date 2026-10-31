@@ -144,7 +144,8 @@ export const ERROR_CATALOG = {
     'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },
     'SUI-RUN-ON-TARGET': { template: 'Target "{target}" of event "{event}" does not resolve at {path}' },
     'SUI-RUN-ICON': { template: 'Icon "{name}" at {path} is in neither the core set nor the icons of the app' },
-    'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' }
+    'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' },
+    'SUI-RUN-WRITE': { template: 'The runtime did not apply the write to {path}' }
 } as const satisfies Record<string, CatalogEntry>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

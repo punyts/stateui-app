@@ -5,6 +5,8 @@ Component system and app documents built on `@punyts/stateui`.
 ## Entry points
 - `@punyts/stateui-app`: everything.
 - `@punyts/stateui-app/core`: the DOM-free part; safe to import under plain Node.
+- `@punyts/stateui-app/protocol`: the runtime message types, limits and structural validator; no DOM and no StateUI, so the preview host can import it.
+- `@punyts/stateui-app/runtime`: `startRuntime` and the protocol (the code that runs inside the preview iframe).
 
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
@@ -372,6 +374,22 @@ message (E7.1).
   removed. Password-type fields are the caller's to name (E7.1).
 - The function returns what the store holds now; it does not know which values the user changed. The host loads the
   result over the document, so values equal to the document's are harmless.
+
+## Preview runtime and message protocol
+
+Code is in `src/runtime/`. `protocol` holds the closed set of messages and the validator; `startRuntime` is the code that runs inside the preview iframe (E7.1).
+
+**Messages.** Every message is `{ v: 1, nonce, type, ...fields }` (`PROTOCOL_VERSION`). Host to runtime: `load` (`document`, optional `state` = `{ data, app }` and `icons`), `write` (`writes`: `{ path, value }` or `{ path, remove: true }` below `$.data` or `$.app`, and optional `icons`), `command` (`target`, `command`, `value?`), `locale` (`locale`), `theme` (`kind`, `name`) and `ping` (`id`). Runtime to host: `ready`, `snapshot` (`data`, `app`), `emit` (`name`, `payload?`), `error` (`errors`: `{ code, message, severity?, statePath?, component? }`) and `pong` (`id`).
+
+**`validateMessage(value)`** returns `{ ok: true, message }` or `{ ok: false, reason }`. The reason is `invalid` (not an object of the protocol, wrong version, no nonce, a wrong or extra field, a write outside `$.data` and `$.app` or through `__proto__`), `unknown` (a type outside the set) or `oversized` (over `MESSAGE_BYTE_LIMITS` for its type, or not serialisable). It does not compare the nonce. Limits (`limits.ts`): load 3 MiB, write 512 KiB, snapshot 1 MiB, emit, error and command 64 KiB, the small types 1 KiB; 500 writes per message; 50 errors per error message. The `icons` map (`isIconsMap`) has at most 256 icons named in lower-case words, each `{ outline, filled? }` with at most 32 paths of at most 8 KiB, only SVG path data characters, and at most 256 KiB in all.
+
+**`startRuntime(window, parent, nonce, library, { host? })`** listens for `message` events and acts only when `event.source === parent` (pass `window.parent`), the message validates and carries the nonce. Everything else is dropped and counted in `handle.stats().dropped` (`invalid`, `unknown`, `oversized`, `unhandled`, `foreign`). `host` defaults to `window.document.body`.
+- `load` calls `mountApp` (a running app is disposed first). The `state` snapshot is applied and `icons` written to `$.runtime.icons` before the first render; articulation values for nodes that no longer exist are skipped. Then it posts `ready`. A document that does not mount posts `error` with the errors and no `ready`.
+- `write` sets or removes the paths (a changed `component` re-renders only that node through `<sui-node>`), merges `icons` and posts `snapshot`. A write the store refuses posts `SUI-RUN-WRITE`.
+- `ping` is answered with `pong`. `command`, `locale` and `theme` are valid but not handled yet (E7.13): they are dropped and counted as `unhandled`.
+- `snapshot` is built with `snapshotState`. It is posted after each `write` message, and also when the user changes `$.data` or articulation (once per tick, only if it differs from the last one). It never holds links, `$.runtime`, content, runtime articulation, the `value` of an `inputType: "password"` node, or the `$.data` path such a node's `<-value` is linked to. Throttling belongs to the host.
+- `emit` comes from the dispatcher's `onEmit` hook; `error` from `onError`, mount errors, uncaught errors and unhandled rejections (`SUI-RUN-BINDING`). At most 200 errors are posted per runtime.
+- Posting uses target origin `*`, because a frame sandboxed without `allow-same-origin` has an opaque origin; the nonce is the check.
 
 ## Building a component library
 

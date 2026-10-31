@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.1.0
+- Runtime message protocol and in-iframe runtime (E7.1, AMM-1754): `src/runtime/` defines the closed, versioned message set (`load`, `write`, `command`, `locale`, `theme`, `ready`, `snapshot`, `emit`, `error`, `ping`, `pong`), `validateMessage` with size limits, `isIconsMap`, and `startRuntime(window, parent, nonce, library)`, which mounts on `load`, applies `write` messages, answers `ping`, and posts `ready`, `snapshot` (no password values or `$.runtime`), `emit` and `error`. `command`, `locale` and `theme` are dropped and counted until E7.13. New entry points `./protocol` (no DOM) and `./runtime`, also exported from the root. New error code `SUI-RUN-WRITE`.
 - `catalog.json` has a top-level `theme` section (semantic tokens with type, default, group and description, and the shipped overlays by kind with the groups each kind may touch), built by `buildThemeSection` from `tokens.descriptions.json`; a semantic token without a one-line description is `SUI-BUILD-TOKENDESC`. `emitCatalog` takes the section as its second argument; `BuildOptions.tokenDescriptions` replaces the descriptions.
 - Scaffold: package, build and test setup, and the `.` and `./core` entry points (AMM-1649).
 - Build option `sharedCssDir`: a line `@include "<name>.css";` in a `view.css` is replaced with that file of the shared folder before the checks and transforms, so the token lint covers the partial. An unknown or non-plain file name, and an `@include` inside a partial, are `SUI-BUILD-IO` with the line.
