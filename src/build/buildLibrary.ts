@@ -1,0 +1,144 @@
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { scanLibrary } from '../core/convention/index.js';
+import type { FileMap, ScannedComponent } from '../core/convention/index.js';
+import type { BuildError } from '../core/errors/index.js';
+import { buildDefaults, parseShape } from '../core/shape/index.js';
+import type { JsonObject } from '../core/types.js';
+import { compileCheck } from './check.js';
+import { compileController } from './controller.js';
+import { loadStateUI } from './dom.js';
+import type { StateUIModule } from './dom.js';
+import { emitIndex, emitIndexTypes, emitModule, emitModuleTypes } from './emit.js';
+import { buildFailure } from './failures.js';
+import type { BuildOptions, BuildResult, BuiltComponent } from './types.js';
+
+async function listFiles(root: string, relative = ''): Promise<string[]> {
+    const entries = await readdir(join(root, relative), { withFileTypes: true });
+    const paths: string[] = [];
+    for (const entry of entries) {
+        const path = relative === '' ? entry.name : `${relative}/${entry.name}`;
+        if (entry.isDirectory()) paths.push(...(await listFiles(root, path)));
+        else if (entry.isFile()) paths.push(path);
+    }
+    return paths.sort();
+}
+
+interface Compiled {
+    files: Map<string, string>;
+    errors: BuildError[];
+}
+
+async function compileComponent(
+    stateui: StateUIModule,
+    sourceDir: string,
+    component: ScannedComponent,
+    options: BuildOptions
+): Promise<Compiled> {
+    const errors: BuildError[] = [];
+    const files = new Map<string, string>();
+    const viewFile = component.files.view as string;
+    const stateFile = component.files.state as string;
+
+    // Source text with LF newlines, so the output does not depend on the platform of the checkout
+    const read = async (file: string): Promise<string | undefined> => {
+        try {
+            return (await readFile(join(sourceDir, file), 'utf8')).replace(/\r\n?/g, '\n');
+        } catch {
+            errors.push(buildFailure('file', file, 'could not be read'));
+            return undefined;
+        }
+    };
+
+    const stateText = await read(stateFile);
+    const view = await read(viewFile);
+    const cssFile = component.files.css;
+    const cssSource = cssFile === undefined ? undefined : await read(cssFile);
+
+    let defaultState: JsonObject = {};
+    if (stateText !== undefined) {
+        const result = parseShape(stateText, stateFile);
+        errors.push(...result.errors);
+        if (result.shape) defaultState = buildDefaults(result.shape);
+    }
+
+    let css = cssSource;
+    if (cssFile !== undefined && cssSource !== undefined) {
+        const context = { component: component.name, file: cssFile };
+        for (const check of options.cssChecks ?? []) errors.push(...check(cssSource, context));
+        for (const transform of options.cssTransforms ?? []) css = transform(css as string, context);
+    }
+
+    if (view !== undefined && (cssFile === undefined || css !== undefined)) {
+        const styles = cssFile === undefined ? undefined : { file: cssFile, text: css as string };
+        errors.push(...compileCheck(stateui, { file: viewFile, text: view }, styles));
+    }
+
+    let hasController = false;
+    const controllerFile = component.files.controller;
+    if (controllerFile !== undefined) {
+        const text = await read(controllerFile);
+        if (text !== undefined) {
+            const compiled = compileController(text, controllerFile);
+            errors.push(...compiled.errors);
+            if (compiled.js !== undefined) {
+                files.set(`${component.name}.controller.js`, compiled.js);
+                hasController = true;
+            }
+        }
+    }
+
+    if (errors.length > 0 || view === undefined) return { files: new Map(), errors };
+
+    files.set(
+        `${component.name}.js`,
+        emitModule({
+            name: component.name,
+            tag: component.tag,
+            template: view,
+            ...(css === undefined ? {} : { styles: css }),
+            defaultState,
+            controller: hasController
+        })
+    );
+    files.set(`${component.name}.d.ts`, emitModuleTypes());
+    return { files, errors };
+}
+
+/**
+ * Builds a component library folder: scans it by convention, compiles each root component's template and
+ * stylesheet with StateUI, and writes one module per root component (plus its compiled controller) and an
+ * index to `outDir`. A component with an error gets no module and the others are still built, so one run
+ * reports every problem. Composed components have no module. Output depends on the sources only, so two
+ * builds of the same input are byte-identical. Files in `outDir` from earlier builds are not removed
+ */
+export async function buildLibrary(sourceDir: string, outDir: string, options: BuildOptions = {}): Promise<BuildResult> {
+    const stateui = await loadStateUI();
+    const fileMap: Record<string, true> = {};
+    for (const path of await listFiles(sourceDir)) fileMap[path] = true;
+    const scan = scanLibrary(fileMap as FileMap);
+    const errors: BuildError[] = [...scan.errors];
+
+    const output = new Map<string, string>();
+    const built: BuiltComponent[] = [];
+    for (const component of scan.components) {
+        if (component.tier !== 'root') continue;
+        const compiled = await compileComponent(stateui, sourceDir, component, options);
+        errors.push(...compiled.errors);
+        if (compiled.errors.length > 0) continue;
+        for (const [file, text] of compiled.files) output.set(file, text);
+        built.push({ component, files: [...compiled.files.keys()].sort() });
+    }
+
+    output.set('index.js', emitIndex(built.map((entry) => entry.component.name)));
+    output.set('index.d.ts', emitIndexTypes());
+
+    const files = [...output.keys()].sort();
+    for (const file of files) {
+        const target = join(outDir, file);
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, output.get(file) as string, 'utf8');
+    }
+
+    return { built, errors, files };
+}

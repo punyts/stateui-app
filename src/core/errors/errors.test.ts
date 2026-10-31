@@ -38,7 +38,10 @@ describe('error catalog', () => {
             'SUI-BUILD-KIND',
             'SUI-BUILD-DEFAULT',
             'SUI-BUILD-PATTERN',
-            'SUI-BUILD-SUMMARY'
+            'SUI-BUILD-SUMMARY',
+            'SUI-STATE-CONDITION',
+            'SUI-STATE-RUNTIME',
+            'SUI-LINK-ROW'
         ]) {
             expect(CODES).toContain(code);
         }

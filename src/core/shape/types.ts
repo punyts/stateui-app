@@ -1,7 +1,22 @@
 import type { JsonValue } from '../types.js';
 
-/** The value types a property can have. `url` is checked by the URL rule, `icon` is a name, `node` is a slot */
-export const PROPERTY_TYPES = ['string', 'number', 'integer', 'boolean', 'array', 'object', 'any', 'url', 'icon', 'node'] as const;
+/**
+ * The value types a property can have. `url` is checked by the URL rule, `icon` is an icon name, `node` is a slot
+ * and `map` is a keyed map described by `items`
+ */
+export const PROPERTY_TYPES = [
+    'string',
+    'number',
+    'integer',
+    'boolean',
+    'array',
+    'object',
+    'any',
+    'url',
+    'icon',
+    'node',
+    'map'
+] as const;
 
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
@@ -19,9 +34,13 @@ export interface ValidatorOptions {
     length?: Bounds;
 }
 
+/** A property that is required only while a sibling property holds (or does not hold) a value */
+export type RequiredWhen = { property: string; equals: JsonValue } | { property: string; notEquals: JsonValue };
+
 /** One property of a shape */
 export interface PropertyShape {
-    type: PropertyType;
+    /** One type, or a list when the property accepts several (`["array", "map"]`) */
+    type: PropertyType | PropertyType[];
     default?: JsonValue;
     required: boolean;
     /** `content` for the `_` properties an overlay may translate; absent otherwise */
@@ -29,6 +48,16 @@ export interface PropertyShape {
     /** The allowed values; absent means any value of the type */
     values?: JsonValue[];
     validators: ValidatorOptions;
+    /** Set when a type is `map`: `"string"` for string values, or the properties each map value (an object) may hold */
+    items?: 'string' | Record<string, PropertyShape>;
+    /** The property is required only while a sibling property holds (or does not hold) a value */
+    requiredWhen?: RequiredWhen;
+    /** True when only controllers write the property: it has a default and a node may not set it */
+    runtime: boolean;
+    /** True when `<sui-node>` writes the property as a host attribute */
+    reflect: boolean;
+    /** True when a `node` property (or a node field of a map item) is a row template, where `$row` is legal */
+    row: boolean;
 }
 
 /** A parsed `*.state.json`: defaults, validation rules and the catalog entry of one component */

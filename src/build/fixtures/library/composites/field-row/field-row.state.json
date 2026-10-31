@@ -1,0 +1,6 @@
+{
+    "summary": "A labelled row",
+    "properties": {
+        "label": { "type": "node" }
+    }
+}

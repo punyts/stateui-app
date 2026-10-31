@@ -25,6 +25,7 @@ export interface CatalogEntry {
 export const ERROR_CATALOG = {
     'SUI-DOC-SHAPE': { template: 'The document is not a valid application document' },
     'SUI-DOC-KEY': { template: 'Unknown or misplaced document key "{key}" at {path}' },
+    'SUI-DOC-COMPOSED': { template: 'Composed component "{name}" at {path} uses a reserved library name' },
     'SUI-DOC-ORDER': { template: 'Key "{key}" at {path} is integer-like and would be reordered; use a prefixed key' },
     'SUI-DOC-LIMIT-NODES': { template: 'The document has {actual} nodes; the limit is {limit}' },
     'SUI-DOC-LIMIT-DEPTH': { template: 'Nodes nest {actual} levels deep at {path}; the limit is {limit}' },
@@ -37,6 +38,13 @@ export const ERROR_CATALOG = {
     'SUI-STATE-INVALID': { template: 'Property "{name}" at {path} does not fit the shape of "{component}"' },
     'SUI-STATE-UNKNOWN': { template: 'Property "{name}" at {path} is not in the shape of "{component}"' },
     'SUI-STATE-REQUIRED': { template: 'Property "{name}" at {path} is required by "{component}"' },
+    'SUI-STATE-CONDITION': {
+        template: 'Property "{name}" at {path} is required by "{component}" under the value of "{other}"'
+    },
+    'SUI-STATE-RUNTIME': {
+        template: 'Property "{name}" at {path} is written by the controller of "{component}"; a node cannot set it'
+    },
+    'SUI-LINK-ROW': { template: 'Reference {target} at {path} uses $row outside a row template' },
     'SUI-LINK-MISSING': { template: 'Link target {target} at {path} does not exist' },
     'SUI-LINK-CYCLE': { template: 'Link at {path} loops back through {target}' },
     'SUI-ON-EVENT': { template: 'Component "{component}" at {path} has no event "{event}"' },
@@ -70,6 +78,10 @@ export const ERROR_CATALOG = {
     'SUI-BUILD-DUPLICATE': { template: 'Component "{component}" is defined by both {file} and {other}' },
     'SUI-BUILD-TIER': { template: 'Component "{component}" in {file} mixes root and composed files' },
     'SUI-BUILD-MISSING': { template: 'Root component "{component}" in {file} needs {name}' },
+    'SUI-BUILD-TEMPLATE': { template: 'Template {file} does not compile: {name}' },
+    'SUI-BUILD-STYLE': { template: 'Styles in {file} do not compile: {name}' },
+    'SUI-BUILD-CONTROLLER': { template: 'Controller {file} is not valid: {name}' },
+    'SUI-BUILD-IO': { template: 'File {file} could not be read: {name}' },
     'SUI-BUILD-TOKEN': { template: 'CSS in {file} uses "{token}"; components may only use semantic and component tokens' },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' }

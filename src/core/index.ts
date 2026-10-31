@@ -15,6 +15,8 @@ export {
     buildDefaults,
     isSafeUrl,
     parseShape,
+    reflectedProperties,
+    typesOf,
     validateNode
 } from './shape/index.js';
 export type {
@@ -22,10 +24,22 @@ export type {
     KeyRule,
     PropertyShape,
     PropertyType,
+    RequiredWhen,
     RuleContext,
     Shape,
     ShapeResult,
+    ValidateContext,
     ValidatorOptions
 } from './shape/index.js';
 export { scanLibrary } from './convention/index.js';
 export type { ComponentFiles, ComponentTier, FileMap, ScanResult, ScannedComponent } from './convention/index.js';
+export { checkComposedNames, cloneJson, mergeValues, resolveNode } from './resolve/index.js';
+export type {
+    ComponentLibrary,
+    ComposedEntry,
+    DocumentComposed,
+    LibraryEntry,
+    ResolveOptions,
+    ResolveResult,
+    RootEntry
+} from './resolve/index.js';

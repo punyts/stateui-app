@@ -1,0 +1,2 @@
+:host { display: block; }
+.label { color: {{ $.color }}; }

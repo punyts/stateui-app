@@ -2,7 +2,7 @@ import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
-import { fitsProperty } from './fit.js';
+import { fitsProperty, typesOf } from './fit.js';
 import { MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.js';
 import type { PropertyShape, PropertyType, Shape } from './types.js';
 import { VALIDATORS, isValidatorName } from './validators.js';
@@ -13,6 +13,8 @@ export interface RuleContext {
     errors: BuildError[];
     /** Dotted location of the object the key sits in, empty at the top; `properties.size` inside a property */
     where: string;
+    /** True inside the `items` of a map: runtime and reflect do not apply there */
+    nested?: boolean;
 }
 
 type KeyType = 'string' | 'boolean' | 'object' | 'array' | 'any';
@@ -101,14 +103,19 @@ interface PropertyDraft extends PropertyShape {
 export const PROPERTY_KEYS: readonly KeyRule<PropertyDraft>[] = [
     {
         name: 'type',
-        type: 'string',
+        type: 'any',
         required: true,
         rule(value, draft, context) {
-            if (!PROPERTY_TYPES.includes(value as PropertyType)) {
+            const list = Array.isArray(value) ? value : [value];
+            const valid =
+                list.length > 0 &&
+                list.every((entry) => PROPERTY_TYPES.includes(entry as PropertyType)) &&
+                new Set(list).size === list.length;
+            if (!valid) {
                 context.errors.push(invalid(context, 'type'));
                 return;
             }
-            draft.type = value as PropertyType;
+            draft.type = list.length === 1 ? (list[0] as PropertyType) : (list as PropertyType[]);
             draft.typeSet = true;
         }
     },
@@ -175,15 +182,91 @@ export const PROPERTY_KEYS: readonly KeyRule<PropertyDraft>[] = [
                     }
                     continue;
                 }
-                if (draft.typeSet && !rule.applies(draft.type)) {
+                if (draft.typeSet && !typesOf(draft).some((type) => rule.applies(type))) {
                     context.errors.push(invalid(context, `validators.${name}`));
                     continue;
                 }
                 (draft.validators as Record<string, unknown>)[name] = parsed;
             }
         }
+    },
+    {
+        name: 'items',
+        type: 'any',
+        required: false,
+        rule(value, draft, context) {
+            if (value === 'string') {
+                draft.items = 'string';
+                return;
+            }
+            if (kindOf(value) !== 'object' || Object.keys(asObject(value)).length === 0) {
+                context.errors.push(invalid(context, 'items'));
+                // Marks the key as present so checkCombination does not report it missing as well
+                draft.items = {};
+                return;
+            }
+            draft.items = readProperties(asObject(value), { ...context, where: locate(context, 'items'), nested: true });
+        }
+    },
+    {
+        name: 'requiredWhen',
+        type: 'object',
+        required: false,
+        rule(value, draft, context) {
+            const input = asObject(value);
+            const keys = Object.keys(input).sort().join(',');
+            const condition = input.property;
+            const valid = typeof condition === 'string' && (keys === 'equals,property' || keys === 'notEquals,property');
+            if (!valid) {
+                context.errors.push(invalid(context, 'requiredWhen'));
+                return;
+            }
+            draft.requiredWhen =
+                input.equals !== undefined
+                    ? { property: condition, equals: input.equals }
+                    : { property: condition, notEquals: input.notEquals as JsonValue };
+        }
+    },
+    {
+        name: 'runtime',
+        type: 'boolean',
+        required: false,
+        rule(value, draft) {
+            draft.runtime = value === true;
+        }
+    },
+    {
+        name: 'reflect',
+        type: 'boolean',
+        required: false,
+        rule(value, draft) {
+            draft.reflect = value === true;
+        }
+    },
+    {
+        name: 'row',
+        type: 'boolean',
+        required: false,
+        rule(value, draft) {
+            draft.row = value === true;
+        }
     }
 ];
+
+const NOT_REFLECTED: readonly PropertyType[] = ['node', 'array', 'object', 'map', 'any'];
+
+/** The checks that need the whole property: its type decides whether `items`, `runtime`, `reflect` and `row` fit */
+function checkCombination(draft: PropertyDraft, where: string, context: RuleContext): void {
+    if (!draft.typeSet) return;
+    const types = typesOf(draft);
+    const problem = (key: string): void => {
+        context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `${where}.${key}` }));
+    };
+    if (types.includes('map') !== (draft.items !== undefined)) problem('items');
+    if (draft.row && !types.includes('node')) problem('row');
+    if (draft.reflect && (context.nested || types.some((type) => NOT_REFLECTED.includes(type)))) problem('reflect');
+    if (draft.runtime && (context.nested || draft.default === undefined || draft.required)) problem('runtime');
+}
 
 function readProperty(name: string, input: JsonValue, context: RuleContext): PropertyShape | undefined {
     if (!isAllowedName(name)) {
@@ -196,8 +279,17 @@ function readProperty(name: string, input: JsonValue, context: RuleContext): Pro
         return undefined;
     }
     const before = context.errors.length;
-    const draft: PropertyDraft = { type: 'any', required: false, validators: {}, typeSet: false };
+    const draft: PropertyDraft = {
+        type: 'any',
+        required: false,
+        validators: {},
+        runtime: false,
+        reflect: false,
+        row: false,
+        typeSet: false
+    };
     applyKeys(PROPERTY_KEYS, asObject(input), draft, { ...context, where });
+    checkCombination(draft, where, context);
 
     if ((name.startsWith(PREFIXES.content) ? 'content' : undefined) !== draft.kind) {
         context.errors.push(buildError('SUI-BUILD-KIND', { file: context.file, name }));
@@ -217,7 +309,25 @@ function readProperty(name: string, input: JsonValue, context: RuleContext): Pro
 }
 
 function fitsValueType(property: PropertyShape, value: JsonValue): boolean {
-    return fitsProperty({ type: property.type, required: false, validators: {} }, value);
+    return fitsProperty({ ...property, required: false, validators: {}, values: undefined }, value);
+}
+
+/** Reads a table of properties; a `requiredWhen` must name another property of the same table */
+function readProperties(input: { [key: string]: JsonValue }, context: RuleContext): Record<string, PropertyShape> {
+    const properties: Record<string, PropertyShape> = {};
+    for (const [name, value] of Object.entries(input)) {
+        const property = readProperty(name, value, context);
+        if (property) properties[name] = property;
+    }
+    for (const [name, property] of Object.entries(properties)) {
+        const sibling = property.requiredWhen?.property;
+        if (sibling !== undefined && (sibling === name || !Object.hasOwn(properties, sibling))) {
+            context.errors.push(
+                buildError('SUI-BUILD-SHAPE', { file: context.file, name: `${locate(context, name)}.requiredWhen.property` })
+            );
+        }
+    }
+    return properties;
 }
 
 function readNames(value: JsonValue, context: RuleContext, key: string): string[] {
@@ -251,10 +361,7 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
         type: 'object',
         required: false,
         rule(value, shape, context) {
-            for (const [name, input] of Object.entries(asObject(value))) {
-                const property = readProperty(name, input, { ...context, where: 'properties' });
-                if (property) shape.properties[name] = property;
-            }
+            shape.properties = readProperties(asObject(value), { ...context, where: 'properties' });
         }
     },
     {

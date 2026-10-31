@@ -17,6 +17,10 @@
         "./core": {
             "types": "./dist/core/index.d.ts",
             "default": "./dist/core/index.js"
+        },
+        "./build": {
+            "types": "./dist/build/index.d.ts",
+            "default": "./dist/build/index.js"
         }
     },
     "scripts": {
@@ -46,5 +50,8 @@
         "playwright": "^1.61.1",
         "typescript": "^5.9.3",
         "vitest": "^4.1.10"
+    },
+    "bin": {
+        "stateui-app-build": "dist/build/cli.js"
     }
 }

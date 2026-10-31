@@ -1,0 +1,8 @@
+{
+    "summary": "A line of text",
+    "events": ["press"],
+    "properties": {
+        "_text": { "type": "string", "kind": "content", "default": "Hello" },
+        "color": { "type": "string", "default": "black" }
+    }
+}
