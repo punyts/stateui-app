@@ -49,6 +49,10 @@ export const ERROR_CATALOG = {
     'SUI-STATE-RUNTIME': {
         template: 'Property "{name}" at {path} is written by the controller of "{component}"; a node cannot set it'
     },
+    'SUI-STATE-FILLED': {
+        template: 'Property "{name}" at {path} asks for a filled icon, but "{other}" has no filled variant; the outline is drawn',
+        severity: 'warning'
+    },
     'SUI-LINK-ROW': { template: 'Reference {target} at {path} uses $row outside a row template' },
     'SUI-LINK-MISSING': {
         template: 'Link target {target} at {path} does not exist or is not an exposed runtime property'
@@ -135,6 +139,7 @@ export const ERROR_CATALOG = {
     'SUI-RUN-ON-SHAPE': { template: 'The "{event}" entry at {path} is not a command or a list of commands' },
     'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },
     'SUI-RUN-ON-TARGET': { template: 'Target "{target}" of event "{event}" does not resolve at {path}' },
+    'SUI-RUN-ICON': { template: 'Icon "{name}" at {path} is in neither the core set nor the icons of the app' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' }
 } as const satisfies Record<string, CatalogEntry>;
 

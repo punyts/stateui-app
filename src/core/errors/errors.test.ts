@@ -48,6 +48,8 @@ describe('error catalog', () => {
             'SUI-BUILD-SUMMARY',
             'SUI-STATE-CONDITION',
             'SUI-STATE-RUNTIME',
+            'SUI-STATE-FILLED',
+            'SUI-RUN-ICON',
             'SUI-LINK-ROW',
             'SUI-LINK-TARGET'
         ]) {
@@ -59,6 +61,8 @@ describe('error catalog', () => {
         expect(buildError('SUI-NODE-MISSING', { path: '$.app.a' }).severity).toBeUndefined();
         expect(buildError('SUI-THEME-CONTRAST', { token: 'a', other: 'b', actual: 3, limit: 4.5 }).severity).toBe('warning');
         expect(buildError('SUI-LOCALE-MISSING', { locale: 'de', path: '$.app.a._title' }).severity).toBe('warning');
+        expect(buildError('SUI-STATE-FILLED', { name: 'filled', other: 'a-b-2', path: '$.app.i' }).severity).toBe('warning');
+        expect(buildError('SUI-RUN-ICON', { name: 'nope', path: '$.app.i' }).severity).toBeUndefined();
     });
 
     it('words SUI-THEME-OVERLAY from the name, kind, path and a fixed reason', () => {
