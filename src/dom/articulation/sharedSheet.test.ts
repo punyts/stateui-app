@@ -139,3 +139,48 @@ describe('generateSharedSheet', () => {
         expect(used.filter((name) => /^--ui-(palette|font)-/.test(name))).toEqual([]);
     });
 });
+
+describe('focus and forced colors', () => {
+    const forced = sheet.slice(sheet.indexOf('@media (forced-colors: active)'));
+
+    it('should draw :focus-visible on the host and inside the shadow root from the focus tokens', () => {
+        // Arrange
+        const start = sheet.indexOf(':host(:focus-visible),\n:focus-visible {');
+        const rule = sheet.slice(start, sheet.indexOf('}', start));
+
+        // Assert
+        expect(start).toBeGreaterThanOrEqual(0);
+        expect(rule).toContain('outline: var(--ui-focus-width) solid var(--ui-color-focus);');
+        expect(rule).toContain('outline-offset: var(--ui-focus-offset);');
+    });
+
+    it.each([
+        ['--tone', 'ButtonText'],
+        ['--tone-soft', 'Canvas'],
+        ['--tone-on', 'CanvasText'],
+        ['--surface', 'Canvas'],
+        ['--shadow', 'none']
+    ])('should map %s to %s under forced-colors: active', (property, value) => {
+        // Arrange
+        const block = forced.slice(0, forced.indexOf(':host(:focus-visible)'));
+
+        // Assert
+        expect(forced.startsWith('@media (forced-colors: active) {')).toBe(true);
+        expect(block).toContain(`${property}: ${value};`);
+    });
+
+    it('should map the focus outline colour to Highlight under forced-colors: active', () => {
+        // Arrange
+        const focus = forced.slice(forced.indexOf(':host(:focus-visible)'));
+
+        // Assert
+        expect(focus).toContain('outline-color: Highlight;');
+    });
+
+    it('should place the forced-colors block after every tone and elevation rule and repeat their selectors', () => {
+        // Assert
+        expect(sheet.lastIndexOf(':host([tone=')).toBeLessThan(sheet.indexOf('@media (forced-colors: active)'));
+        expect(sheet.lastIndexOf(':host([elevation=')).toBeLessThan(sheet.indexOf('@media (forced-colors: active)'));
+        expect(forced).toContain(':host([tone]),\n    :host([elevation]) {');
+    });
+});

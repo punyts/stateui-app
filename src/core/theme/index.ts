@@ -20,6 +20,7 @@ export { mergeOverDefaults, validateTokens } from './validate.js';
 export type { ValidateTokensOptions } from './validate.js';
 export { THEME_VALIDATOR, validateThemeTokens } from './documentValidator.js';
 export { validateTheme, validateThemeOverlays } from './documentValidator.js';
+export { validateNodeThemes } from './nodeOverrides.js';
 export {
     KIND_GROUPS,
     OVERLAY_KINDS,

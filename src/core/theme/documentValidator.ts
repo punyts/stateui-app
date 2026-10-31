@@ -3,6 +3,7 @@ import type { BuildError } from '../errors/index.js';
 import { collectComponentTokens } from '../shape/componentTokens.js';
 import { registerDocumentValidator } from '../validate/registry.js';
 import type { DocumentValidationContext } from '../validate/types.js';
+import { validateNodeThemes } from './nodeOverrides.js';
 import { buildOverlayCatalog, hasOverlay } from './overlays/catalog.js';
 import { SYSTEM, SYSTEM_KINDS, isOverlayKind } from './overlays/types.js';
 import { overlayError } from './overlays/validate.js';
@@ -72,9 +73,13 @@ export function validateThemeOverlays(context: DocumentValidationContext): Build
     return errors;
 }
 
-/** The registered `theme` validator: the tokens and active names, then the overlays */
+/** The registered `theme` validator: the tokens and active names, the overlays, then every node's `theme` override */
 export function validateTheme(context: DocumentValidationContext): BuildError[] {
-    return [...validateThemeTokens(context), ...validateThemeOverlays(context)];
+    return [
+        ...validateThemeTokens(context),
+        ...validateThemeOverlays(context),
+        ...validateNodeThemes(context, libraryTokens(context))
+    ];
 }
 
 registerDocumentValidator(THEME_VALIDATOR, validateTheme);

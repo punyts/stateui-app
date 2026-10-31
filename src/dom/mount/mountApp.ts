@@ -16,7 +16,8 @@ import { createDispatcher } from '../on/index.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
 import { ensureAppRoot } from '../app/index.js';
-import '../theme/index.js';
+import { nodeThemeMapper } from '../theme/index.js';
+import type { ComponentToken } from '../../core/theme/index.js';
 import { mountSteps } from './steps.js';
 import type { AppState, MountContext, MountedApp, StartedContext } from './types.js';
 
@@ -31,8 +32,11 @@ function rootEntry(library: ComponentLibrary, name: string): { tag: string; shap
     return entry?.tier === 'root' ? entry : undefined;
 }
 
-function baseOptions(library: ComponentLibrary): NodeOptions {
-    return { reflect: (name) => (rootEntry(library, name) ? reflectedProperties(rootEntry(library, name)!.shape) : []) };
+function baseOptions(library: ComponentLibrary, componentTokens: readonly ComponentToken[]): NodeOptions {
+    return {
+        theme: nodeThemeMapper(componentTokens),
+        reflect: (name) => (rootEntry(library, name) ? reflectedProperties(rootEntry(library, name)!.shape) : [])
+    };
 }
 
 function initialState(document: AppDocument, app: Node): AppState {
@@ -105,7 +109,7 @@ export function mountApp(
         componentTokens: collected.tokens,
         instances: resolved.instances,
         state: initialState(document, extracted.tree),
-        options: baseOptions(library),
+        options: baseOptions(library, collected.tokens),
         hooks
     };
 

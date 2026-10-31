@@ -31,7 +31,7 @@ describe('error catalog', () => {
     });
 
     it('includes the sub-codes the specs name', () => {
-        for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST', 'SUI-THEME-REF', 'SUI-THEME-VALUE', 'SUI-THEME-TOKEN',
+        for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST', 'SUI-THEME-REF', 'SUI-THEME-VALUE', 'SUI-THEME-TOKEN', 'SUI-THEME-LAYER',
             'SUI-BUILD-TOKEN',
             'SUI-BUILD-TOKENGROUP',
             'SUI-BUILD-TOKENDEF',

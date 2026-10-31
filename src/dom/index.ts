@@ -7,5 +7,14 @@ export { generateLayoutBase, generateLayoutSheet, generateLayoutSheets } from '.
 export { mountApp, mountSteps, registerMountStep } from './mount/index.js';
 export type { AppState, MountContext, MountedApp, MountStep, StartedContext } from './mount/index.js';
 export { APP_ROOT_TAG, CSS_VALUE, componentLeaves, ensureAppRoot, tokenSheet } from './app/index.js';
-export { DEFAULT_ACTIVE, THEME_STEP, applyOverlay, followSystem, resolveSystem, systemMode, systemMotion } from './theme/index.js';
+export {
+    DEFAULT_ACTIVE,
+    THEME_STEP,
+    applyOverlay,
+    followSystem,
+    nodeThemeMapper,
+    resolveSystem,
+    systemMode,
+    systemMotion
+} from './theme/index.js';
 export type { MediaQueryLike, SystemHooks, ThemeStore } from './theme/index.js';

@@ -65,6 +65,9 @@ export const ERROR_CATALOG = {
     'SUI-THEME-REF': { template: 'Token at {path} has the reference {target}, which is not allowed: {name}' },
     'SUI-THEME-VALUE': { template: 'Token value at {path} is not a valid "{name}" value' },
     'SUI-THEME-TOKEN': { template: 'Token path {path} is not in the default tree or the component tokens' },
+    'SUI-THEME-LAYER': {
+        template: 'Token "{name}" at {path} is a primitive token; node "{component}" at {other} may override semantic and component tokens only'
+    },
     'SUI-THEME-OVERLAY': { template: 'Theme overlay "{name}" of kind "{other}" at {path} is not allowed: {key}' },
     'SUI-THEME-CONTRAST': {
         template: 'Contrast between {token} and {other} is {actual}:1, below {limit}:1',

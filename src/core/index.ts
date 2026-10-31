@@ -120,6 +120,7 @@ export {
     isOverlayKind,
     mergeTokenTrees,
     overlayError,
+    validateNodeThemes,
     validateTheme,
     validateThemeOverlay,
     validateThemeOverlays,

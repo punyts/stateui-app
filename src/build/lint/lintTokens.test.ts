@@ -155,3 +155,71 @@ describe('generated sheets', () => {
         expect(errors).toEqual([]);
     });
 });
+
+describe('focus and motion rules', () => {
+    it.each([
+        ['outline: none', 'a:focus { outline: none; }', 1, 11],
+        ['outline: 0', 'a:focus { outline: 0; }', 1, 11],
+        ['outline: 0px', 'a:focus { outline: 0px; }', 1, 11],
+        ['outline-width: 0', 'a:focus {\n    outline-width: 0;\n}', 2, 5],
+        ['outline: none !important', 'a { outline: none !important; }', 1, 5],
+        ['outline: 0 solid', 'a { outline: 0 solid; }', 1, 5]
+    ])('should reject %s with SUI-BUILD-TOKEN at its position', (_name, css, line, column) => {
+        // Act
+        const errors = lintCss(css, context);
+
+        // Assert
+        expect(errors).toEqual([expect.objectContaining({ code: 'SUI-BUILD-TOKEN', file: 'atoms/x/x.view.css', line, column })]);
+        expect(errors[0]?.message).toContain('outline');
+    });
+
+    it('should accept an outline drawn from tokens and a non-zero outline width', () => {
+        expect(lintCss('a { outline: var(--ui-focus-width) solid var(--ui-color-focus); outline-width: 2px; outline-offset: 0; }', context)).toEqual([]);
+        expect(lintCss('a { outline: 1px solid var(--ui-color-focus, 0); }', context)).toEqual([]);
+    });
+
+    it.each([
+        ['transition: opacity 200ms ease', 'a { transition: opacity 200ms ease; }', 1, 25],
+        ['transition-duration: 0.2s', 'a { transition-duration: 0.2s; }', 1, 26],
+        ['transition-delay: 50ms', 'a { transition-delay: 50ms; }', 1, 23],
+        ['animation: spin 1s linear', 'a { animation: spin 1s linear; }', 1, 21],
+        ['animation-duration: .5s', 'a { animation-duration: .5s; }', 1, 25],
+        ['animation-delay: 0s', 'a { animation-delay: 0s; }', 1, 22]
+    ])('should reject a literal duration in %s', (_name, css, line, column) => {
+        // Act
+        const errors = lintCss(css, context);
+
+        // Assert
+        expect(errors).toEqual([expect.objectContaining({ code: 'SUI-BUILD-TOKEN', line, column })]);
+        expect(errors[0]?.message).toContain('motion token');
+    });
+
+    it('should accept durations from motion tokens and literals outside transition and animation', () => {
+        const css = [
+            'a { transition: opacity var(--ui-motion-duration-base) ease; }',
+            'b { animation: spin calc(var(--ui-motion-duration-slow) * 2) linear; }',
+            'c { transition: none; animation-name: fade-2s; }',
+            'd { width: 10s; /* transition: 1s */ }'
+        ].join('\n');
+
+        expect(lintCss(css, context)).toEqual([]);
+    });
+
+    it('should report both offences of one rule in source order', () => {
+        // Act
+        const errors = lintCss('a { transition: all 1s; outline: none; }', context);
+
+        // Assert
+        expect(errors.map((error) => error.column)).toEqual([21, 25]);
+    });
+});
+
+describe('the shared sheet', () => {
+    it('should pass the lint with its focus and forced-colors rules', () => {
+        // Act
+        const errors = lintCss(generateSharedSheet(), { file: 'shared', tokens: [] });
+
+        // Assert
+        expect(errors).toEqual([]);
+    });
+});

@@ -29,6 +29,37 @@ function densityRule(density: string, leaves: readonly TokenLeaf[]): string {
     return `:host([density=${density}]) {\n${body}\n}`;
 }
 
+/**
+ * Focus is always drawn: on the host and on any focusable element inside the component's shadow root, from the focus
+ * tokens. The lint rejects a component rule that removes an outline, so this is the only focus style
+ */
+const FOCUS_RULE = `:host(:focus-visible),
+:focus-visible {
+    outline: var(--ui-focus-width) solid var(--ui-color-focus);
+    outline-offset: var(--ui-focus-offset);
+}`;
+
+/**
+ * In forced-colors mode the palette is the user's, so the local colour properties map to system colours and the focus
+ * outline is Highlight. The selectors repeat the tone and elevation attribute selectors so this block wins on
+ * specificity, and it comes last so it wins on order. Shadows are removed
+ */
+const FORCED_COLORS_RULE = `@media (forced-colors: active) {
+    :host,
+    :host([tone]),
+    :host([elevation]) {
+        --tone: ButtonText;
+        --tone-soft: Canvas;
+        --tone-on: CanvasText;
+        --surface: Canvas;
+        --shadow: none;
+    }
+    :host(:focus-visible),
+    :focus-visible {
+        outline-color: Highlight;
+    }
+}`;
+
 function rule(attribute: string, value: string, declarations: readonly [string, string][]): string {
     const body = declarations.map(([name, token]) => `    ${name}: var(${token});`).join('\n');
     return `:host([${attribute}=${value}]) {\n${body}\n}`;
@@ -39,6 +70,7 @@ function rule(attribute: string, value: string, declarations: readonly [string, 
  * local custom properties on the host: `tone` gives `--tone`, `--tone-soft` and `--tone-on`; `size` gives
  * `--control-height` and `--icon-size`; `elevation` gives `--surface` and `--shadow`; `textRole` gives
  * `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `hidden` removes the host from layout.
+ * `:focus-visible` is drawn from the focus tokens, and `forced-colors: active` maps the local colours to system colours.
  * `density` sets `--ui-density-factor` and re-declares the density-dependent `space` tokens on the host, so everything
  * below follows. `variant` has no rule here: a variant is painted by the component's own CSS. The build prepends this text to every root component's CSS, so the tone table lives only here
  */
@@ -81,5 +113,7 @@ export function generateSharedSheet(leaves: readonly TokenLeaf[] = DEFAULT_LEAVE
     const dependent = densityDependentLeaves(leaves);
     for (const density of ARTICULATION_LISTS.density) rules.push(densityRule(density, dependent));
     rules.push(':host([hidden]) {\n    display: none;\n}');
+    rules.push(FOCUS_RULE);
+    rules.push(FORCED_COLORS_RULE);
     return `${rules.join('\n')}\n`;
 }

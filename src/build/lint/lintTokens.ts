@@ -3,6 +3,7 @@ import type { BuildError } from '../../core/errors/index.js';
 import { DEFAULT_LEAVES, toCssValue } from '../../core/theme/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
 import type { CssCheck, CssContext } from '../types.js';
+import { focusMotionFindings } from './focusMotion.js';
 import { declarationsOf, locator, maskCss } from './mask.js';
 import { findUiVars, squash } from './vars.js';
 
@@ -27,7 +28,8 @@ function componentDefaults(tokens: readonly ComponentToken[]): Map<string, strin
  * `var(--ui-scale-*)` and any `var(--ui-font-*)` are primitives), no `var(--ui-*)` name that is neither a default token
  * nor a declared component token, no literal colour (`#hex`, `rgb(`, `rgba(`, `hsl(`, `hsla(`), and a fallback written
  * by hand on a declared component token must equal the shape default. Comments, strings and `url()` contents are
- * ignored. Every error is a `SUI-BUILD-TOKEN` with the 1-based line and column of the offending name or colour.
+ * ignored. It also rejects a removed outline (`outline: none`, `outline: 0`, `outline-width: 0`) and a literal `ms` or `s`
+ * duration in `transition` and `animation` declarations. Every error is a `SUI-BUILD-TOKEN` with the 1-based line and column of the offending name or colour.
  *
  * One declaration is exempt: a custom property that is a default semantic token, written with that token's own default
  * expression. The generated shared sheet uses it to re-declare the density-dependent tokens on a density host
@@ -69,6 +71,8 @@ export function lintCss(css: string, context: LintContext): BuildError[] {
             }
         }
     }
+
+    found.push(...focusMotionFindings(masked, declarations));
 
     return found
         .sort((a, b) => a.offset - b.offset)
