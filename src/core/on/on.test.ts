@@ -163,6 +163,41 @@ describe('validateOn', () => {
         expect(errors[0]).toMatchObject({ code: 'SUI-ON-COMMAND', statePath: '$.app.children.b.on.press' });
     });
 
+    it('should report a literal command value that is not a key of the commandValues map', () => {
+        // Arrange
+        const region = parseShape(
+            {
+                summary: 'Region',
+                commands: ['show'],
+                commandValues: { show: 'messages' },
+                properties: { messages: { type: 'map', items: 'string', default: { fallback: 'Saved' } } }
+            },
+            'region.state.json'
+        ).shape as Shape;
+        const library: ComponentLibrary = { ...LIBRARY, region: { tier: 'root', tag: 'ui-region', shape: region } };
+        const app = (messages: unknown, value: unknown): Node => ({
+            component: 'toolbar',
+            children: {
+                r: { component: 'region', ...(messages === undefined ? {} : { messages }) } as Node,
+                b: { component: 'button', on: { press: { command: 'show', target: '$.app.children.r', value } } } as Node
+            }
+        });
+        const run = (node: Node): string[] => validateOn(resolveNode(node, library), library).map((error) => error.code);
+
+        // Act
+        const known = run(app({ saved: 'Saved' }, 'saved'));
+        const unknown = validateOn(resolveNode(app({ saved: 'Saved' }, 'nope'), library), library);
+        const fromDefault = run(app(undefined, 'fallback'));
+        const path = run(app({ saved: 'Saved' }, '$.data.key'));
+
+        // Assert
+        expect(known).toEqual([]);
+        expect(unknown).toHaveLength(1);
+        expect(unknown[0]).toMatchObject({ code: 'SUI-ON-VALUE', statePath: '$.app.children.b.on.press' });
+        expect(fromDefault).toEqual([]);
+        expect(path).toEqual([]);
+    });
+
     it('should report a missing target node and a missing provider', () => {
         const missing = check(button({ press: { command: 'submit', target: '.children.nope' } }));
         const provider = check(button({ press: { command: 'submit', target: '$parent' } }));

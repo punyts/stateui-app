@@ -75,6 +75,11 @@ export interface Shape {
     shared: string[];
     events: string[];
     commands: string[];
+    /**
+     * Commands whose `value` must be a key of one of the component's `map` properties (`toastRegion`: `{ show:
+     * "messages" }`), so `validateOn` can check a literal value. Absent when the shape declares none
+     */
+    commandValues?: Record<string, string>;
     /** True when the component lays out children, so a node may carry `layout` */
     layout: boolean;
     /**

@@ -180,6 +180,24 @@ class OnValidator {
             this.errors.push(
                 buildError('SUI-ON-COMMAND', { component: located.node.component, path: located.path, command: name, statePath })
             );
+            return;
+        }
+        this.checkValue(command, located.node, statePath);
+    }
+
+    /**
+     * A literal `value` of a command the shape lists in `commandValues` must be a key of that map property, read from
+     * the node or the shape default. A `$` path or a `{{ }}` expression is only known at run time and is not checked
+     */
+    private checkValue(command: OnCommand, node: TreeNode, statePath: string): void {
+        const shape = shapeOf(this.library, node.component);
+        const property = shape?.commandValues?.[command.command];
+        const value = command.value;
+        if (property === undefined || typeof value !== 'string' || value.startsWith('$') || value.includes('{{')) return;
+
+        const map = Object.hasOwn(node, property) ? node[property] : shape?.properties[property]?.default;
+        if (isObject(map) && !Object.hasOwn(map, value)) {
+            this.errors.push(buildError('SUI-ON-VALUE', { command: command.command, path: statePath, name: property, statePath }));
         }
     }
 
@@ -210,6 +228,7 @@ class OnValidator {
  *   `toggle` without a target
  * - `SUI-ON-EVENT`: the node's component does not declare the event
  * - `SUI-ON-COMMAND`: the target's component does not declare the command
+ * - `SUI-ON-VALUE`: a literal `value` of a command the target's shape lists in `commandValues` is not a key of that map
  * - `SUI-ON-TARGET`: the target text is not a valid form (including dot climbing), the ancestor or a step does not
  *   exist, no ancestor provides the command for `$parent`, a component command targets a property or a path outside
  *   `$.app`, or `set` and `toggle` do not target a property the component declares

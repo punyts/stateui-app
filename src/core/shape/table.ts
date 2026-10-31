@@ -468,6 +468,13 @@ export function finishShape(shape: Shape, context: RuleContext): void {
     if (shape.layout && shape.placement !== undefined) {
         context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: 'placement' }));
     }
+    for (const [command, property] of Object.entries(shape.commandValues ?? {})) {
+        const type = Object.hasOwn(shape.properties, property) ? shape.properties[property]?.type : undefined;
+        const isMap = type === 'map' || (Array.isArray(type) && type.includes('map'));
+        if (!shape.commands.includes(command) || !isMap) {
+            context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `commandValues.${command}` }));
+        }
+    }
     if (context.errors.length > 0) return;
     shape.properties[HIDDEN] = {
         type: 'boolean',
@@ -526,6 +533,22 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
         required: false,
         rule(value, shape, context) {
             shape.commands = readNames(value, context, 'commands');
+        }
+    },
+    {
+        name: 'commandValues',
+        type: 'object',
+        required: false,
+        rule(value, shape, context) {
+            const input = asObject(value);
+            const valid =
+                Object.keys(input).length > 0 &&
+                Object.entries(input).every(([command, property]) => EVENT_NAME.test(command) && typeof property === 'string');
+            if (!valid) {
+                context.errors.push(invalid(context, 'commandValues'));
+                return;
+            }
+            shape.commandValues = input as Record<string, string>;
         }
     },
     {

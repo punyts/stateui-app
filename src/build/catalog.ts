@@ -204,6 +204,7 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
             events: shape.events,
             commands: shape.commands,
             layout: shape.layout,
+            ...(shape.commandValues === undefined ? {} : { commandValues: shape.commandValues }),
             ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
         },
         shared: [...shape.shared, HIDDEN],

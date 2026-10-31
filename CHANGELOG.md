@@ -7,3 +7,5 @@
 - Fix: `buildAppOverlay` with the `library` option now translates the entries of a content map (`_errors.required`); before, only entries whose key started with `_` were picked.
 - Validator `regex` (a maximum length, 1 to `MAX_PATTERN_LENGTH`): a string property whose value must be a regular expression of at most that length that compiles and has no nested quantifier such as `(a+)+`; for a field's `pattern`.
 - `mountApp` no longer applies a `$row` link found in a row template (a `row: true` slot or map-item field): the `<-key` stays in the tree as written, so a component can pass the template to `resolveRowLinks`; before, such a document failed to mount with `SUI-LINK-MISSING`.
+- Fix: `libraryFromCatalog` carries a catalog entry's declared `placement` into its library shape, so children of a component with a placement shape (tabs) validate.
+- Shape key `commandValues` and the error `SUI-ON-VALUE`: a literal `value` of a listed command must be a key of the named `map` property.

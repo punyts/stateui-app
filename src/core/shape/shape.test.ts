@@ -167,6 +167,33 @@ describe('parseShape', () => {
         it('should reject a bad command list', () => {
             expect(parseCodes({ summary: 'x', commands: ['Focus'] })).toEqual(['SUI-BUILD-SHAPE']);
         });
+
+        it('should accept commandValues that name a declared command and a map property', () => {
+            // Arrange
+            const input = {
+                summary: 'x',
+                commands: ['show'],
+                commandValues: { show: 'messages' },
+                properties: { messages: { type: 'map', items: 'string', default: {} } }
+            };
+
+            // Act
+            const result = parseShape(input, 'x.state.json');
+
+            // Assert
+            expect(result.errors).toEqual([]);
+            expect(result.shape?.commandValues).toEqual({ show: 'messages' });
+        });
+
+        it.each([
+            [{ show: 'messages' }, [], { messages: { type: 'map', items: 'string', default: {} } }],
+            [{ show: 'label' }, ['show'], { label: { type: 'string', default: '' } }],
+            [{ show: 'missing' }, ['show'], {}],
+            [{ show: 1 }, ['show'], { messages: { type: 'map', items: 'string', default: {} } }],
+            [{}, ['show'], {}]
+        ])('should reject commandValues %j with commands %j', (commandValues, commands, properties) => {
+            expect(parseCodes({ summary: 'x', commands, commandValues, properties })).toEqual(['SUI-BUILD-SHAPE']);
+        });
     });
 
     describe('validators', () => {
