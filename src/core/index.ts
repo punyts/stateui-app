@@ -69,3 +69,12 @@ export type {
     TreeNode,
     ValidateOnOptions
 } from './on/index.js';
+export { documentValidators, libraryFromCatalog, registerDocumentValidator, validateDocument } from './validate/index.js';
+export type {
+    CatalogComponent,
+    CatalogSource,
+    DocumentValidation,
+    DocumentValidationContext,
+    DocumentValidator,
+    ValidateDocumentOptions
+} from './validate/index.js';

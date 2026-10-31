@@ -26,6 +26,8 @@ export const ERROR_CATALOG = {
     'SUI-DOC-SHAPE': { template: 'The document is not a valid application document' },
     'SUI-DOC-KEY': { template: 'Unknown or misplaced document key "{key}" at {path}' },
     'SUI-DOC-COMPOSED': { template: 'Composed component "{name}" at {path} uses a reserved library name' },
+    'SUI-DOC-TYPE': { template: 'Document key "{key}" at {path} has the wrong type' },
+    'SUI-DOC-VALIDATOR': { template: 'Validator "{name}" failed while checking the document' },
     'SUI-DOC-ORDER': { template: 'Key "{key}" at {path} is integer-like and would be reordered; use a prefixed key' },
     'SUI-DOC-LIMIT-NODES': { template: 'The document has {actual} nodes; the limit is {limit}' },
     'SUI-DOC-LIMIT-DEPTH': { template: 'Nodes nest {actual} levels deep at {path}; the limit is {limit}' },
@@ -91,6 +93,9 @@ export const ERROR_CATALOG = {
     },
     'SUI-BUILD-TOKEN': { template: 'CSS in {file} uses "{token}"; components may only use semantic and component tokens' },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
+    'SUI-RUN-ON-SHAPE': { template: 'The "{event}" entry at {path} is not a command or a list of commands' },
+    'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },
+    'SUI-RUN-ON-TARGET': { template: 'Target "{target}" of event "{event}" does not resolve at {path}' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' }
 } as const satisfies Record<string, CatalogEntry>;
 
