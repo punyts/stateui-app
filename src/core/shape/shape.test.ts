@@ -407,6 +407,14 @@ describe('validateNode', () => {
             expect(codes(typed, { value: 'ab1' })).toEqual(['SUI-STATE-INVALID']);
         });
 
+        it('should check pattern on a url after the URL rule', () => {
+            const typed = propertyShape({ type: 'url', validators: { pattern: '^data:' } });
+
+            expect(codes(typed, { value: 'data:image/png;base64,AAAA' })).toEqual([]);
+            expect(codes(typed, { value: '#top' })).toEqual(['SUI-STATE-INVALID']);
+            expect(codes(typed, { value: 'https://example.com' })).toEqual(['SUI-STATE-INVALID']);
+        });
+
         it('should fail a pattern check for a string over the input limit', () => {
             const typed = propertyShape({ type: 'string', validators: { pattern: '^a+$' } });
 

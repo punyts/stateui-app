@@ -216,6 +216,68 @@ describe('buildLibrary', () => {
         expect(result.built).toEqual([]);
     });
 
+    it('should inline an @include line from sharedCssDir before checks and transforms run', async () => {
+        const shared = await library({ 'base.css': 'p { margin: 0; }\n' });
+        const source = await library(
+            simple('inc', '<p>{{ $.text }}</p>', { 'atoms/inc/inc.view.css': 'a { top: 0; }\n@include "base.css";\nb { top: 1px; }' })
+        );
+        const out = await scratch();
+        const seen: string[] = [];
+
+        const result = await buildLibrary(source, out, {
+            sharedCssDir: shared,
+            cssChecks: [(css) => (seen.push(css), [])]
+        });
+
+        expect(result.errors).toEqual([]);
+        expect(seen).toEqual(['a { top: 0; }\np { margin: 0; }\nb { top: 1px; }']);
+        expect(await readFile(join(out, 'inc.js'), 'utf8')).toContain('p { margin: 0; }');
+    });
+
+    it('should report an unknown @include file as SUI-BUILD-IO with its line', async () => {
+        const shared = await library({ 'base.css': 'p { margin: 0; }' });
+        const source = await library(
+            simple('inc', '<p>{{ $.text }}</p>', { 'atoms/inc/inc.view.css': 'a { top: 0; }\n  @include "missing.css";' })
+        );
+
+        const result = await buildLibrary(source, await scratch(), { sharedCssDir: shared });
+
+        expect(result.errors).toEqual([
+            expect.objectContaining({ code: 'SUI-BUILD-IO', file: 'atoms/inc/inc.view.css', line: 2, column: 3 })
+        ]);
+        expect(result.errors[0]?.message).toContain('missing.css');
+        expect(result.built).toEqual([]);
+    });
+
+    it('should reject an @include path outside the shared folder and a nested @include', async () => {
+        const shared = await library({ 'outer.css': '@include "base.css";', 'base.css': 'p { margin: 0; }' });
+        const source = await library({
+            ...simple('up', '<p>{{ $.text }}</p>', { 'atoms/up/up.view.css': '@include "../x.css";' }),
+            ...simple('nest', '<p>{{ $.text }}</p>', { 'atoms/nest/nest.view.css': '@include "outer.css";' })
+        });
+
+        const result = await buildLibrary(source, await scratch(), { sharedCssDir: shared });
+
+        expect(result.errors.map((error) => error.file).sort()).toEqual(['atoms/nest/nest.view.css', 'atoms/up/up.view.css']);
+    });
+
+    it('should run the token lint on the inlined partial', async () => {
+        const shared = await library({ 'bad.css': 'p { color: var(--ui-palette-red); }' });
+        const source = await library(simple('lint', '<p>{{ $.text }}</p>', { 'atoms/lint/lint.view.css': '@include "bad.css";' }));
+
+        const result = await buildLibrary(source, await scratch(), { sharedCssDir: shared });
+
+        expect(result.errors.map((error) => error.code)).toContain('SUI-BUILD-TOKEN');
+    });
+
+    it('should leave @include lines alone without sharedCssDir', async () => {
+        const source = await library(simple('raw', '<p>{{ $.text }}</p>', { 'atoms/raw/raw.view.css': '/* @include "x.css"; */' }));
+
+        const result = await buildLibrary(source, await scratch());
+
+        expect(result.errors).toEqual([]);
+    });
+
     it('should give byte-identical output with no extension points and with empty lists', async () => {
         const first = await scratch();
         const second = await scratch();

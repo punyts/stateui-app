@@ -58,7 +58,7 @@ export const VALIDATORS: { [K in ValidatorName]: ValidatorRule<K> } = {
     },
     pattern: {
         parse: (options) => (typeof options === 'string' && compile(options) !== undefined ? options : undefined),
-        applies: (type) => type === 'string',
+        applies: (type) => type === 'string' || type === 'url',
         check: (value, options) => {
             if (typeof value !== 'string' || value.length > MAX_PATTERN_INPUT) return false;
             const expression = compile(options);

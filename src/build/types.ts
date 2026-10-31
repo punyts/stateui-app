@@ -23,6 +23,12 @@ export type CssTransform = (css: string, context: CssContext) => string;
 export type CssCheck = (css: string, context: CssContext) => BuildError[];
 
 export interface BuildOptions {
+    /**
+     * A folder of shared stylesheets. A line `@include "<name>.css";` in a component's `view.css` is replaced with
+     * that file before the checks and transforms run, so the token lint also covers the partial; an unknown file is a
+     * `SUI-BUILD` error with the line. Lines reported after an include count the inlined text. Off by default
+     */
+    sharedCssDir?: string;
     /** Applied in order, each to the output of the one before; none by default */
     cssTransforms?: readonly CssTransform[];
     /** Run on the CSS before any transform, so the lines they report match the file; none by default */

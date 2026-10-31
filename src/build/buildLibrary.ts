@@ -22,6 +22,7 @@ import { loadStateUI } from './dom.js';
 import type { StateUIModule } from './dom.js';
 import { emitIndex, emitIndexTypes, emitModule, emitModuleTypes } from './emit.js';
 import { buildFailure } from './failures.js';
+import { inlineIncludes } from './includes.js';
 import { SHARED_SHEET_LINES, prependSharedSheet } from './sharedSheet.js';
 import { LAYOUT_SHEET_LINES, checkLayoutHost, prependLayoutSheets } from './layoutSheets.js';
 import { emitOverlay, inFile, overlayFileName, readOverlay } from './overlays.js';
@@ -82,7 +83,8 @@ async function compileComponent(
     const stateText = await read(stateFile);
     const view = await read(viewFile);
     const cssFile = component.files.css;
-    const cssSource = cssFile === undefined ? undefined : await read(cssFile);
+    const rawCss = cssFile === undefined ? undefined : await read(cssFile);
+    const cssSource = rawCss === undefined ? undefined : await inlineIncludes(rawCss, cssFile as string, options.sharedCssDir, errors);
 
     let defaultState: JsonObject = {};
     let shape: Shape | undefined;
