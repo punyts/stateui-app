@@ -194,7 +194,37 @@
             "soft": "{palette.teal.100}",
             "on": "{palette.white}"
         },
-        "backdrop": "rgba(9, 9, 11, 0.5)"
+        "backdrop": "rgba(9, 9, 11, 0.5)",
+        "data": {
+            "categorical": {
+                "1": "{palette.green.600}",
+                "2": "{palette.violet.500}",
+                "3": "{palette.red.700}",
+                "4": "{palette.blue.600}",
+                "5": "{palette.amber.900}",
+                "6": "{palette.teal.700}",
+                "7": "{palette.amber.600}",
+                "8": "{palette.neutral.500}"
+            },
+            "sequential": {
+                "1": "{palette.blue.500}",
+                "2": "{palette.blue.600}",
+                "3": "{palette.blue.700}",
+                "4": "{palette.blue.800}",
+                "5": "{palette.blue.900}",
+                "6": "{palette.blue.950}",
+                "7": "{palette.black}"
+            },
+            "diverging": {
+                "neg3": "{palette.red.800}",
+                "neg2": "{palette.red.600}",
+                "neg1": "{palette.red.500}",
+                "zero": "{palette.neutral.500}",
+                "pos1": "{palette.blue.500}",
+                "pos2": "{palette.blue.600}",
+                "pos3": "{palette.blue.800}"
+            }
+        }
     },
     "space": {
         "inset": {

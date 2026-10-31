@@ -7,6 +7,9 @@ import type { TokenTree } from './types.js';
 /** The minimum contrast ratio for text, below which a pair is reported */
 export const MIN_CONTRAST = 4.5;
 
+/** The minimum contrast ratio for a data-visualisation colour against `color.surface.base` */
+export const MIN_DATA_CONTRAST = 3;
+
 const TONES = ['neutral', 'accent', 'danger', 'warning', 'success', 'info'] as const;
 const MAX_CHAIN = 32;
 
@@ -96,29 +99,54 @@ function resolveLiteral(tree: TokenTree, path: string): string | undefined {
     return undefined;
 }
 
+/** The paths of the leaves below `color.data`, in tree order */
+function dataColorPaths(tree: TokenTree): string[] {
+    const paths: string[] = [];
+    const walk = (node: TokenTree | string | undefined, prefix: string): void => {
+        if (node === undefined) return;
+        if (typeof node === 'string') {
+            paths.push(prefix);
+            return;
+        }
+        for (const [key, child] of Object.entries(node)) walk(child, `${prefix}.${key}`);
+    };
+    const color = tree.color;
+    const data = color === undefined || typeof color === 'string' ? undefined : color.data;
+    walk(data, 'color.data');
+    return paths;
+}
+
 /**
  * Checks `color.<tone>.base` against `color.<tone>.on` for every tone, and `color.text.base` against
  * `color.surface.base`, on the effective tree. A pair below 4.5:1 is a `SUI-THEME-CONTRAST` warning with both
- * state paths. A pair that does not resolve to opaque literal colours is skipped
+ * state paths. Every `color.data.*` colour is checked against `color.surface.base` at 3:1 the same way. A pair that
+ * does not resolve to opaque literal colours is skipped
  */
 export function checkContrast(effectiveTree: TokenTree): BuildError[] {
     const pairs: [string, string][] = TONES.map((tone) => [`color.${tone}.base`, `color.${tone}.on`]);
     pairs.push(['color.text.base', 'color.surface.base']);
 
+    const limits = new Map<string, number>();
+    for (const path of dataColorPaths(effectiveTree)) {
+        pairs.push([path, 'color.surface.base']);
+        limits.set(path, MIN_DATA_CONTRAST);
+    }
+
     const warnings: BuildError[] = [];
     for (const [first, second] of pairs) {
+        const limit = limits.get(first as string) ?? MIN_CONTRAST;
         const a = resolveLiteral(effectiveTree, first as string);
         const b = resolveLiteral(effectiveTree, second as string);
         if (a === undefined || b === undefined) continue;
         const ratio = contrastRatio(a, b);
-        if (ratio === undefined || ratio >= MIN_CONTRAST) continue;
+        if (ratio === undefined || ratio >= limit) continue;
         warnings.push(
             buildError('SUI-THEME-CONTRAST', {
                 token: `${TOKENS_STATE_PATH}.${first}`,
                 other: `${TOKENS_STATE_PATH}.${second}`,
                 statePath: `${TOKENS_STATE_PATH}.${first}`,
                 actual: Math.floor(ratio * 100) / 100,
-                limit: MIN_CONTRAST
+                limit
             })
         );
     }

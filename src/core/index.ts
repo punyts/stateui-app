@@ -97,6 +97,7 @@ export {
     DEFAULT_LEAVES,
     DEFAULT_TOKENS,
     MIN_CONTRAST,
+    MIN_DATA_CONTRAST,
     TOKENS_STATE_PATH,
     TOKEN_TYPES,
     TokenNameError,

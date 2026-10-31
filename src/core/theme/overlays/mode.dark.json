@@ -48,7 +48,37 @@
                 "soft": "{palette.teal.900}",
                 "on": "{palette.neutral.950}"
             },
-            "backdrop": "rgba(0, 0, 0, 0.7)"
+            "backdrop": "rgba(0, 0, 0, 0.7)",
+            "data": {
+                "categorical": {
+                    "1": "{palette.green.400}",
+                    "2": "{palette.violet.400}",
+                    "3": "{palette.red.400}",
+                    "4": "{palette.blue.400}",
+                    "5": "{palette.amber.200}",
+                    "6": "{palette.teal.400}",
+                    "7": "{palette.amber.400}",
+                    "8": "{palette.neutral.400}"
+                },
+                "sequential": {
+                    "1": "{palette.blue.600}",
+                    "2": "{palette.blue.500}",
+                    "3": "{palette.blue.400}",
+                    "4": "{palette.blue.300}",
+                    "5": "{palette.blue.200}",
+                    "6": "{palette.blue.100}",
+                    "7": "{palette.blue.50}"
+                },
+                "diverging": {
+                    "neg3": "{palette.red.300}",
+                    "neg2": "{palette.red.400}",
+                    "neg1": "{palette.red.500}",
+                    "zero": "{palette.neutral.400}",
+                    "pos1": "{palette.blue.500}",
+                    "pos2": "{palette.blue.400}",
+                    "pos3": "{palette.blue.300}"
+                }
+            }
         },
         "elevation": {
             "flat": {

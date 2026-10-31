@@ -354,6 +354,160 @@
                 "description": "Dimming layer behind modals and drawers"
             },
             {
+                "path": "color.data.categorical.1",
+                "type": "color",
+                "default": "{palette.green.600}",
+                "group": "color",
+                "description": "Series color 1 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.categorical.2",
+                "type": "color",
+                "default": "{palette.violet.500}",
+                "group": "color",
+                "description": "Series color 2 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.categorical.3",
+                "type": "color",
+                "default": "{palette.red.700}",
+                "group": "color",
+                "description": "Series color 3 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.categorical.4",
+                "type": "color",
+                "default": "{palette.blue.600}",
+                "group": "color",
+                "description": "Series color 4 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.categorical.5",
+                "type": "color",
+                "default": "{palette.amber.900}",
+                "group": "color",
+                "description": "Series color 5 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.categorical.6",
+                "type": "color",
+                "default": "{palette.teal.700}",
+                "group": "color",
+                "description": "Series color 6 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.categorical.7",
+                "type": "color",
+                "default": "{palette.amber.600}",
+                "group": "color",
+                "description": "Series color 7 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.categorical.8",
+                "type": "color",
+                "default": "{palette.neutral.500}",
+                "group": "color",
+                "description": "Series color 8 of 8 for unordered categories, told apart from its neighbours with common color-vision deficiencies"
+            },
+            {
+                "path": "color.data.sequential.1",
+                "type": "color",
+                "default": "{palette.blue.500}",
+                "group": "color",
+                "description": "Step 1 of 7 for ordered values; each step has more contrast with the surface than the one before"
+            },
+            {
+                "path": "color.data.sequential.2",
+                "type": "color",
+                "default": "{palette.blue.600}",
+                "group": "color",
+                "description": "Step 2 of 7 for ordered values; each step has more contrast with the surface than the one before"
+            },
+            {
+                "path": "color.data.sequential.3",
+                "type": "color",
+                "default": "{palette.blue.700}",
+                "group": "color",
+                "description": "Step 3 of 7 for ordered values; each step has more contrast with the surface than the one before"
+            },
+            {
+                "path": "color.data.sequential.4",
+                "type": "color",
+                "default": "{palette.blue.800}",
+                "group": "color",
+                "description": "Step 4 of 7 for ordered values; each step has more contrast with the surface than the one before"
+            },
+            {
+                "path": "color.data.sequential.5",
+                "type": "color",
+                "default": "{palette.blue.900}",
+                "group": "color",
+                "description": "Step 5 of 7 for ordered values; each step has more contrast with the surface than the one before"
+            },
+            {
+                "path": "color.data.sequential.6",
+                "type": "color",
+                "default": "{palette.blue.950}",
+                "group": "color",
+                "description": "Step 6 of 7 for ordered values; each step has more contrast with the surface than the one before"
+            },
+            {
+                "path": "color.data.sequential.7",
+                "type": "color",
+                "default": "{palette.black}",
+                "group": "color",
+                "description": "Step 7 of 7 for ordered values; each step has more contrast with the surface than the one before"
+            },
+            {
+                "path": "color.data.diverging.neg3",
+                "type": "color",
+                "default": "{palette.red.800}",
+                "group": "color",
+                "description": "Strongest negative step of the diverging scale for values around a midpoint"
+            },
+            {
+                "path": "color.data.diverging.neg2",
+                "type": "color",
+                "default": "{palette.red.600}",
+                "group": "color",
+                "description": "Medium negative step of the diverging scale for values around a midpoint"
+            },
+            {
+                "path": "color.data.diverging.neg1",
+                "type": "color",
+                "default": "{palette.red.500}",
+                "group": "color",
+                "description": "Weak negative step of the diverging scale for values around a midpoint"
+            },
+            {
+                "path": "color.data.diverging.zero",
+                "type": "color",
+                "default": "{palette.neutral.500}",
+                "group": "color",
+                "description": "Midpoint, neither negative nor positive step of the diverging scale for values around a midpoint"
+            },
+            {
+                "path": "color.data.diverging.pos1",
+                "type": "color",
+                "default": "{palette.blue.500}",
+                "group": "color",
+                "description": "Weak positive step of the diverging scale for values around a midpoint"
+            },
+            {
+                "path": "color.data.diverging.pos2",
+                "type": "color",
+                "default": "{palette.blue.600}",
+                "group": "color",
+                "description": "Medium positive step of the diverging scale for values around a midpoint"
+            },
+            {
+                "path": "color.data.diverging.pos3",
+                "type": "color",
+                "default": "{palette.blue.800}",
+                "group": "color",
+                "description": "Strongest positive step of the diverging scale for values around a midpoint"
+            },
+            {
                 "path": "space.inset.sm",
                 "type": "dimension",
                 "default": "calc({scale.space.3} * {density.factor})",
