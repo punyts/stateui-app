@@ -29,6 +29,8 @@ export interface BuildOptions {
      * `SUI-BUILD` error with the line. Lines reported after an include count the inlined text. Off by default
      */
     sharedCssDir?: string;
+    /** The descriptions of the semantic tokens by dotted path; the library's own `tokens.descriptions.json` by default */
+    tokenDescriptions?: Readonly<Record<string, string>>;
     /** Applied in order, each to the output of the one before; none by default */
     cssTransforms?: readonly CssTransform[];
     /** Run on the CSS before any transform, so the lines they report match the file; none by default */

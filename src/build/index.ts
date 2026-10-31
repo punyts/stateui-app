@@ -4,6 +4,8 @@ export { checkLayoutHost, hasLayoutHost, prependLayoutSheets } from './layoutShe
 export { applyTokenFallbacks } from './tokenFallbacks.js';
 export { checkTokens, lintCss } from './lint/index.js';
 export type { LintContext } from './lint/index.js';
+export { buildThemeSection } from './theme.js';
+export type { ThemeOverlayEntry, ThemeSection, ThemeSources, ThemeTokenEntry } from './theme.js';
 export { formatError } from './format.js';
 export type { BuildOptions, BuildResult, BuiltComponent, CssCheck, CssContext, CssTransform } from './types.js';
 export type {

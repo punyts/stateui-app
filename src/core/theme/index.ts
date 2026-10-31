@@ -37,3 +37,4 @@ export {
     validateThemeOverlay
 } from './overlays/index.js';
 export type { OverlayCatalog, OverlayKind, ThemeOverlays, TokenOverlay, ValidateOverlayOptions } from './overlays/index.js';
+export { DEFAULT_TOKEN_DESCRIPTIONS, TOKEN_DESCRIPTIONS_FILE } from './descriptions.js';

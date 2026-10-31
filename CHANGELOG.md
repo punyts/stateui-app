@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.1.0
+- `catalog.json` has a top-level `theme` section (semantic tokens with type, default, group and description, and the shipped overlays by kind with the groups each kind may touch), built by `buildThemeSection` from `tokens.descriptions.json`; a semantic token without a one-line description is `SUI-BUILD-TOKENDESC`. `emitCatalog` takes the section as its second argument; `BuildOptions.tokenDescriptions` replaces the descriptions.
 - Scaffold: package, build and test setup, and the `.` and `./core` entry points (AMM-1649).
 - Build option `sharedCssDir`: a line `@include "<name>.css";` in a `view.css` is replaced with that file of the shared folder before the checks and transforms, so the token lint covers the partial. An unknown or non-plain file name, and an `@include` inside a partial, are `SUI-BUILD-IO` with the line.
 - Fix: the catalog `example` of a component now includes each property a `requiredWhen` makes required (with its default or a sample value), so the example passes `validateNode`; before, it left them out.

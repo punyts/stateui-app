@@ -9,6 +9,9 @@ import type { Node } from '../core/types.js';
 import { composedEntry, emitCatalog, exampleNode, rootEntry, sizeOf } from './catalog.js';
 import type { CatalogShape, ComponentCatalogEntry } from './catalog.js';
 import { buildLibrary } from './index.js';
+import { buildThemeSection } from './theme.js';
+
+const THEME = buildThemeSection().theme;
 
 const temporary: string[] = [];
 
@@ -187,8 +190,8 @@ describe('emitCatalog', () => {
             rootEntry(scanned(name), parsed({ summary: name }), 'atom')
         );
 
-        const first = emitCatalog(entries);
-        const second = emitCatalog([...entries].reverse());
+        const first = emitCatalog(entries, THEME);
+        const second = emitCatalog([...entries].reverse(), THEME);
 
         expect(first.catalog.components.map((entry) => entry.name)).toEqual(['alpha', 'mid', 'zeta']);
         expect(second.text).toBe(first.text);

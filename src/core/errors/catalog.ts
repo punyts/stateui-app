@@ -138,6 +138,7 @@ export const ERROR_CATALOG = {
     'SUI-BUILD-TOKENCONFLICT': {
         template: 'Component token group "{name}" in {file} does not match the same group in {other}'
     },
+    'SUI-BUILD-TOKENDESC': { template: 'Semantic token "{name}" needs a one-line description in {file}' },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-ON-SHAPE': { template: 'The "{event}" entry at {path} is not a command or a list of commands' },
     'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },

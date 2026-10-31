@@ -140,5 +140,766 @@
             }
         }
     ],
-    "locales": []
+    "locales": [],
+    "theme": {
+        "tokens": [
+            {
+                "path": "color.surface.base",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Background of the page and of most panels"
+            },
+            {
+                "path": "color.surface.raised",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Background of cards and other surfaces that sit above the page"
+            },
+            {
+                "path": "color.surface.sunken",
+                "type": "color",
+                "default": "{palette.neutral.50}",
+                "group": "color",
+                "description": "Background of wells and areas set below the page, such as table headers"
+            },
+            {
+                "path": "color.surface.overlay",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Background of menus, popovers and dialogs"
+            },
+            {
+                "path": "color.text.base",
+                "type": "color",
+                "default": "{palette.neutral.900}",
+                "group": "color",
+                "description": "Default text color"
+            },
+            {
+                "path": "color.text.muted",
+                "type": "color",
+                "default": "{palette.neutral.600}",
+                "group": "color",
+                "description": "Secondary text such as hints and captions"
+            },
+            {
+                "path": "color.text.inverse",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Text on a dark or strongly colored background"
+            },
+            {
+                "path": "color.text.disabled",
+                "type": "color",
+                "default": "{palette.neutral.400}",
+                "group": "color",
+                "description": "Text of a disabled control"
+            },
+            {
+                "path": "color.border.base",
+                "type": "color",
+                "default": "{palette.neutral.200}",
+                "group": "color",
+                "description": "Default border and divider color"
+            },
+            {
+                "path": "color.border.strong",
+                "type": "color",
+                "default": "{palette.neutral.400}",
+                "group": "color",
+                "description": "Border of inputs and of elements that need more contrast"
+            },
+            {
+                "path": "color.focus",
+                "type": "color",
+                "default": "{color.accent.base}",
+                "group": "color",
+                "description": "Color of the focus ring"
+            },
+            {
+                "path": "color.neutral.base",
+                "type": "color",
+                "default": "{palette.neutral.700}",
+                "group": "color",
+                "description": "Solid neutral color, for neutral buttons and badges"
+            },
+            {
+                "path": "color.neutral.soft",
+                "type": "color",
+                "default": "{palette.neutral.100}",
+                "group": "color",
+                "description": "Soft neutral background, for subtle badges and chips"
+            },
+            {
+                "path": "color.neutral.on",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Text and icons on the solid neutral color"
+            },
+            {
+                "path": "color.accent.base",
+                "type": "color",
+                "default": "{palette.blue.600}",
+                "group": "color",
+                "description": "Solid brand color, for primary buttons and links"
+            },
+            {
+                "path": "color.accent.soft",
+                "type": "color",
+                "default": "{palette.blue.100}",
+                "group": "color",
+                "description": "Soft brand background, for selected rows and highlights"
+            },
+            {
+                "path": "color.accent.on",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Text and icons on the solid brand color"
+            },
+            {
+                "path": "color.danger.base",
+                "type": "color",
+                "default": "{palette.red.600}",
+                "group": "color",
+                "description": "Solid color for errors and destructive actions"
+            },
+            {
+                "path": "color.danger.soft",
+                "type": "color",
+                "default": "{palette.red.100}",
+                "group": "color",
+                "description": "Soft background for error messages"
+            },
+            {
+                "path": "color.danger.on",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Text and icons on the solid danger color"
+            },
+            {
+                "path": "color.warning.base",
+                "type": "color",
+                "default": "{palette.amber.500}",
+                "group": "color",
+                "description": "Solid color for warnings"
+            },
+            {
+                "path": "color.warning.soft",
+                "type": "color",
+                "default": "{palette.amber.100}",
+                "group": "color",
+                "description": "Soft background for warning messages"
+            },
+            {
+                "path": "color.warning.on",
+                "type": "color",
+                "default": "{palette.neutral.950}",
+                "group": "color",
+                "description": "Text and icons on the solid warning color"
+            },
+            {
+                "path": "color.success.base",
+                "type": "color",
+                "default": "{palette.green.700}",
+                "group": "color",
+                "description": "Solid color for success states"
+            },
+            {
+                "path": "color.success.soft",
+                "type": "color",
+                "default": "{palette.green.100}",
+                "group": "color",
+                "description": "Soft background for success messages"
+            },
+            {
+                "path": "color.success.on",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Text and icons on the solid success color"
+            },
+            {
+                "path": "color.info.base",
+                "type": "color",
+                "default": "{palette.teal.700}",
+                "group": "color",
+                "description": "Solid color for informational states"
+            },
+            {
+                "path": "color.info.soft",
+                "type": "color",
+                "default": "{palette.teal.100}",
+                "group": "color",
+                "description": "Soft background for informational messages"
+            },
+            {
+                "path": "color.info.on",
+                "type": "color",
+                "default": "{palette.white}",
+                "group": "color",
+                "description": "Text and icons on the solid info color"
+            },
+            {
+                "path": "color.backdrop",
+                "type": "color",
+                "default": "rgba(9, 9, 11, 0.5)",
+                "group": "color",
+                "description": "Dimming layer behind modals and drawers"
+            },
+            {
+                "path": "space.inset.sm",
+                "type": "dimension",
+                "default": "calc({scale.space.3} * {density.factor})",
+                "group": "space",
+                "description": "Small padding inside a component"
+            },
+            {
+                "path": "space.inset.md",
+                "type": "dimension",
+                "default": "calc({scale.space.4} * {density.factor})",
+                "group": "space",
+                "description": "Medium padding inside a component"
+            },
+            {
+                "path": "space.inset.lg",
+                "type": "dimension",
+                "default": "calc({scale.space.5} * {density.factor})",
+                "group": "space",
+                "description": "Large padding inside a component"
+            },
+            {
+                "path": "space.gap.sm",
+                "type": "dimension",
+                "default": "calc({scale.space.2} * {density.factor})",
+                "group": "space",
+                "description": "Small gap between neighbouring items in a row or column"
+            },
+            {
+                "path": "space.gap.md",
+                "type": "dimension",
+                "default": "calc({scale.space.3} * {density.factor})",
+                "group": "space",
+                "description": "Medium gap between neighbouring items in a row or column"
+            },
+            {
+                "path": "space.gap.lg",
+                "type": "dimension",
+                "default": "calc({scale.space.4} * {density.factor})",
+                "group": "space",
+                "description": "Large gap between neighbouring items in a row or column"
+            },
+            {
+                "path": "space.stack.sm",
+                "type": "dimension",
+                "default": "calc({scale.space.5} * {density.factor})",
+                "group": "space",
+                "description": "Small vertical space between blocks of content"
+            },
+            {
+                "path": "space.stack.md",
+                "type": "dimension",
+                "default": "calc({scale.space.6} * {density.factor})",
+                "group": "space",
+                "description": "Medium vertical space between blocks of content"
+            },
+            {
+                "path": "space.stack.lg",
+                "type": "dimension",
+                "default": "calc({scale.space.7} * {density.factor})",
+                "group": "space",
+                "description": "Large vertical space between blocks of content"
+            },
+            {
+                "path": "size.control.sm",
+                "type": "dimension",
+                "default": "{scale.size.5}",
+                "group": "size",
+                "description": "Height of a small control such as a button or input"
+            },
+            {
+                "path": "size.control.md",
+                "type": "dimension",
+                "default": "{scale.size.6}",
+                "group": "size",
+                "description": "Height of a medium control such as a button or input"
+            },
+            {
+                "path": "size.control.lg",
+                "type": "dimension",
+                "default": "{scale.size.7}",
+                "group": "size",
+                "description": "Height of a large control such as a button or input"
+            },
+            {
+                "path": "size.icon.sm",
+                "type": "dimension",
+                "default": "{scale.size.1}",
+                "group": "size",
+                "description": "Width and height of a small icon"
+            },
+            {
+                "path": "size.icon.md",
+                "type": "dimension",
+                "default": "{scale.size.2}",
+                "group": "size",
+                "description": "Width and height of a medium icon"
+            },
+            {
+                "path": "size.icon.lg",
+                "type": "dimension",
+                "default": "{scale.size.3}",
+                "group": "size",
+                "description": "Width and height of a large icon"
+            },
+            {
+                "path": "icon.stroke",
+                "type": "number",
+                "default": "2",
+                "group": "icon",
+                "description": "Stroke width of outline icons"
+            },
+            {
+                "path": "radius.none",
+                "type": "dimension",
+                "default": "0",
+                "group": "radius",
+                "description": "Square corners"
+            },
+            {
+                "path": "radius.sm",
+                "type": "dimension",
+                "default": "4px",
+                "group": "radius",
+                "description": "Small corner radius, for inputs and badges"
+            },
+            {
+                "path": "radius.md",
+                "type": "dimension",
+                "default": "6px",
+                "group": "radius",
+                "description": "Medium corner radius, for buttons and cards"
+            },
+            {
+                "path": "radius.lg",
+                "type": "dimension",
+                "default": "12px",
+                "group": "radius",
+                "description": "Large corner radius, for dialogs and large panels"
+            },
+            {
+                "path": "radius.full",
+                "type": "dimension",
+                "default": "9999px",
+                "group": "radius",
+                "description": "Fully rounded corners, for pills and avatars"
+            },
+            {
+                "path": "border.width.thin",
+                "type": "dimension",
+                "default": "1px",
+                "group": "border",
+                "description": "Width of a normal border"
+            },
+            {
+                "path": "border.width.thick",
+                "type": "dimension",
+                "default": "2px",
+                "group": "border",
+                "description": "Width of an emphasized border"
+            },
+            {
+                "path": "elevation.flat.shadow",
+                "type": "shadow",
+                "default": "none",
+                "group": "elevation",
+                "description": "Shadow of a surface level with the page (none)"
+            },
+            {
+                "path": "elevation.flat.layer",
+                "type": "number",
+                "default": "0",
+                "group": "elevation",
+                "description": "Stacking order of a flat surface"
+            },
+            {
+                "path": "elevation.raised.shadow",
+                "type": "shadow",
+                "default": "0 1px 3px 0 rgba(9, 9, 11, 0.12)",
+                "group": "elevation",
+                "description": "Shadow of cards and raised surfaces"
+            },
+            {
+                "path": "elevation.raised.layer",
+                "type": "number",
+                "default": "1",
+                "group": "elevation",
+                "description": "Stacking order of a raised surface"
+            },
+            {
+                "path": "elevation.overlay.shadow",
+                "type": "shadow",
+                "default": "0 8px 24px 0 rgba(9, 9, 11, 0.16)",
+                "group": "elevation",
+                "description": "Shadow of menus and popovers"
+            },
+            {
+                "path": "elevation.overlay.layer",
+                "type": "number",
+                "default": "10",
+                "group": "elevation",
+                "description": "Stacking order of menus and popovers"
+            },
+            {
+                "path": "elevation.modal.shadow",
+                "type": "shadow",
+                "default": "0 16px 48px 0 rgba(9, 9, 11, 0.24)",
+                "group": "elevation",
+                "description": "Shadow of modals and drawers"
+            },
+            {
+                "path": "elevation.modal.layer",
+                "type": "number",
+                "default": "20",
+                "group": "elevation",
+                "description": "Stacking order of modals and drawers"
+            },
+            {
+                "path": "text.display.family",
+                "type": "fontFamily",
+                "default": "{font.family.sans}",
+                "group": "text",
+                "description": "Font family of display text, the largest style"
+            },
+            {
+                "path": "text.display.size",
+                "type": "dimension",
+                "default": "{font.size.8}",
+                "group": "text",
+                "description": "Font size of display text"
+            },
+            {
+                "path": "text.display.weight",
+                "type": "fontWeight",
+                "default": "{font.weight.bold}",
+                "group": "text",
+                "description": "Font weight of display text"
+            },
+            {
+                "path": "text.display.leading",
+                "type": "number",
+                "default": "{font.leading.tight}",
+                "group": "text",
+                "description": "Line height of display text"
+            },
+            {
+                "path": "text.title.family",
+                "type": "fontFamily",
+                "default": "{font.family.sans}",
+                "group": "text",
+                "description": "Font family of titles"
+            },
+            {
+                "path": "text.title.size",
+                "type": "dimension",
+                "default": "{font.size.6}",
+                "group": "text",
+                "description": "Font size of titles"
+            },
+            {
+                "path": "text.title.weight",
+                "type": "fontWeight",
+                "default": "{font.weight.bold}",
+                "group": "text",
+                "description": "Font weight of titles"
+            },
+            {
+                "path": "text.title.leading",
+                "type": "number",
+                "default": "{font.leading.tight}",
+                "group": "text",
+                "description": "Line height of titles"
+            },
+            {
+                "path": "text.heading.family",
+                "type": "fontFamily",
+                "default": "{font.family.sans}",
+                "group": "text",
+                "description": "Font family of headings"
+            },
+            {
+                "path": "text.heading.size",
+                "type": "dimension",
+                "default": "{font.size.5}",
+                "group": "text",
+                "description": "Font size of headings"
+            },
+            {
+                "path": "text.heading.weight",
+                "type": "fontWeight",
+                "default": "{font.weight.medium}",
+                "group": "text",
+                "description": "Font weight of headings"
+            },
+            {
+                "path": "text.heading.leading",
+                "type": "number",
+                "default": "{font.leading.tight}",
+                "group": "text",
+                "description": "Line height of headings"
+            },
+            {
+                "path": "text.body.family",
+                "type": "fontFamily",
+                "default": "{font.family.sans}",
+                "group": "text",
+                "description": "Font family of body text"
+            },
+            {
+                "path": "text.body.size",
+                "type": "dimension",
+                "default": "{font.size.3}",
+                "group": "text",
+                "description": "Font size of body text"
+            },
+            {
+                "path": "text.body.weight",
+                "type": "fontWeight",
+                "default": "{font.weight.regular}",
+                "group": "text",
+                "description": "Font weight of body text"
+            },
+            {
+                "path": "text.body.leading",
+                "type": "number",
+                "default": "{font.leading.normal}",
+                "group": "text",
+                "description": "Line height of body text"
+            },
+            {
+                "path": "text.label.family",
+                "type": "fontFamily",
+                "default": "{font.family.sans}",
+                "group": "text",
+                "description": "Font family of labels and button text"
+            },
+            {
+                "path": "text.label.size",
+                "type": "dimension",
+                "default": "{font.size.2}",
+                "group": "text",
+                "description": "Font size of labels and button text"
+            },
+            {
+                "path": "text.label.weight",
+                "type": "fontWeight",
+                "default": "{font.weight.medium}",
+                "group": "text",
+                "description": "Font weight of labels and button text"
+            },
+            {
+                "path": "text.label.leading",
+                "type": "number",
+                "default": "{font.leading.normal}",
+                "group": "text",
+                "description": "Line height of labels and button text"
+            },
+            {
+                "path": "text.caption.family",
+                "type": "fontFamily",
+                "default": "{font.family.sans}",
+                "group": "text",
+                "description": "Font family of captions and hints"
+            },
+            {
+                "path": "text.caption.size",
+                "type": "dimension",
+                "default": "{font.size.1}",
+                "group": "text",
+                "description": "Font size of captions and hints"
+            },
+            {
+                "path": "text.caption.weight",
+                "type": "fontWeight",
+                "default": "{font.weight.regular}",
+                "group": "text",
+                "description": "Font weight of captions and hints"
+            },
+            {
+                "path": "text.caption.leading",
+                "type": "number",
+                "default": "{font.leading.normal}",
+                "group": "text",
+                "description": "Line height of captions and hints"
+            },
+            {
+                "path": "text.code.family",
+                "type": "fontFamily",
+                "default": "{font.family.mono}",
+                "group": "text",
+                "description": "Font family of code and other monospace text"
+            },
+            {
+                "path": "text.code.size",
+                "type": "dimension",
+                "default": "{font.size.2}",
+                "group": "text",
+                "description": "Font size of code"
+            },
+            {
+                "path": "text.code.weight",
+                "type": "fontWeight",
+                "default": "{font.weight.regular}",
+                "group": "text",
+                "description": "Font weight of code"
+            },
+            {
+                "path": "text.code.leading",
+                "type": "number",
+                "default": "{font.leading.normal}",
+                "group": "text",
+                "description": "Line height of code"
+            },
+            {
+                "path": "motion.duration.fast",
+                "type": "duration",
+                "default": "100ms",
+                "group": "motion",
+                "description": "Duration of quick transitions such as hover changes"
+            },
+            {
+                "path": "motion.duration.base",
+                "type": "duration",
+                "default": "200ms",
+                "group": "motion",
+                "description": "Duration of normal transitions"
+            },
+            {
+                "path": "motion.duration.slow",
+                "type": "duration",
+                "default": "400ms",
+                "group": "motion",
+                "description": "Duration of large transitions such as drawers opening"
+            },
+            {
+                "path": "motion.easing.standard",
+                "type": "easing",
+                "default": "cubic-bezier(0.4, 0, 0.2, 1)",
+                "group": "motion",
+                "description": "Easing of transitions that stay on screen"
+            },
+            {
+                "path": "motion.easing.enter",
+                "type": "easing",
+                "default": "cubic-bezier(0, 0, 0.2, 1)",
+                "group": "motion",
+                "description": "Easing of elements entering the screen"
+            },
+            {
+                "path": "motion.easing.exit",
+                "type": "easing",
+                "default": "cubic-bezier(0.4, 0, 1, 1)",
+                "group": "motion",
+                "description": "Easing of elements leaving the screen"
+            },
+            {
+                "path": "density.factor",
+                "type": "number",
+                "default": "1",
+                "group": "density",
+                "description": "Multiplier applied to every spacing token; 1 is normal"
+            },
+            {
+                "path": "density.compact",
+                "type": "number",
+                "default": "0.75",
+                "group": "density",
+                "description": "The density factor of the compact density"
+            },
+            {
+                "path": "density.comfortable",
+                "type": "number",
+                "default": "1",
+                "group": "density",
+                "description": "The density factor of the comfortable density"
+            },
+            {
+                "path": "density.spacious",
+                "type": "number",
+                "default": "1.25",
+                "group": "density",
+                "description": "The density factor of the spacious density"
+            },
+            {
+                "path": "focus.width",
+                "type": "dimension",
+                "default": "2px",
+                "group": "focus",
+                "description": "Width of the focus ring"
+            },
+            {
+                "path": "focus.offset",
+                "type": "dimension",
+                "default": "2px",
+                "group": "focus",
+                "description": "Distance between an element and its focus ring"
+            }
+        ],
+        "overlays": {
+            "mode": [
+                {
+                    "name": "light",
+                    "groups": [
+                        "color",
+                        "elevation"
+                    ]
+                },
+                {
+                    "name": "dark",
+                    "groups": [
+                        "color",
+                        "elevation"
+                    ]
+                },
+                {
+                    "name": "contrast",
+                    "groups": [
+                        "color",
+                        "elevation"
+                    ]
+                }
+            ],
+            "brand": [
+                {
+                    "name": "default",
+                    "groups": [
+                        "palette",
+                        "font.family",
+                        "radius",
+                        "icon"
+                    ]
+                }
+            ],
+            "motion": [
+                {
+                    "name": "full",
+                    "groups": [
+                        "motion"
+                    ]
+                },
+                {
+                    "name": "reduced",
+                    "groups": [
+                        "motion"
+                    ]
+                }
+            ]
+        }
+    }
 }

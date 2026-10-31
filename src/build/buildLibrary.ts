@@ -15,6 +15,7 @@ import { checkTokens, lintCss } from './lint/index.js';
 import { applyTokenFallbacks } from './tokenFallbacks.js';
 import type { JsonObject, Node } from '../core/types.js';
 import { composedEntry, emitCatalog, rootEntry, sizeError, sizeOf } from './catalog.js';
+import { buildThemeSection } from './theme.js';
 import type { CatalogSize, ComponentCatalogEntry } from './catalog.js';
 import { compileCheck } from './check.js';
 import { compileController } from './controller.js';
@@ -299,7 +300,9 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
             ).tokens
         ));
     output.set('index.d.ts', emitIndexTypes());
-    const { catalog, text } = emitCatalog(entries);
+    const themeSection = buildThemeSection({ descriptions: options.tokenDescriptions });
+    errors.push(...themeSection.errors);
+    const { catalog, text } = emitCatalog(entries, themeSection.theme);
     output.set('catalog.json', text);
 
     const files = [...output.keys()].sort();

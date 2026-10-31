@@ -6,6 +6,7 @@ import { typesOf } from '../core/shape/index.js';
 import type { PropertyShape, Shape } from '../core/shape/index.js';
 import type { ExposedPath, ScannedComponent } from '../core/convention/index.js';
 import type { JsonObject, JsonValue, Node } from '../core/types.js';
+import type { ThemeSection } from './theme.js';
 
 /** The size of a component, from the group folder it sits in */
 export type CatalogSize = 'atom' | 'molecule' | 'composite';
@@ -78,6 +79,8 @@ export interface Catalog {
     components: ComponentCatalogEntry[];
     /** Every language that a component that built has an overlay for, sorted */
     locales: string[];
+    /** The theme tokens a node override may set and the shipped overlays; see `buildThemeSection` */
+    theme: ThemeSection;
 }
 
 const SIZES: Readonly<Record<string, CatalogSize>> = {
@@ -239,10 +242,10 @@ export function composedEntry(
     };
 }
 
-/** The catalog and the text of `catalog.json`: entries sorted by name, the list of languages sorted, four-space indent, LF newline at the end */
-export function emitCatalog(entries: readonly ComponentCatalogEntry[]): { catalog: Catalog; text: string } {
+/** The catalog and the text of `catalog.json`: entries sorted by name, the list of languages sorted, the theme section, four-space indent, LF newline at the end */
+export function emitCatalog(entries: readonly ComponentCatalogEntry[], theme: ThemeSection): { catalog: Catalog; text: string } {
     const components = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     const locales = [...new Set(components.flatMap((entry) => entry.locales))].sort();
-    const catalog: Catalog = { components, locales };
+    const catalog: Catalog = { components, locales, theme };
     return { catalog, text: `${JSON.stringify(catalog, null, 4)}\n` };
 }
