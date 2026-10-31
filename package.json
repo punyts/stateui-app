@@ -1,0 +1,50 @@
+{
+    "name": "@punyts/stateui-app",
+    "version": "0.1.0",
+    "publishConfig": {
+        "access": "public"
+    },
+    "type": "module",
+    "description": "Component system and app documents on top of StateUI",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./core": {
+            "types": "./dist/core/index.d.ts",
+            "default": "./dist/core/index.js"
+        }
+    },
+    "scripts": {
+        "clean": "bash ../../bin/clean.sh .",
+        "typecheck": "tsc -p tsconfig.build.json --noEmit",
+        "build": "npm run typecheck && bash ../../bin/build.sh . tsc -b tsconfig.build.json",
+        "test": "npm run test:run",
+        "test:run": "vitest run",
+        "test:watch": "vitest --watch",
+        "test:cov": "vitest run --coverage",
+        "test:browser": "vitest run --config vitest.browser.config.ts",
+        "build:watch": "tsc -b tsconfig.build.json -w",
+        "dev": "npm run build:watch"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "@punyts/core": "^1.0.0",
+        "@punyts/expression": "^1.4.0",
+        "@punyts/state": "^1.2.0",
+        "@punyts/stateui": "^0.2.0"
+    },
+    "devDependencies": {
+        "@vitest/browser-playwright": "^4.1.10",
+        "happy-dom": "^21.0.4",
+        "playwright": "^1.61.1",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.10"
+    }
+}
