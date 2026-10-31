@@ -1,6 +1,7 @@
 import { HIDDEN, isArticulationName } from '../core/articulation/index.js';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
+import type { ComponentToken } from '../core/theme/index.js';
 import { typesOf } from '../core/shape/index.js';
 import type { PropertyShape, Shape } from '../core/shape/index.js';
 import type { ScannedComponent } from '../core/convention/index.js';
@@ -14,8 +15,8 @@ export type CatalogSize = 'atom' | 'molecule' | 'composite';
  * when the shape declares it and leaves it out otherwise
  */
 export interface ShapeExtras {
-    /** The component tokens the component declares */
-    tokens?: JsonValue;
+    /** The component tokens the component declares: group, path, type and default */
+    tokens?: ComponentToken[];
     /** The `placement` shape its children may carry */
     placement?: Record<string, PropertyShape>;
     /** The override paths that are the component's intended interface */
@@ -187,7 +188,8 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
             shared: shape.shared,
             events: shape.events,
             commands: shape.commands,
-            layout: shape.layout
+            layout: shape.layout,
+            ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
         },
         shared: [...shape.shared, HIDDEN],
         own: Object.keys(shape.properties).filter((name) => !isArticulationName(name)),

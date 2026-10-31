@@ -1,3 +1,4 @@
+import type { ComponentToken } from '../core/theme/index.js';
 import type { JsonObject } from '../core/types.js';
 
 /** What one root component's module is made from */
@@ -46,12 +47,14 @@ export function emitModuleTypes(): string {
     ].join('\n');
 }
 
-/** The index: every built module in name order, and `registerAll` */
-export function emitIndex(names: readonly string[]): string {
+/** The index: every built module in name order, the library's component tokens and `registerAll` */
+export function emitIndex(names: readonly string[], tokens: readonly ComponentToken[] = []): string {
     const lines: string[] = names.map((name, index) => `import * as component${index} from './${name}.js';`);
     lines.push(
         '',
         `export const components = [${names.map((_name, index) => `component${index}`).join(', ')}];`,
+        '',
+        `export const componentTokens = ${JSON.stringify(tokens, null, 4)};`,
         '',
         'export function registerAll() {',
         '    return components.map((component) => component.register());',
@@ -73,7 +76,15 @@ export function emitIndexTypes(): string {
         '    register(): typeof StateUIElement;',
         '}',
         '',
+        'export interface ComponentTokenEntry {',
+        '    readonly path: string;',
+        '    readonly group: string;',
+        "    readonly type: 'color' | 'dimension' | 'number' | 'duration' | 'easing' | 'shadow' | 'fontFamily' | 'fontWeight';",
+        '    readonly default: string;',
+        '}',
+        '',
         'export declare const components: ComponentModule[];',
+        'export declare const componentTokens: ComponentTokenEntry[];',
         'export declare function registerAll(): (typeof StateUIElement)[];',
         ''
     ].join('\n');

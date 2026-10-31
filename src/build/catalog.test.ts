@@ -110,17 +110,17 @@ describe('rootEntry', () => {
         const area = parsed({ summary: 'x', properties: { area: { type: 'string' } } }).properties.area as PropertyShape;
         const declared: CatalogShape = {
             ...shape,
-            tokens: { '--ui-table-gap': 'space' },
+            tokens: [{ path: 'table.gap', group: 'table', type: 'dimension', default: '{space.gap.md}' }],
             placement: { area },
             exposes: { columns: 'The columns' }
         };
 
         const entry = rootEntry(scanned('table'), declared, 'atom');
 
-        expect(entry.tokens).toEqual({ '--ui-table-gap': 'space' });
+        expect(entry.tokens).toEqual([{ path: 'table.gap', group: 'table', type: 'dimension', default: '{space.gap.md}' }]);
         expect(entry.placement).toEqual({ area });
         expect(entry.exposes).toEqual({ columns: 'The columns' });
-        expect(Object.keys(entry.shape)).toEqual(['summary', 'properties', 'shared', 'events', 'commands', 'layout']);
+        expect(Object.keys(entry.shape)).toEqual(['summary', 'properties', 'shared', 'events', 'commands', 'layout', 'tokens']);
     });
 
     it('should leave the optional keys out when the shape does not declare them', () => {

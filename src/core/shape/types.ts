@@ -1,3 +1,4 @@
+import type { ComponentToken } from '../theme/types.js';
 import type { JsonValue } from '../types.js';
 
 /**
@@ -79,6 +80,13 @@ export interface Shape {
      * `icon`, `badge`). Absent when the component declares none; a shape cannot have both `layout` and `placement`
      */
     placement?: Record<string, PropertyShape>;
+    /**
+     * The component tokens the shape declares, with the full dotted path (`button.radius`), the group, the type
+     * inferred from the default and the default. Absent when the shape declares none
+     */
+    tokens?: ComponentToken[];
+    /** The `tokenGroup` the shape sets; absent when the group is the component name */
+    tokenGroup?: string;
 }
 
 /** Longest allowed summary, in characters */

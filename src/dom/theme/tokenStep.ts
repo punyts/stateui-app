@@ -22,6 +22,23 @@ export const THEME_STEP = 'theme';
 const TOKENS_PATH = '$.theme.tokens';
 const ACTIVE_PATH = '$.theme.active';
 
+/**
+ * Creates the empty objects above a component token's path, so a write to `<group>.<token>` has a parent to land in.
+ * The leaf itself stays absent: an unset component token renders no property and the CSS fallback applies
+ */
+function openGroups(tokens: JsonObject, path: string): void {
+    let cursor = tokens;
+    for (const segment of path.split('.').slice(0, -1)) {
+        const next = cursor[segment];
+        if (typeof next === 'object' && next !== null && !Array.isArray(next)) cursor = next;
+        else {
+            const created: JsonObject = {};
+            cursor[segment] = created;
+            cursor = created;
+        }
+    }
+}
+
 function readActive(context: StartedContext): Record<string, string> {
     const active: Record<string, string> = {};
     for (const kind of OVERLAY_KINDS) active[kind] = String(context.store.get(`${ACTIVE_PATH}.${kind}`));
@@ -73,7 +90,9 @@ registerMountStep(THEME_STEP, {
         const { overlays } = buildOverlayCatalog(context.document.themes);
         const resolved = resolveSystem(active, context.hooks);
         const composed = mergeTokenTrees(composeOverlays(overlays, resolved), theme?.tokens ?? {});
-        context.state.theme = { tokens: mergeOverDefaults(composed) as JsonObject, active };
+        const tokens = mergeOverDefaults(composed) as JsonObject;
+        for (const token of context.componentTokens) openGroups(tokens, token.path);
+        context.state.theme = { tokens, active };
     },
     start: follow
 });

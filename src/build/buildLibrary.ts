@@ -7,8 +7,12 @@ import type { BuildError } from '../core/errors/index.js';
 import { validateComponentOverlay, validateLocaleOverlay } from '../core/locale/index.js';
 import { resolveNode } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
-import { buildDefaults, parseShape } from '../core/shape/index.js';
+import { buildDefaults, collectComponentTokens, parseShape } from '../core/shape/index.js';
 import type { Shape } from '../core/shape/index.js';
+import type { ComponentToken } from '../core/theme/index.js';
+import { generateSharedSheet } from '../dom/articulation/index.js';
+import { checkTokens, lintCss } from './lint/index.js';
+import { applyTokenFallbacks } from './tokenFallbacks.js';
 import type { JsonObject, Node } from '../core/types.js';
 import { composedEntry, emitCatalog, rootEntry, sizeError, sizeOf } from './catalog.js';
 import type { CatalogSize, ComponentCatalogEntry } from './catalog.js';
@@ -19,6 +23,7 @@ import type { StateUIModule } from './dom.js';
 import { emitIndex, emitIndexTypes, emitModule, emitModuleTypes } from './emit.js';
 import { buildFailure } from './failures.js';
 import { SHARED_SHEET_LINES, prependSharedSheet } from './sharedSheet.js';
+import { LAYOUT_SHEET_LINES, checkLayoutHost, prependLayoutSheets } from './layoutSheets.js';
 import { emitOverlay, inFile, overlayFileName, readOverlay } from './overlays.js';
 import type { ReadOverlay } from './overlays.js';
 import type { BuildOptions, BuildResult, BuiltComponent } from './types.js';
@@ -35,9 +40,15 @@ async function listFiles(root: string, relative = ''): Promise<string[]> {
 }
 
 /** The prepended shared sheet shifts the lines StateUI reports; this puts them back on the lines of the file */
-function withoutSharedSheet(problem: BuildError): BuildError {
+function withoutSharedSheet(problem: BuildError, prependedLines: number): BuildError {
     if (problem.line === undefined) return problem;
-    return { ...problem, line: Math.max(1, problem.line - SHARED_SHEET_LINES) };
+    return { ...problem, line: Math.max(1, problem.line - prependedLines) };
+}
+
+/** The component tokens of the whole library, and the group conflicts by the state file that holds them */
+interface LibraryTokens {
+    tokens: readonly ComponentToken[];
+    conflicts: ReadonlyMap<string, BuildError[]>;
 }
 
 interface Compiled {
@@ -50,9 +61,10 @@ async function compileComponent(
     stateui: StateUIModule,
     sourceDir: string,
     component: ScannedComponent,
-    options: BuildOptions
+    options: BuildOptions,
+    library: LibraryTokens
 ): Promise<Compiled> {
-    const errors: BuildError[] = [];
+    const errors: BuildError[] = [...(library.conflicts.get(component.files.state as string) ?? [])];
     const files = new Map<string, string>();
     const viewFile = component.files.view as string;
     const stateFile = component.files.state as string;
@@ -95,15 +107,20 @@ async function compileComponent(
     // A component without a stylesheet still gets the shared one, under the file name the convention would give it
     const styleFile = cssFile ?? viewFile.replace(/\.html$/, '.css');
     let css: string | undefined = cssFile === undefined ? '' : cssSource;
+    let prependedLines = SHARED_SHEET_LINES;
     if (css !== undefined) {
-        const context = { component: component.name, file: styleFile };
-        if (cssSource !== undefined) for (const check of options.cssChecks ?? []) errors.push(...check(cssSource, context));
-        for (const transform of [prependSharedSheet, ...(options.cssTransforms ?? [])]) css = transform(css, context);
+        const context = { component: component.name, file: styleFile, tokens: library.tokens };
+        if (cssSource !== undefined) for (const check of [checkTokens, ...(options.cssChecks ?? [])]) errors.push(...check(cssSource, context));
+        const supportsLayout = shape?.layout === true;
+        const builtIn = supportsLayout ? [prependSharedSheet, prependLayoutSheets] : [prependSharedSheet];
+        for (const transform of [...builtIn, applyTokenFallbacks, ...(options.cssTransforms ?? [])]) css = transform(css, context);
+        prependedLines = SHARED_SHEET_LINES + (supportsLayout ? LAYOUT_SHEET_LINES : 0);
     }
+    if (view !== undefined && shape !== undefined) errors.push(...checkLayoutHost(view, shape.layout, viewFile));
 
     if (view !== undefined && css !== undefined) {
         const problems = compileCheck(stateui, { file: viewFile, text: view }, { file: styleFile, text: css });
-        errors.push(...problems.map((problem) => (problem.file === styleFile ? withoutSharedSheet(problem) : problem)));
+        errors.push(...problems.map((problem) => (problem.file === styleFile ? withoutSharedSheet(problem, prependedLines) : problem)));
     }
 
     let hasController = false;
@@ -186,6 +203,33 @@ async function readComposed(sourceDir: string, file: string, errors: BuildError[
 }
 
 /**
+ * Reads every root component's shape ahead of the build, so a component's CSS can be checked and rewritten against the
+ * tokens of the whole library. Shape errors are left for the component's own build; a group conflict is reported once
+ * per state file and fails that component
+ */
+async function collectLibraryTokens(sourceDir: string, components: readonly ScannedComponent[]): Promise<LibraryTokens> {
+    const sources: { file: string; shape: Shape }[] = [];
+    for (const component of components) {
+        const file = component.files.state;
+        if (component.tier !== 'root' || file === undefined) continue;
+        try {
+            const text = (await readFile(join(sourceDir, file), 'utf8')).replace(/\r\n?/g, '\n');
+            const result = parseShape(text, file);
+            if (result.shape) sources.push({ file, shape: result.shape });
+        } catch {
+            continue;
+        }
+    }
+    const collected = collectComponentTokens(sources);
+    const conflicts = new Map<string, BuildError[]>();
+    for (const error of collected.errors) {
+        const file = error.file as string;
+        conflicts.set(file, [...(conflicts.get(file) ?? []), error]);
+    }
+    return { tokens: collected.tokens, conflicts };
+}
+
+/**
  * Builds a component library folder: scans it by convention, compiles each root component's template and
  * stylesheet with StateUI, and writes one module per root component (plus its compiled controller) and an
  * index to `outDir`. A component with an error gets no module and the others are still built, so one run
@@ -199,6 +243,11 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
     for (const path of await listFiles(sourceDir)) fileMap[path] = true;
     const scan = scanLibrary(fileMap as FileMap);
     const errors: BuildError[] = [...scan.errors];
+
+    const library = await collectLibraryTokens(sourceDir, scan.components);
+    errors.push(
+        ...lintCss(generateSharedSheet(), { file: 'generated shared sheet', tokens: library.tokens })
+    );
 
     const output = new Map<string, string>();
     const built: BuiltComponent[] = [];
@@ -222,7 +271,7 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
             pending.push({ component, tree, size, overlays });
             continue;
         }
-        const compiled = await compileComponent(stateui, sourceDir, component, options);
+        const compiled = await compileComponent(stateui, sourceDir, component, options, library);
         errors.push(...compiled.errors);
         if (compiled.errors.length > 0) continue;
         for (const [file, text] of compiled.files) output.set(file, text);
@@ -230,16 +279,21 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
         if (compiled.shape) entries.push(rootEntry(component, compiled.shape, sizeOf(component.group) as CatalogSize));
     }
 
-    const library = libraryOf(entries);
+    const resolver = libraryOf(entries);
     for (const item of pending) {
-        const problems = checkComposedOverlays(item, library);
+        const problems = checkComposedOverlays(item, resolver);
         errors.push(...problems);
         if (problems.length > 0 || item.overlays.length !== Object.keys(item.component.locales).length) continue;
         entries.push(composedEntry(item.component, item.tree, item.size));
         for (const read of item.overlays) output.set(overlayFileName(item.component.name, read.code), emitOverlay(read.overlay));
     }
 
-    output.set('index.js', emitIndex(built.map((entry) => entry.component.name)));
+    output.set('index.js', emitIndex(
+            built.map((entry) => entry.component.name),
+            collectComponentTokens(
+                entries.flatMap((entry) => (entry.tier === 'root' ? [{ file: entry.name, shape: entry.shape }] : []))
+            ).tokens
+        ));
     output.set('index.d.ts', emitIndexTypes());
     const { catalog, text } = emitCatalog(entries);
     output.set('catalog.json', text);

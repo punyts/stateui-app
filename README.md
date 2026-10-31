@@ -33,7 +33,7 @@ A component's `*.state.json` is its default state, its validation rules and its 
 }
 ```
 
-- **Top-level keys.** `shared` (see below), `summary` (required; one line, at most `MAX_SUMMARY_LENGTH` = 120 characters; served by `ui_components_list`), `properties`, `events` and `commands` (lists of lower camel-case names), `layout` (true when the component lays out children, so a node may carry `layout`). Keys are rows in the `SHAPE_KEYS` table (and `PROPERTY_KEYS` for a property): name, JSON type and rule. A later story adds `tokens` by adding a row. `placement` is described under Layouts and placement.
+- **Top-level keys.** `shared` (see below), `summary` (required; one line, at most `MAX_SUMMARY_LENGTH` = 120 characters; served by `ui_components_list`), `properties`, `events` and `commands` (lists of lower camel-case names), `layout` (true when the component lays out children, so a node may carry `layout`). Keys are rows in the `SHAPE_KEYS` table (and `PROPERTY_KEYS` for a property): name, JSON type and rule. `tokens` and `tokenGroup` are described under Component tokens. `placement` is described under Layouts and placement.
 - **Property keys.** `type` (required: `string`, `number`, `integer`, `boolean`, `array`, `object`, `any`, `url`, `icon`, `node`, `map`, or a list of them when several are allowed, as in `["array", "map"]`), `default`, `required`, `kind` (`content` is the only extra kind), `values` (allowed values), `validators`, `items`, `requiredWhen`, `runtime`, `exposed`, `reflect`, `row`. A `node` property is a slot and must hold an object with a `component` name.
 - **Maps (`type: "map"`, `items`).** `items` is `"string"` (every value is a string, e.g. a `_errors` content map) or a sub-shape: an object of properties each map value may hold (table `columns`, static `select` options). A map type needs `items` and no other type may have it. Nested `_` properties inside `items` must be kind `content` and every other nested property must not (`SUI-BUILD-KIND`). `validateNode` walks maps and reports each violation with the map key in the path, e.g. `$.app.children.t.columns.total._title`.
 - **`requiredWhen`.** `{ "property": "decorative", "equals": false }` or `{ "property": "iconPosition", "notEquals": "start" }` makes the property required while a sibling property (same table, not itself) has, or does not have, that value. The sibling's value is the node's value or its default; if the sibling or the property is a `<-` link the check is skipped. A missing value is `SUI-STATE-CONDITION`, naming both properties.
@@ -50,9 +50,32 @@ A component's `*.state.json` is its default state, its validation rules and its 
 - **`buildDefaults(shape)`** returns a fresh default state: every property that has a `default`.
 - **`validateNode(shape, node, statePath)`** returns `SUI-STATE-*` violations with the state path: `SUI-STATE-UNKNOWN` (unknown property or a link to one), `SUI-STATE-SHARED` (an unsupported shared property), `SUI-STATE-REQUIRED`, `SUI-STATE-INVALID` (type, allowed values, validators, URL rule, icon name, slot not a node, map contents), `SUI-STATE-CONDITION`, `SUI-STATE-RUNTIME`, `SUI-LINK-ROW` and `SUI-NODE-NAME` (`$` or `__` keys). The optional fourth argument is `{ isIconName?, insideRow? }`. `<-name` links count as providing `name` and their value is not checked. `component`, `children`, `placement`, `theme` and `on` belong to the tree and are not checked here.
 
+### Component tokens
+
+A shape declares the knobs a minion may change as `tokens`: nested objects whose leaves are references to semantic tokens.
+
+```json
+{
+    "summary": "A button",
+    "tokens": {
+        "radius": "{radius.md}",
+        "padding": { "inline": "{space.inset.md}", "block": "{space.inset.sm}" },
+        "row": "calc({size.control.md} * {density.factor})"
+    }
+}
+```
+
+- **Group.** The tokens live under `tokenGroup`, a lower-case word (`^[a-z][a-z0-9]*$`, not a default group such as `color`). It defaults to the component name, taken from the shape file name (`button.state.json` gives `button`). A camelCase name (`record-list.state.json` is `recordList`) without `tokenGroup` is `SUI-BUILD-TOKENGROUP` naming the file, as is an unusable `tokenGroup`. Shapes of one family share a group (`field`, `control`).
+- **Defaults.** `inferComponentDefault(value)` checks each default with the value rules of Theme tokens: it must reference at least one semantic token (a literal, a primitive, a component token or an unknown path is `SUI-BUILD-TOKENDEF`), and the type is inferred from the referenced token (a `calc()` of dimensions and numbers with at least one dimension is a `dimension`). A token key that is not lower-case letters and digits is `SUI-BUILD-NAME`.
+- **`Shape.tokens`** lists `{ path, group, type, default }` per leaf, the path starting with the group (`button.padding.inline`); absent when the shape declares none.
+- **`collectComponentTokens(sources)`** takes `{ file, shape }` entries and returns `{ tokens, errors }`: the token set of the library sorted by path. Shapes that share a group must declare identical entries; otherwise each of them gets a `SUI-BUILD-TOKENCONFLICT` naming its file and the first file of the group, and its entries are left out.
+- **Lookup.** The paths and types join `validateTokens` (`componentTokens` option); the `theme` document validator reads them from the library's shapes, so a document or overlay may set `button.radius` only when a shape declares it. The catalog entry carries `tokens` (and `shape.tokens`).
+
 ### Shared articulation stylesheet
 
 `generateSharedSheet()` (`src/dom/articulation/`) returns the CSS that turns the reflected attributes into local custom properties: `tone` gives `--tone`, `--tone-soft` and `--tone-on`; `size` gives `--control-height` and `--icon-size`; `elevation` gives `--surface` and `--shadow`; `textRole` (attribute `text-role`) gives `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `hidden` removes the host from layout. The build prepends it to every root component's CSS (a component with no `view.css` gets it alone; style error lines still match the component's file), so component CSS says `background: var(--tone)` and never repeats the tone table. `variant` has no rule here: the component's CSS decides how each variant paints the tone properties. `mountApp` reflects the shared names and `hidden` onto each node's element through `<sui-node>`, so no component code is involved.
+
+`density` on a container sets `--ui-density-factor` to the chosen multiplier (`density.compact`, `comfortable` or `spacious`) on that host and re-declares every semantic token whose default value uses `{density.factor}` (`space.inset`, `gap` and `stack`) from its default expression. A `var()` is resolved where the property is declared, so the re-declaration is what makes the `calc()` use the host's factor; everything below the container follows, so one `density` on a form changes every field. Limit: a node `theme` override of a `space` token is not carried into a nested density host, which re-declares `space.*` from the default expression.
 
 ### Layouts and placement
 
@@ -71,6 +94,12 @@ Allowed values: `gap` is `none`, `sm`, `md` or `lg`; `align` is `start`, `center
 A component that has no `layout` can declare the placement its children carry with a `placement` key in its `*.state.json`: a table of properties like `properties`, where `_` properties are content (tabs: `_tab`, `icon`, `badge`). A shape cannot have both `"layout": true` and `placement`.
 
 `validateDocument` runs the `layout` and `placement` validators, which report `SUI-LAYOUT-TYPE`, `-SETTING`, `-VALUE`, `-FIELD`, `-PLACEMENT` and `-REQUIRED` for unknown or disallowed types, settings and fields, `SUI-LAYOUT-UNSUPPORTED` for a `layout` on a component whose shape does not support it, `SUI-LAYOUT-PARENT` for a `placement` under a parent that has neither a layout nor a placement shape (naming the parent), and `SUI-LAYOUT-ROOT` for a `placement` on the app root. Composed components are checked under `$.composed.<name>`. `validateNode` ignores `layout`; the layout validator reports it.
+
+A component whose shape sets `"layout": true` marks the element that holds its children with `<div layout-host="" />` in its view; the build rejects a layout-capable component without a `layout-host`, and a `layout-host` in a component that does not support `layout`, as `SUI-BUILD-TEMPLATE` naming the view file. `<sui-node>` writes `layout`, `layout-<setting>` attributes and `--layout-<setting>` custom properties on the `layout-host`, and `placement` as attributes (`region="nw"`, `col="2"`, `row-span="2"`) on each child. The build prepends one stylesheet per layout type (`generateLayoutSheets`, `src/dom/layout/`), generated from the closed lists, to every layout-capable component, so changing `layout` or `placement` in state rearranges the children with no component code. The `layout-host` sets `container-type: inline-size`, so keep it a block-level box: a host that sizes to its content collapses to zero width.
+
+**Breakpoints.** `BREAKPOINTS` is `sm` 480, `md` 768, `lg` 1024 and `xl` 1280 px of container width. A `grid`, `row` or `region` with `collapseBelow` stacks its children as one column in key order when its container is narrower than that width; without `collapseBelow` it never collapses. A container query cannot restyle its own container, so the sheet makes the component host `display: block; container-type: inline-size` and the queries restyle the `layout-host` inside it. The width compared is the host's content box, so the host's own padding is not counted. A nested layout host responds to its own component host's width.
+
+Limits: `grow` has rules for whole numbers 0 to 12 only; `adhoc` placement (`x`, `y`, `width`, `height`) uses typed `attr()`, so it needs a browser that supports it (Chromium 133 and later), and the `adhoc` container needs its own height because its children are absolutely positioned; empty tracks of a `region` layout still take the gap.
 
 ## Convention scan
 
@@ -353,7 +382,7 @@ The build scans the folder, compiles each root component's template and styleshe
 | `<name>.d.ts` | Types for the module |
 | `catalog.json` | Every component that built, root and composed, sorted by name: `name`, `tier`, `tag`, `size`, `summary`, `shape`, `content`, `slots`, `events`, `commands`, `layout`, `locales`, `example` (composed entries have `tree` instead of the shape fields) |
 | `<name>.locale.<code>.json` | The validated overlay of a root or composed component, one file per language |
-| `index.js` | `components` (every module in name order) and `registerAll()` |
+| `index.js` | `components` (every module in name order), `componentTokens` (the library's component tokens: `path`, `group`, `type`, `default`) and `registerAll()` |
 
 Composed components have no module; `catalog.json` describes them with their default tree.
 
@@ -377,6 +406,8 @@ Composed components have no module; `catalog.json` describes them with their def
 - **Extension points.** `cssTransforms` (CSS text to CSS text, run in order before StateUI compiles the CSS) and
   `cssChecks` (return `SUI-BUILD` errors; they see the CSS as written, so their lines match the file). With none
   registered the output is the same as without the points.
+- **Component token fallbacks.** The build reads every root shape first, so a component's CSS is handled against the tokens of the whole library. The `applyTokenFallbacks` transform (always run, after the shared sheets) rewrites each bare `var(--ui-<group>-<token>)` of a declared component token to `var(--ui-<group>-<token>, <default as var() references>)`; comments and strings are left alone. The default is only a CSS fallback: nothing is written on `<ui-app-root>`, so a node `theme` override of the semantic token still reaches the component. `CssContext` has `tokens`, the library's component tokens.
+- **Token lint (`SUI-BUILD-TOKEN`).** The `checkTokens` check always runs on every `view.css` as written, and the build runs `lintCss` on the generated shared sheet. Each error has the file and the 1-based line and column of the name or colour: `var(--ui-palette-*)`, `var(--ui-scale-*)` and any `var(--ui-font-*)` (primitives); a `var(--ui-*)` that is neither a default token nor a declared component token (a token of another group is fine); a literal colour (`#hex`, `rgb(`, `rgba(`, `hsl(`, `hsla(`) in a declaration value; and a hand-written fallback on a declared component token that differs from the shape default (whitespace ignored). Comments, strings, `url()` contents and id selectors are not checked. One declaration is exempt: a custom property that is a default semantic token written with that token's own default expression, which is how the shared sheet re-declares the density-dependent space tokens on a density host. A component with a violation gets no module and the others still build. `lintCss(css, { file, tokens })` is exported from `./build` for CSS the build does not own, such as a shared partial a later step inlines.
 - **Deterministic.** The same input gives the same bytes: no timestamps, sorted output, LF newlines. Files left in
   `outDir` by earlier builds are not removed.
 - **Node only.** The template check needs a DOM, so the build installs a happy-dom window when none exists; `happy-dom`
@@ -401,7 +432,9 @@ The token tree, its types, references and value checks. Code is in `src/core/the
 (`tokenSheet()`), each bound to the store: `--ui-color-text-muted: {{ cssValue($.theme.tokens.color.text.muted) }};`.
 `cssValue` is a controller member that calls `toCssValue`, so a reference value (`{palette.blue.600}`) becomes
 `var(--ui-palette-blue-600)` and the browser resolves the chain. The set is closed: a StateUI style binding needs a
-static property name, so a token outside the default tree is `SUI-THEME-TOKEN`.
+static property name, so a token that is neither in the default tree nor declared by a shape is `SUI-THEME-TOKEN`.
+
+Component tokens (E3.11) are added by `mountApp`: `componentLeaves(tokens)` gives the leaves and `ensureAppRoot(tokens)` defines a root whose sheet declares them too, bound the same way. A leaf that is not set renders no property (StateUI removes a custom property whose bound value is empty), so the CSS fallback written by the build applies; writing `$.theme.tokens.<group>.<token>` sets it and deleting the leaf restores the default. The tree starts with the empty group objects (`$.theme.tokens.button`) so a write has a parent. A sheet is fixed when a tag is defined, so `ensureAppRoot` returns the tag for the token set: the first set takes `ui-app-root`, a different set later takes `ui-app-root-2`, and so on.
 
 A write to `$.theme.tokens.<path>` calls `setProperty` once on the host, synchronously, and reads no layout. Writing a
 primitive changes one property in JavaScript; every role that references it follows in the browser.

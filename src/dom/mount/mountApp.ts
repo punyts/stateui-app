@@ -9,13 +9,13 @@ import { extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
-import { reflectedProperties } from '../../core/shape/index.js';
+import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
 import type { AppDocument, JsonObject, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
-import { APP_ROOT_TAG, ensureAppRoot } from '../app/index.js';
+import { ensureAppRoot } from '../app/index.js';
 import '../theme/index.js';
 import { mountSteps } from './steps.js';
 import type { AppState, MountContext, MountedApp, StartedContext } from './types.js';
@@ -88,6 +88,10 @@ export function mountApp(
     const validation = validateDocument(document, library);
     if (!isValid(validation.errors)) return failed(validation.errors);
     const errors = [...validation.errors];
+    const collected = collectComponentTokens(
+        Object.entries(library).flatMap(([name, entry]) => (entry.tier === 'root' ? [{ file: name, shape: entry.shape }] : []))
+    );
+    if (!isValid(collected.errors)) return failed([...errors, ...collected.errors]);
 
     const resolved = resolveNode(cloneJson(document.app as unknown as JsonObject) as Node, library, document.composed);
     const extracted = extractLinks(resolved.node, { library, instances: resolved.instances });
@@ -98,6 +102,7 @@ export function mountApp(
         host,
         document,
         library,
+        componentTokens: collected.tokens,
         instances: resolved.instances,
         state: initialState(document, extracted.tree),
         options: baseOptions(library),
@@ -141,10 +146,10 @@ export function mountApp(
     owner = token;
     setNodeResolver((name) => rootEntry(library, name)?.tag);
     setNodeOptions(context.options);
-    ensureAppRoot();
+    const rootTag = ensureAppRoot(collected.tokens);
     mount(host, store);
     const dispatcher = createDispatcher({ host, store, library, instances: resolved.instances, rootPath: APP_PATH, hooks });
-    const root = host.appendChild(host.ownerDocument.createElement(APP_ROOT_TAG));
+    const root = host.appendChild(host.ownerDocument.createElement(rootTag));
 
     let disposed = false;
     return {

@@ -119,7 +119,15 @@ export const ERROR_CATALOG = {
     'SUI-BUILD-GROUP': {
         template: 'Component "{component}" in {file} must sit in an atoms, molecules or composites folder'
     },
-    'SUI-BUILD-TOKEN': { template: 'CSS in {file} uses "{token}"; components may only use semantic and component tokens' },
+    'SUI-BUILD-TOKEN': { template: 'CSS in {file} uses "{token}": {name}' },
+    'SUI-BUILD-TOKENGROUP': {
+        template:
+            'Component "{component}" in {file} needs a "tokenGroup": a lower-case word that is not a default token group'
+    },
+    'SUI-BUILD-TOKENDEF': { template: 'Component token "{name}" in {file} is not allowed: {other}' },
+    'SUI-BUILD-TOKENCONFLICT': {
+        template: 'Component token group "{name}" in {file} does not match the same group in {other}'
+    },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-ON-SHAPE': { template: 'The "{event}" entry at {path} is not a command or a list of commands' },
     'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },

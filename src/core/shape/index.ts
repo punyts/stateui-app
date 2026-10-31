@@ -13,3 +13,5 @@ export { reflectedProperties } from './reflect.js';
 export { fitsProperty, typesOf } from './fit.js';
 export { nodeChildren } from './children.js';
 export type { NodeChild } from './children.js';
+export { collectComponentTokens } from './componentTokens.js';
+export type { CollectedTokens, ShapeSource } from './componentTokens.js';

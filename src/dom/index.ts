@@ -3,8 +3,9 @@ export type { CommandElement, CommandHandler, DispatchHooks, Dispatcher, Dispatc
 export { createNodeLocale, registerLocaleStep, switchLocale } from './locale/index.js';
 export type { LocaleStepHandle, LocaleStore, NodeLocale, NodeLocaleOptions, NodeLocaleStore } from './locale/index.js';
 export { generateSharedSheet } from './articulation/index.js';
+export { generateLayoutBase, generateLayoutSheet, generateLayoutSheets } from './layout/index.js';
 export { mountApp, mountSteps, registerMountStep } from './mount/index.js';
 export type { AppState, MountContext, MountedApp, MountStep, StartedContext } from './mount/index.js';
-export { APP_ROOT_TAG, CSS_VALUE, ensureAppRoot, tokenSheet } from './app/index.js';
+export { APP_ROOT_TAG, CSS_VALUE, componentLeaves, ensureAppRoot, tokenSheet } from './app/index.js';
 export { DEFAULT_ACTIVE, THEME_STEP, applyOverlay, followSystem, resolveSystem, systemMode, systemMotion } from './theme/index.js';
 export type { MediaQueryLike, SystemHooks, ThemeStore } from './theme/index.js';

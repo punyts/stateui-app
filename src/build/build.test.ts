@@ -202,10 +202,10 @@ describe('buildLibrary', () => {
 
     it('should fail a component when a cssCheck reports an error and keep its location', async () => {
         const source = await library(
-            simple('tokens', '<p>{{ $.text }}</p>', { 'atoms/tokens/tokens.view.css': 'p { color: var(--ui-palette-red); }' })
+            simple('tokens', '<p>{{ $.text }}</p>', { 'atoms/tokens/tokens.view.css': 'p { margin: 0; }' })
         );
         const options: BuildOptions = {
-            cssChecks: [(_css, context) => [buildError('SUI-BUILD-TOKEN', { file: context.file, token: '--ui-palette-red', line: 1, column: 18 })]]
+            cssChecks: [(_css, context) => [buildError('SUI-BUILD-TOKEN', { file: context.file, token: '--ui-palette-red', name: 'custom', line: 1, column: 18 })]]
         };
 
         const result = await buildLibrary(source, await scratch(), options);
@@ -371,5 +371,121 @@ describe('buildLibrary locale overlays', () => {
         expect(result.files).toContain('card.locale.de.json');
         expect(result.files).not.toContain('broken.locale.de.json');
         expect(result.catalog.locales).toEqual(['de']);
+    });
+});
+
+function withTokens(name: string, tokens: Record<string, unknown>, css: string, extra: Record<string, unknown> = {}): Record<string, string> {
+    return {
+        [`atoms/${name}/${name}.view.html`]: '<p>{{ $.text }}</p>',
+        [`atoms/${name}/${name}.view.css`]: css,
+        [`atoms/${name}/${name}.state.json`]: JSON.stringify({
+            summary: 'A test component',
+            properties: { text: { type: 'string', default: 'x' } },
+            tokens,
+            ...extra
+        })
+    };
+}
+
+describe('component tokens in the build', () => {
+    it('should add the default as a fallback, list the tokens in the catalog and export them from the index', async () => {
+        // Arrange
+        const source = await library(withTokens('chip', { radius: '{radius.md}' }, 'p { border-radius: var(--ui-chip-radius); }'));
+        const out = await scratch();
+
+        // Act
+        const result = await buildLibrary(source, out);
+
+        // Assert
+        expect(result.errors).toEqual([]);
+        const module = await readFile(join(out, 'chip.js'), 'utf8');
+        expect(module).toContain('border-radius: var(--ui-chip-radius, var(--ui-radius-md));');
+        const tokens = [{ path: 'chip.radius', group: 'chip', type: 'dimension', default: '{radius.md}' }];
+        expect((result.catalog.components[0] as { tokens?: unknown }).tokens).toEqual(tokens);
+        expect(await readFile(join(out, 'index.js'), 'utf8')).toContain(`export const componentTokens = ${JSON.stringify(tokens, null, 4)};`);
+        expect(await readFile(join(out, 'index.d.ts'), 'utf8')).toContain('export declare const componentTokens: ComponentTokenEntry[];');
+    });
+
+    it('should let a component use a component token of another group', async () => {
+        // Arrange
+        const source = await library({
+            ...withTokens('chip', { radius: '{radius.md}' }, 'p { color: red; }'),
+            ...withTokens('pill', { gap: '{space.gap.md}' }, 'p { border-radius: var(--ui-chip-radius); gap: var(--ui-pill-gap); }')
+        });
+        const out = await scratch();
+
+        // Act
+        const result = await buildLibrary(source, out);
+
+        // Assert
+        expect(result.errors).toEqual([]);
+        expect(await readFile(join(out, 'pill.js'), 'utf8')).toContain('var(--ui-chip-radius, var(--ui-radius-md))');
+    });
+
+    it('should name both files when two shapes of one group differ, and build neither', async () => {
+        // Arrange
+        const source = await library({
+            ...withTokens('one', { gap: '{space.gap.md}' }, 'p { margin: 0; }', { tokenGroup: 'field' }),
+            ...withTokens('two', { gap: '{space.gap.lg}' }, 'p { margin: 0; }', { tokenGroup: 'field' }),
+            ...withTokens('three', { gap: '{space.gap.md}' }, 'p { margin: 0; }', { tokenGroup: 'other' })
+        });
+
+        // Act
+        const result = await buildLibrary(source, await scratch());
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.file]).sort()).toEqual([
+            ['SUI-BUILD-TOKENCONFLICT', 'atoms/one/one.state.json'],
+            ['SUI-BUILD-TOKENCONFLICT', 'atoms/two/two.state.json']
+        ]);
+        expect(result.built.map((entry) => entry.component.name)).toEqual(['three']);
+    });
+
+    it('should report a camelCase component without tokenGroup against its state file', async () => {
+        // Arrange
+        const source = await library(withTokens('record-list', { row: '{size.control.md}' }, 'p { margin: 0; }'));
+
+        // Act
+        const result = await buildLibrary(source, await scratch());
+
+        // Assert
+        expect(result.errors).toEqual([expect.objectContaining({ code: 'SUI-BUILD-TOKENGROUP', file: 'atoms/record-list/record-list.state.json' })]);
+    });
+});
+
+describe('build lint SUI-BUILD-TOKEN', () => {
+    it('should report one violation of each kind with file, line and column and still build the clean components', async () => {
+        // Arrange
+        const source = await library({
+            ...simple('clean', '<p>{{ $.text }}</p>', { 'atoms/clean/clean.view.css': 'p { color: var(--ui-color-text-base); }' }),
+            ...simple('primitive', '<p>{{ $.text }}</p>', { 'atoms/primitive/primitive.view.css': 'p {\n    color: var(--ui-palette-red-500);\n}' }),
+            ...simple('scale', '<p>{{ $.text }}</p>', { 'atoms/scale/scale.view.css': 'p { gap: var(--ui-scale-space-3); }' }),
+            ...simple('font', '<p>{{ $.text }}</p>', { 'atoms/font/font.view.css': 'p { font-family: var(--ui-font-family-sans); }' }),
+            ...simple('unknown', '<p>{{ $.text }}</p>', { 'atoms/unknown/unknown.view.css': 'p { gap: var(--ui-made-up); }' }),
+            ...simple('literal', '<p>{{ $.text }}</p>', { 'atoms/literal/literal.view.css': 'p { color: #ff0000; }' })
+        });
+        const out = await scratch();
+
+        // Act
+        const result = await buildLibrary(source, out);
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.file, error.line, error.column])).toEqual([
+            ['SUI-BUILD-TOKEN', 'atoms/font/font.view.css', 1, 22],
+            ['SUI-BUILD-TOKEN', 'atoms/literal/literal.view.css', 1, 12],
+            ['SUI-BUILD-TOKEN', 'atoms/primitive/primitive.view.css', 2, 16],
+            ['SUI-BUILD-TOKEN', 'atoms/scale/scale.view.css', 1, 14],
+            ['SUI-BUILD-TOKEN', 'atoms/unknown/unknown.view.css', 1, 14]
+        ]);
+        expect(result.built.map((entry) => entry.component.name)).toEqual(['clean']);
+        expect(result.files).toContain('clean.js');
+    });
+
+    it('should pass the fixture library and its generated shared sheet', async () => {
+        // Arrange / Act
+        const result = await buildLibrary(FIXTURE, await scratch());
+
+        // Assert
+        expect(result.errors).toEqual([]);
     });
 });

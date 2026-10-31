@@ -10,6 +10,13 @@ export interface ShapeResult {
     errors: BuildError[];
 }
 
+/** The camel-cased component name a shape file name gives: `text-label.state.json` is `textLabel` */
+function componentName(file: string): string {
+    const base = file.split('/').pop() as string;
+    const stem = base.replace(/\.state\.json$/, '').replace(/\.json$/, '');
+    return stem.replace(/-([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
+}
+
 /**
  * Reads a `*.state.json`. `json` is the file text or the already parsed value; `file` names the file in every
  * error. Every problem is reported, not just the first. `shape` is set only when there are no errors
@@ -29,7 +36,7 @@ export function parseShape(json: unknown, file: string): ShapeResult {
 
     const shape: Shape = { summary: '', properties: {}, shared: [], events: [], commands: [], layout: false };
     const errors: BuildError[] = [];
-    const context = { file, errors, where: '' };
+    const context = { file, errors, where: '', component: componentName(file) };
     applyKeys(SHAPE_KEYS, input as { [key: string]: JsonValue }, shape, context);
     finishShape(shape, context);
     return errors.length > 0 ? { errors } : { shape, errors };

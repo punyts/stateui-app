@@ -13,6 +13,7 @@ export {
     SHAPE_KEYS,
     VALIDATORS,
     buildDefaults,
+    collectComponentTokens,
     isSafeUrl,
     parseShape,
     reflectedProperties,
@@ -22,6 +23,7 @@ export {
 } from './shape/index.js';
 export type {
     Bounds,
+    CollectedTokens,
     KeyRule,
     NodeChild,
     PropertyShape,
@@ -30,6 +32,7 @@ export type {
     RuleContext,
     Shape,
     ShapeResult,
+    ShapeSource,
     ValidateContext,
     ValidatorOptions
 } from './shape/index.js';
@@ -94,6 +97,7 @@ export {
     cssName,
     flattenTokens,
     hasInjection,
+    inferComponentDefault,
     mergeOverDefaults,
     parseValue,
     referencesOf,
@@ -123,6 +127,7 @@ export {
     validateTokens
 } from './theme/index.js';
 export type {
+    ComponentDefaultResult,
     ComponentToken,
     OverlayCatalog,
     OverlayKind,
@@ -162,6 +167,7 @@ export {
 export type { AppOverlayOptions, ComponentOverlays, LocaleOverlayOptions } from './locale/index.js';
 export {
     ALIGNS,
+    BREAKPOINTS,
     COLLAPSE_BELOW,
     GAPS,
     LAYOUTS,
@@ -172,4 +178,4 @@ export {
     validateLayouts,
     validatePlacements
 } from './layout/index.js';
-export type { FieldSpec, LayoutDefinition, LayoutType } from './layout/index.js';
+export type { Breakpoint, FieldSpec, LayoutDefinition, LayoutType } from './layout/index.js';

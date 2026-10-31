@@ -1,4 +1,5 @@
 import type { BuildError } from '../core/errors/index.js';
+import type { ComponentToken } from '../core/theme/index.js';
 import type { Catalog } from './catalog.js';
 import type { ScannedComponent } from '../core/convention/index.js';
 
@@ -8,6 +9,8 @@ export interface CssContext {
     component: string;
     /** The path of the `view.css` file, relative to the library folder, with forward slashes */
     file: string;
+    /** The component tokens the whole library declares (E3.11); empty when no shape declares any */
+    tokens: readonly ComponentToken[];
 }
 
 /** Turns a component's CSS text into CSS text; runs before StateUI compiles it */

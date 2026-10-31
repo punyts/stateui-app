@@ -2,11 +2,14 @@ import { HIDDEN, closedList, isArticulationName, isSharedName } from '../articul
 import type { SharedName } from '../articulation/index.js';
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
+import { inferComponentDefault } from '../theme/componentTokens.js';
+import { tokenLayer } from '../theme/defaults.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 import { fitsProperty, typesOf } from './fit.js';
 import { MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.js';
 import type { PropertyShape, PropertyType, Shape } from './types.js';
+import type { ComponentToken } from '../theme/types.js';
 import { VALIDATORS, isValidatorName } from './validators.js';
 
 /** What the parser hands every rule: the file being read, the error list and where in the file the rule runs */
@@ -17,6 +20,8 @@ export interface RuleContext {
     where: string;
     /** True inside the `items` of a map: runtime and reflect do not apply there */
     nested?: boolean;
+    /** The camel-cased component name the shape file belongs to; the default token group */
+    component?: string;
 }
 
 type KeyType = 'string' | 'boolean' | 'object' | 'array' | 'any';
@@ -402,6 +407,53 @@ function readShared(value: { [key: string]: JsonValue }, shape: Shape, context: 
     }
 }
 
+const TOKEN_SEGMENT = /^[a-z0-9]+$/;
+const TOKEN_GROUP = /^[a-z][a-z0-9]*$/;
+
+/** Reads `tokens`: nested objects whose leaves are semantic references; the group is added by `finishShape` */
+function readTokens(input: { [key: string]: JsonValue }, shape: Shape, context: RuleContext): void {
+    const tokens: ComponentToken[] = [];
+    const walk = (node: { [key: string]: JsonValue }, prefix: string[]): void => {
+        for (const [key, value] of Object.entries(node)) {
+            const path = [...prefix, key];
+            const where = `tokens.${path.join('.')}`;
+            if (!TOKEN_SEGMENT.test(key)) {
+                context.errors.push(buildError('SUI-BUILD-NAME', { file: context.file, name: key }));
+            } else if (kindOf(value) === 'object') {
+                if (Object.keys(asObject(value)).length === 0) {
+                    context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: where }));
+                } else walk(asObject(value), path);
+            } else if (typeof value !== 'string') {
+                context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: where }));
+            } else {
+                const result = inferComponentDefault(value);
+                if ('reason' in result) {
+                    context.errors.push(
+                        buildError('SUI-BUILD-TOKENDEF', { file: context.file, name: path.join('.'), other: result.reason })
+                    );
+                } else tokens.push({ path: path.join('.'), group: '', type: result.type, default: value.trim() });
+            }
+        }
+    };
+    if (Object.keys(input).length === 0) {
+        context.errors.push(invalid(context, 'tokens'));
+        return;
+    }
+    walk(input, []);
+    shape.tokens = tokens;
+}
+
+/** Gives each declared token its group (`tokenGroup`, or the component name when that is one lower-case word) */
+function resolveTokenGroup(shape: Shape, context: RuleContext): void {
+    if (shape.tokens === undefined) return;
+    const group = shape.tokenGroup ?? context.component ?? '';
+    if (!TOKEN_GROUP.test(group) || tokenLayer(group) !== 'component') {
+        context.errors.push(buildError('SUI-BUILD-TOKENGROUP', { file: context.file, component: context.component ?? group }));
+        return;
+    }
+    shape.tokens = shape.tokens.map((token) => ({ ...token, group, path: `${group}.${token.path}` }));
+}
+
 /**
  * The checks and additions that need the whole shape, run after every key is read: an own property may not use an
  * articulation name (a modal's width choice is `width`, not `size`), and `hidden` is added to every shape
@@ -412,6 +464,7 @@ export function finishShape(shape: Shape, context: RuleContext): void {
             context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `properties.${name}` }));
         }
     }
+    resolveTokenGroup(shape, context);
     if (shape.layout && shape.placement !== undefined) {
         context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: 'placement' }));
     }
@@ -494,6 +547,22 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
                 return;
             }
             shape.placement = readProperties(input, { ...context, where: 'placement', nested: true });
+        }
+    },
+    {
+        name: 'tokens',
+        type: 'object',
+        required: false,
+        rule(value, shape, context) {
+            readTokens(asObject(value), shape, context);
+        }
+    },
+    {
+        name: 'tokenGroup',
+        type: 'string',
+        required: false,
+        rule(value, shape) {
+            shape.tokenGroup = value as string;
         }
     }
 ];

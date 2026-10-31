@@ -33,6 +33,9 @@ describe('error catalog', () => {
     it('includes the sub-codes the specs name', () => {
         for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST', 'SUI-THEME-REF', 'SUI-THEME-VALUE', 'SUI-THEME-TOKEN',
             'SUI-BUILD-TOKEN',
+            'SUI-BUILD-TOKENGROUP',
+            'SUI-BUILD-TOKENDEF',
+            'SUI-BUILD-TOKENCONFLICT',
             'SUI-LOCALE-UNKNOWN',
             'SUI-LOCALE-MORE',
             'SUI-LOCALE-LINKED',
@@ -65,7 +68,7 @@ describe('error catalog', () => {
     });
 
     it('copies location fields onto the error and nothing else', () => {
-        const error = buildError('SUI-BUILD-TOKEN', { file: 'a/a.view.css', token: '--x', line: 3, column: 7 });
+        const error = buildError('SUI-BUILD-TOKEN', { file: 'a/a.view.css', token: '--x', name: 'unknown token', line: 3, column: 7 });
 
         expect(error).toEqual({
             code: 'SUI-BUILD-TOKEN',

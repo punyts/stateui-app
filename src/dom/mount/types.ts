@@ -1,6 +1,7 @@
 import type { Store } from '@punyts/state';
 import type { NodeOptions } from '@punyts/stateui';
 import type { BuildError } from '../../core/errors/index.js';
+import type { ComponentToken } from '../../core/theme/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { AppDocument, JsonObject, Node } from '../../core/types.js';
 import type { DispatchHooks } from '../on/index.js';
@@ -32,6 +33,8 @@ export interface MountContext {
     host: Element;
     document: AppDocument;
     library: ComponentLibrary;
+    /** The component tokens the library's shapes declare (E3.11), each once, sorted by path */
+    componentTokens: readonly ComponentToken[];
     /** The composed names expanded at each state path (`ResolveResult.instances`) */
     instances: Readonly<Record<string, string[]>>;
     /** The initial state before the store is created: `prepare` may replace `theme` and `locale` */

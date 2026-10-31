@@ -1,10 +1,12 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
+import { collectComponentTokens } from '../shape/componentTokens.js';
 import { registerDocumentValidator } from '../validate/registry.js';
 import type { DocumentValidationContext } from '../validate/types.js';
 import { buildOverlayCatalog, hasOverlay } from './overlays/catalog.js';
 import { SYSTEM, SYSTEM_KINDS, isOverlayKind } from './overlays/types.js';
 import { overlayError } from './overlays/validate.js';
+import type { ComponentToken } from './types.js';
 import { validateTokens } from './validate.js';
 
 /** The name the theme validator is registered under; a later story that extends it registers this name again */
@@ -12,6 +14,14 @@ export const THEME_VALIDATOR = 'theme';
 
 function wrongType(key: string, statePath: string): BuildError {
     return buildError('SUI-DOC-TYPE', { key, path: statePath, statePath });
+}
+
+/** The component tokens the library's shapes declare; they join the token lookup */
+function libraryTokens(context: DocumentValidationContext): ComponentToken[] {
+    const sources = Object.values(context.library).flatMap((entry) =>
+        entry.tier === 'root' ? [{ file: entry.tag, shape: entry.shape }] : []
+    );
+    return collectComponentTokens(sources).tokens;
 }
 
 /**
@@ -28,7 +38,7 @@ export function validateThemeTokens(context: DocumentValidationContext): BuildEr
         if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {
             errors.push(wrongType('tokens', '$.theme.tokens'));
         } else {
-            errors.push(...validateTokens(theme.tokens ?? {}));
+            errors.push(...validateTokens(theme.tokens ?? {}, { componentTokens: libraryTokens(context) }));
         }
     }
     const active: unknown = theme.active;

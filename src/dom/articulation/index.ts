@@ -1,1 +1,1 @@
-export { generateSharedSheet } from './sharedSheet.js';
+export { densityDependentLeaves, generateSharedSheet } from './sharedSheet.js';

@@ -1,3 +1,5 @@
+export { inferComponentDefault } from './componentTokens.js';
+export type { ComponentDefaultResult } from './componentTokens.js';
 export { checkContrast, contrastRatio, MIN_CONTRAST } from './contrast.js';
 export {
     DEFAULT_LEAVES,
