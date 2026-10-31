@@ -2,23 +2,34 @@ import { report } from '@punyts/core';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
+import type { ComponentOverlays } from '../core/locale/index.js';
 import { snapshotState } from '../core/snapshot/index.js';
+import { buildOverlayCatalog } from '../core/theme/index.js';
+import type { ThemeOverlays } from '../core/theme/index.js';
 import { PREFIXES } from '../core/types.js';
 import type { JsonValue } from '../core/types.js';
+import { registerLocaleStep } from '../dom/locale/index.js';
 import { mountApp, registerMountStep } from '../dom/mount/index.js';
 import type { MountedApp } from '../dom/mount/index.js';
+import type { CommandContext } from '../dom/on/commands.js';
+import { applyOverlay } from '../dom/theme/index.js';
+import type { ThemeStore } from '../dom/theme/index.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
 import type {
+    CommandMessage,
     IconsMap,
     InboundMessage,
     LoadMessage,
+    LocaleMessage,
     OutboundMessage,
     PathWrite,
     ProtocolError,
     StateSnapshotData,
+    ThemeMessage,
     WriteMessage
 } from './messages.js';
+import { runCommandMessage } from './runCommandMessage.js';
 import { validateMessage } from './validate.js';
 
 const STEP_NAME = 'runtime-load';
@@ -39,6 +50,8 @@ export type RuntimeWindow = Pick<Window, 'addEventListener' | 'removeEventListen
 export interface RuntimeOptions {
     /** The element the application is mounted on; `window.document.body` when absent */
     host?: Element;
+    /** The locale overlays of the library's components (`<name>.locale.<code>.json`), used by the `locale` message; none when absent */
+    componentOverlays?: ComponentOverlays;
 }
 
 /** How many messages the runtime dropped, by reason */
@@ -49,7 +62,7 @@ export interface DroppedCounts {
     unknown: number;
     /** Over the byte limit of its type, or not serialisable */
     oversized: number;
-    /** Valid, but not handled here: `command`, `locale` and `theme` (E7.13), or a type only the runtime sends */
+    /** Valid, but not handled: a type only the runtime sends, or `command`, `locale` or `theme` while no application is mounted */
     unhandled: number;
     /** From another source or with another nonce */
     foreign: number;
@@ -131,7 +144,11 @@ function applyArticulation(store: { get(path: string): unknown; set(path: string
  * - `write` sets or removes the paths below `$.data` and `$.app` (a changed `component` re-renders only that node
  *   through `<sui-node>`), merges its `icons` into `$.runtime.icons`, and posts `snapshot`.
  * - `ping` is answered with `pong`.
- * - `command`, `locale` and `theme` are valid but not handled here: they are dropped and counted as `unhandled`.
+ * - `command` runs a component command with the runner the dispatcher uses for `on` (`target` is a `$.app` node path;
+ *   the system commands `set`, `toggle` and `emit` are refused). `locale` applies a language overlay (`switchLocale`,
+ *   from the document's `locales` and `options.componentOverlays`) and leaves `$.data` alone. `theme` applies the
+ *   overlay `name` of `kind` (`applyOverlay`: the shipped overlays and the document's `themes`). A failure posts
+ *   `error` and changes nothing. With no application mounted these three are counted as `unhandled`.
  *
  * It posts `snapshot` (also when the user changes `$.data` or articulation, only when it differs from the last one),
  * `emit` from the dispatcher hook and `error` for validation and runtime errors. A snapshot is built with
@@ -151,6 +168,8 @@ export function startRuntime(
     const dropped: DroppedCounts = { invalid: 0, unknown: 0, oversized: 0, unhandled: 0, foreign: 0 };
     let mounted: MountedApp | undefined;
     let watching: { store: NonNullable<MountedApp['store']>; listener: () => void } | undefined;
+    const localeStep = registerLocaleStep(options.componentOverlays ?? {});
+    let themeOverlays: ThemeOverlays = buildOverlayCatalog(undefined).overlays;
     let passwordData = new Set<string>();
     let lastSnapshot = '';
     let scheduled = false;
@@ -226,6 +245,7 @@ export function startRuntime(
         teardown();
         lastSnapshot = '';
         passwordData = passwordDataPaths(message.document);
+        themeOverlays = buildOverlayCatalog(message.document.themes).overlays;
         const unregister = registerMountStep(STEP_NAME, {
             start(context): void {
                 const store = context.store;
@@ -289,6 +309,36 @@ export function startRuntime(
         postSnapshot();
     }
 
+    function command(message: CommandMessage): void {
+        const store = mounted?.store;
+        if (!store) {
+            dropped.unhandled += 1;
+            return;
+        }
+        const run = { host: options.host ?? win.document.body, store: store as unknown as CommandContext['store'], library };
+        const error = runCommandMessage(run, message.target, message.command, message.value);
+        if (error) postErrors([error]);
+    }
+
+    function locale(message: LocaleMessage): void {
+        if (!mounted?.store) {
+            dropped.unhandled += 1;
+            return;
+        }
+        const errors = localeStep.switchTo(message.locale);
+        if (errors.length > 0) postErrors(errors);
+    }
+
+    function theme(message: ThemeMessage): void {
+        const store = mounted?.store;
+        if (!store) {
+            dropped.unhandled += 1;
+            return;
+        }
+        const errors = applyOverlay(store as unknown as ThemeStore, message.kind, message.name, themeOverlays);
+        if (errors.length > 0) postErrors(errors);
+    }
+
     function handle(message: InboundMessage): void {
         switch (message.type) {
             case 'load':
@@ -296,6 +346,15 @@ export function startRuntime(
                 return;
             case 'write':
                 writes(message);
+                return;
+            case 'command':
+                command(message);
+                return;
+            case 'locale':
+                locale(message);
+                return;
+            case 'theme':
+                theme(message);
                 return;
             case 'ping':
                 post({ type: 'pong', id: message.id });
@@ -349,6 +408,7 @@ export function startRuntime(
             win.removeEventListener('error', onFailure);
             win.removeEventListener('unhandledrejection', onFailure);
             teardown();
+            localeStep.unregister();
         }
     };
 }

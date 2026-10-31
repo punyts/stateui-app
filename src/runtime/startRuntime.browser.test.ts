@@ -11,8 +11,8 @@ import type { RuntimeHandle } from './index.js';
 
 const NONCE = 'nonce-1';
 
-function shapeOf(properties: Record<string, unknown>, events: string[] = []): Shape {
-    const result = parseShape({ summary: 'Fixture', properties, events }, 'fixture.state.json');
+function shapeOf(properties: Record<string, unknown>, events: string[] = [], commands: string[] = []): Shape {
+    const result = parseShape({ summary: 'Fixture', properties, events, commands }, 'fixture.state.json');
     if (!result.shape) throw new Error(JSON.stringify(result.errors));
     return result.shape;
 }
@@ -26,6 +26,8 @@ const library: ComponentLibrary = {
         tag: 'x-rt-input',
         shape: shapeOf({ value: { type: 'string', default: '' }, inputType: { type: 'string', default: 'text' } })
     },
+    heading: { tier: 'root', tag: 'x-rt-heading', shape: shapeOf({ _text: { type: 'string', kind: 'content', default: 'Heading' } }) },
+    modal: { tier: 'root', tag: 'x-rt-modal', shape: shapeOf({ title: { type: 'string', default: '' } }, [], ['open', 'toast']) },
     button: { tier: 'root', tag: 'x-rt-button', shape: shapeOf({ enabled: { type: 'boolean', default: true } }, ['press']) }
 };
 
@@ -36,6 +38,8 @@ defineComponent({
 defineComponent({ tag: 'x-rt-label', template: '<p>label:{{ $.text }}</p>' });
 defineComponent({ tag: 'x-rt-badge', template: '<p>badge:{{ $.text }}</p>' });
 defineComponent({ tag: 'x-rt-input', template: '<i>input</i>' });
+defineComponent({ tag: 'x-rt-heading', template: '<h1>{{ $._text }}</h1>' });
+defineComponent({ tag: 'x-rt-modal', template: '<dialog>modal</dialog>' });
 defineComponent({ tag: 'x-rt-button', template: '<b>button</b>' });
 
 function textOf(root: ParentNode): string {
@@ -92,7 +96,7 @@ describe('startRuntime in Chromium', () => {
         host = document.body.appendChild(document.createElement('div'));
         postMessage = vi.fn<(message: unknown, origin: string) => void>();
         parent = { postMessage };
-        handle = startRuntime(window, parent, NONCE, library, { host });
+        handle = startRuntime(window, parent, NONCE, library, { host, componentOverlays: { heading: { de: { _text: 'Ueberschrift' } } } });
     });
 
     afterEach(() => {
@@ -217,10 +221,7 @@ describe('startRuntime in Chromium', () => {
         expect(handle.stats().dropped).toEqual({ invalid: 2, unknown: 1, oversized: 1, unhandled: 0, foreign: 0 });
     });
 
-    it('should drop command, locale and theme and count them as unhandled', () => {
-        // Arrange
-        send(message('load', { document: { app: panel({}) } }));
-
+    it('should count command, locale and theme as unhandled while no application is mounted', () => {
         // Act
         send(message('command', { target: '$.app', command: 'open' }));
         send(message('locale', { locale: 'de' }));
@@ -228,7 +229,133 @@ describe('startRuntime in Chromium', () => {
 
         // Assert
         expect(handle.stats().dropped.unhandled).toBe(3);
-        expect(posted().map((entry) => entry.type)).toEqual(['ready']);
+        expect(posted()).toEqual([]);
+    });
+
+    describe('command, locale and theme', () => {
+        type Commanded = HTMLElement & { commands?: Record<string, (value: unknown) => void> };
+
+        const modalDoc = (): AppDocument => ({
+            data: { name: 'Ada' },
+            app: panel({
+                greeting: { component: 'heading' },
+                who: { component: 'label', '<-text': '$.data.name' },
+                dlg: { component: 'modal' }
+            })
+        });
+        const errorCodes = (): string[] =>
+            ofType('error').flatMap((entry) => (entry['errors'] as { code: string }[]).map((error) => error.code));
+        const appRoot = (): Element => host.querySelector('ui-app-root') as Element;
+
+        it('should run a component command on the target element, a modal opens and a toast shows', () => {
+            // Arrange
+            send(message('load', { document: modalDoc() }));
+            const modal = find(host, 'x-rt-modal') as Commanded;
+            const open = vi.fn();
+            const toast = vi.fn();
+            modal.commands = { open, toast };
+
+            // Act
+            send(message('command', { target: '$.app.children.dlg', command: 'open' }));
+            send(message('command', { target: '$.app.children.dlg', command: 'toast', value: { text: 'Saved' } }));
+
+            // Assert
+            expect(open).toHaveBeenCalledTimes(1);
+            expect(toast).toHaveBeenCalledWith({ text: 'Saved' }, undefined);
+            expect(ofType('error')).toHaveLength(0);
+        });
+
+        it('should post error and change nothing for an unknown target, an undeclared command and a system command', () => {
+            // Arrange
+            send(message('load', { document: modalDoc() }));
+            const modal = find(host, 'x-rt-modal') as Commanded;
+            const open = vi.fn();
+            modal.commands = { open };
+            const before = ofType('snapshot').length;
+
+            // Act
+            send(message('command', { target: '$.app.children.nope', command: 'open' }));
+            send(message('command', { target: '$.app.children.dlg', command: 'explode' }));
+            send(message('command', { target: '$.data.name', command: 'set', value: 'x' }));
+
+            // Assert
+            expect(errorCodes()).toEqual(['SUI-RUN-ON-TARGET', 'SUI-RUN-ON-COMMAND', 'SUI-RUN-ON-COMMAND']);
+            expect(open).not.toHaveBeenCalled();
+            expect(ofType('snapshot')).toHaveLength(before);
+            expect(textOf(host)).toContain('label:Ada');
+        });
+
+        it('should change the text content with a locale overlay and leave $.data unchanged', async () => {
+            // Arrange
+            send(message('load', { document: modalDoc() }));
+            send(message('write', { writes: [{ path: '$.data.name', value: 'Grace' }] }));
+            const dataBefore = JSON.stringify(ofType('snapshot').at(-1)?.['data']);
+
+            // Act
+            send(message('locale', { locale: 'de' }));
+            await tick();
+
+            // Assert
+            expect(textOf(host)).toContain('Ueberschrift');
+            expect(textOf(host)).toContain('label:Grace');
+            expect(ofType('error')).toHaveLength(0);
+            expect(JSON.stringify(ofType('snapshot').at(-1)?.['data'])).toBe(dataBefore);
+        });
+
+        it('should post error for a language with no overlay', () => {
+            // Arrange
+            send(message('load', { document: modalDoc() }));
+
+            // Act
+            send(message('locale', { locale: 'fr' }));
+
+            // Assert
+            expect(errorCodes()).toEqual(['SUI-LOCALE-UNKNOWN']);
+            expect(textOf(host)).toContain('Heading');
+        });
+
+        it('should change a token with the dark mode overlay and go back with light', () => {
+            // Arrange
+            send(message('load', { document: modalDoc() }));
+            const surface = (): string => getComputedStyle(appRoot()).getPropertyValue('--ui-color-surface-base').trim();
+            const light = surface();
+
+            // Act
+            send(message('theme', { kind: 'mode', name: 'dark' }));
+            const dark = surface();
+            send(message('theme', { kind: 'mode', name: 'light' }));
+
+            // Assert
+            expect(dark).toBe('#09090b');
+            expect(light).not.toBe(dark);
+            expect(surface()).toBe(light);
+            expect(ofType('error')).toHaveLength(0);
+        });
+
+        it('should post error for an unknown theme kind and an unknown theme name', () => {
+            // Arrange
+            send(message('load', { document: modalDoc() }));
+
+            // Act
+            send(message('theme', { kind: 'sparkle', name: 'dark' }));
+            send(message('theme', { kind: 'mode', name: 'sepia' }));
+
+            // Assert
+            expect(errorCodes()).toEqual(['SUI-THEME-OVERLAY', 'SUI-THEME-OVERLAY']);
+        });
+
+        it('should apply an overlay the document defines in themes', () => {
+            // Arrange
+            const document: AppDocument = { ...modalDoc(), themes: { acme: { kind: 'brand', tokens: { radius: { sm: '3px' } } } } };
+            send(message('load', { document }));
+
+            // Act
+            send(message('theme', { kind: 'brand', name: 'acme' }));
+
+            // Assert
+            expect(ofType('error')).toHaveLength(0);
+            expect(getComputedStyle(appRoot()).getPropertyValue('--ui-radius-sm').trim()).toBe('3px');
+        });
     });
 
     it('should answer ping with pong', () => {

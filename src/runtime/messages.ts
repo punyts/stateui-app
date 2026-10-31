@@ -71,19 +71,19 @@ export interface WriteMessage extends Envelope<'write'> {
     icons?: IconsMap;
 }
 
-/** A component command from `ui_command` (handled by E7.13) */
+/** A component command from `ui_command`: `target` is the `$.app` state path of a node, `command` a command its component declares */
 export interface CommandMessage extends Envelope<'command'> {
     target: string;
     command: string;
     value?: JsonValue;
 }
 
-/** Switch the language (handled by E7.13) */
+/** Switch the language to a code the document or the library has an overlay for */
 export interface LocaleMessage extends Envelope<'locale'> {
     locale: string;
 }
 
-/** Apply a theme overlay of a kind and name (handled by E7.13) */
+/** Apply the theme overlay `name` of `kind` (`mode`, `brand` or `motion`) */
 export interface ThemeMessage extends Envelope<'theme'> {
     kind: string;
     name: string;
