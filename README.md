@@ -313,6 +313,9 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
 2. `composed` is resolved against the library and `app` is resolved node by node. `<-` properties are removed from the
    tree, node references are resolved to the exposed runtime properties they reach, and the links become store aliases
    (`applyLinks`) once the store exists. A link that cannot be resolved or applied stops the run.
+   A `$row` link inside a row template is the exception: it has no target until a record view (or a component such as
+   `descriptionList`) makes a runtime copy of the template, so it is not applied; the `<-key` stays in the tree as
+   written and the component passes the template to `resolveRowLinks`.
 3. The store holds `{ theme, data, locale, app, runtime }`:
    - `theme` is `{ tokens, active }`: the document's `theme.tokens` over the default tree (every token, so a write patches one custom property) and `active` as `{ mode: "light", brand: "default", motion: "full" }` unless the document gives other names. See Token emission below.
    - `data` is a copy of the document's `data`; the document itself is never changed.

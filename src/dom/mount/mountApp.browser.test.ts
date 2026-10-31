@@ -31,6 +31,11 @@ const library: ComponentLibrary = {
         tag: 'x-mount-button',
         shape: shapeOf({ enabled: { type: 'boolean', default: true } }, ['press'])
     },
+    records: {
+        tier: 'root',
+        tag: 'x-mount-records',
+        shape: shapeOf({ title: { type: 'string', default: '' }, row: { type: 'node', row: true } })
+    },
     greeting: {
         tier: 'composed',
         tree: { component: 'label', text: 'Hello' }
@@ -43,6 +48,7 @@ defineComponent({
 });
 defineComponent({ tag: 'x-mount-label', template: '<p>{{ $.text }}</p>' });
 defineComponent({ tag: 'x-mount-button', template: '<b>button</b>' });
+defineComponent({ tag: 'x-mount-records', template: '<i>{{ $.title }}</i>' });
 
 /** Every text node below `root`, crossing shadow roots */
 function textOf(root: ParentNode): string {
@@ -291,5 +297,23 @@ describe('mountApp in Chromium', () => {
         expect(app.store).toBeUndefined();
         expect(app.errors.map((error) => error.code)).toEqual(['SUI-RUN-BINDING']);
         expect(host.childNodes).toHaveLength(0);
+    });
+
+    it('should keep a $row link of a row template in the tree and apply no link for it', () => {
+        // Arrange
+        const host = freshHost();
+        const doc: AppDocument = {
+            data: { name: 'Ada' },
+            app: { component: 'records', '<-title': '$.data.name', row: { component: 'label', '<-text': '$row.name' } } as AppDocument['app']
+        };
+
+        // Act
+        const app = start(host, doc);
+        const template = app.store?.get<Record<string, unknown>>('$.app.row');
+
+        // Assert
+        expect(app.errors).toEqual([]);
+        expect(template?.['<-text']).toBe('$row.name');
+        expect(app.store?.get('$.app.title')).toBe('Ada');
     });
 });

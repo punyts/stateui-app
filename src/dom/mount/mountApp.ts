@@ -10,6 +10,7 @@ import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../cor
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
+import { PREFIXES } from '../../core/types.js';
 import type { AppDocument, JsonObject, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
@@ -63,6 +64,23 @@ function removeLinked(tree: Node, links: readonly Link[]): void {
     }
 }
 
+const ROW_LINK_TARGET = /^\$row(\.|$)/;
+
+/**
+ * A `$row` link in a row template has no target until a record view makes a runtime copy of the template, so it is not
+ * applied at start: it goes back into the tree as written (`<-key`), where the component finds it and passes the
+ * template to `resolveRowLinks`
+ */
+function restoreRowLinks(tree: Node, rowLinks: readonly Link[]): void {
+    for (const link of rowLinks) {
+        let holder: unknown = tree;
+        for (const segment of link.statePath.split('.').slice(2)) {
+            holder = typeof holder === 'object' && holder !== null ? (holder as Record<string, unknown>)[segment] : undefined;
+        }
+        if (typeof holder === 'object' && holder !== null) (holder as Record<string, unknown>)[`${PREFIXES.link}${link.key}`] = link.target;
+    }
+}
+
 function failed(errors: BuildError[]): MountedApp {
     return { store: undefined, baseOverlay: undefined, baseLocale: undefined, errors, dispose: () => undefined };
 }
@@ -100,8 +118,11 @@ export function mountApp(
     const resolved = resolveNode(cloneJson(document.app as unknown as JsonObject) as Node, library, document.composed);
     const extracted = extractLinks(resolved.node, { library, instances: resolved.instances });
     if (!isValid(extracted.errors)) return failed([...errors, ...extracted.errors]);
+    const rowLinks = extracted.links.filter((link) => ROW_LINK_TARGET.test(link.target));
+    const appLinks = extracted.links.filter((link) => !ROW_LINK_TARGET.test(link.target));
     removeLinked(extracted.tree, extracted.links);
     const baseOverlay = extractBaseOverlay(extracted.tree, extracted.linkedPaths);
+    restoreRowLinks(extracted.tree, rowLinks);
     const context: MountContext = {
         host,
         document,
@@ -126,9 +147,9 @@ export function mountApp(
     const store = createStore<AppState>(context.state);
     store.protect(RUNTIME_PATHS.empty);
 
-    const linkErrors = applyLinks(store, extracted.links);
+    const linkErrors = applyLinks(store, appLinks);
     if (linkErrors.length > 0) {
-        disposeLinks(store, extracted.links);
+        disposeLinks(store, appLinks);
         return failed([...errors, ...linkErrors]);
     }
 
@@ -141,7 +162,7 @@ export function mountApp(
         } catch (error) {
             report.error('mountApp step failed to start', { step: name, reason: String(error) });
             for (const dispose of disposers.reverse()) dispose();
-            disposeLinks(store, extracted.links);
+            disposeLinks(store, appLinks);
             return failed([...errors, stepError(name)]);
         }
     }
@@ -174,7 +195,7 @@ export function mountApp(
                     report.error('mountApp step failed to dispose', { reason: String(error) });
                 }
             }
-            disposeLinks(store, extracted.links);
+            disposeLinks(store, appLinks);
             if (owner === token) {
                 owner = undefined;
                 setNodeResolver(undefined);
