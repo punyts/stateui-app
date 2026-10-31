@@ -1,4 +1,5 @@
 import type { BuildError } from '../core/errors/index.js';
+import type { Catalog } from './catalog.js';
 import type { ScannedComponent } from '../core/convention/index.js';
 
 /** What a CSS transform or check is told about the stylesheet it is given */
@@ -38,4 +39,6 @@ export interface BuildResult {
     errors: BuildError[];
     /** Every file written, relative to the out folder, sorted */
     files: string[];
+    /** The content of `catalog.json`: every component that built, sorted by name */
+    catalog: Catalog;
 }

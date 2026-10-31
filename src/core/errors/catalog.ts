@@ -52,6 +52,7 @@ export const ERROR_CATALOG = {
     'SUI-LINK-CYCLE': { template: 'Link at {path} loops back through {target}' },
     'SUI-ON-EVENT': { template: 'Component "{component}" at {path} has no event "{event}"' },
     'SUI-ON-COMMAND': { template: 'Component "{component}" at {path} has no command "{command}"' },
+    'SUI-ON-SHAPE': { template: '"on" entry at {path} must be one command object or a list of them' },
     'SUI-ON-TARGET': { template: 'Target {target} of "{event}" at {path} does not resolve' },
     'SUI-THEME-NAME': { template: 'Token name "{name}" at {path} collides with another token after flattening' },
     'SUI-THEME-OVERLAY': { template: 'Theme overlay "{name}" of kind "{other}" sets a token group outside its kind at {path}' },
@@ -85,6 +86,9 @@ export const ERROR_CATALOG = {
     'SUI-BUILD-STYLE': { template: 'Styles in {file} do not compile: {name}' },
     'SUI-BUILD-CONTROLLER': { template: 'Controller {file} is not valid: {name}' },
     'SUI-BUILD-IO': { template: 'File {file} could not be read: {name}' },
+    'SUI-BUILD-GROUP': {
+        template: 'Component "{component}" in {file} must sit in an atoms, molecules or composites folder'
+    },
     'SUI-BUILD-TOKEN': { template: 'CSS in {file} uses "{token}"; components may only use semantic and component tokens' },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' }

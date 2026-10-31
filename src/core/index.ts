@@ -45,3 +45,27 @@ export type {
     ResolveResult,
     RootEntry
 } from './resolve/index.js';
+export { snapshotState } from './snapshot/index.js';
+export type { SnapshotOptions, SnapshotStore, StateSnapshot } from './snapshot/index.js';
+export {
+    COMMAND_KEYS,
+    SYSTEM_COMMANDS,
+    findProvider,
+    isSystemCommand,
+    parseTarget,
+    readCommand,
+    readEntry,
+    resolveTarget,
+    validateOn
+} from './on/index.js';
+export type {
+    Frame,
+    Located,
+    OnCommand,
+    OnEntry,
+    ParsedTarget,
+    ResolvedTree,
+    SystemCommand,
+    TreeNode,
+    ValidateOnOptions
+} from './on/index.js';

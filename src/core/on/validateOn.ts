@@ -1,0 +1,206 @@
+import { buildError } from '../errors/index.js';
+import type { BuildError } from '../errors/index.js';
+import { isNodeValue, isObject } from '../resolve/merge.js';
+import type { ComponentLibrary, ResolveResult } from '../resolve/index.js';
+import type { Shape } from '../shape/index.js';
+import { RESERVED_KEYS } from '../types.js';
+import type { JsonValue } from '../types.js';
+import { parseTarget, readCommand, readEntry } from './parse.js';
+import { findProvider, resolveTarget } from './resolveTarget.js';
+import type { Frame, Located, OnCommand, TreeNode } from './types.js';
+
+const ROOT_PATH = '$.app';
+
+export interface ValidateOnOptions {
+    /** The state path of the node being validated; `$.app` when absent */
+    path?: string;
+}
+
+/** The part of a `ResolveResult` the validator needs */
+export type ResolvedTree = Pick<ResolveResult, 'node' | 'instances'>;
+
+function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
+    if (!Object.hasOwn(library, component)) return undefined;
+    const entry = library[component];
+    return entry?.tier === 'root' ? entry.shape : undefined;
+}
+
+/** One check run over a tree whose nodes name root components */
+class OnValidator {
+    readonly errors: BuildError[] = [];
+
+    constructor(
+        private readonly library: ComponentLibrary,
+        private readonly instances: Readonly<Record<string, string[]>>,
+        private readonly rootPath: string
+    ) {}
+
+    visit(node: TreeNode, path: string, parents: readonly Frame[]): void {
+        const frame: Frame = {
+            path,
+            key: path.slice(path.lastIndexOf('.') + 1),
+            node,
+            instances: Object.hasOwn(this.instances, path) ? (this.instances[path] as string[]) : []
+        };
+        const chain = [...parents, frame];
+
+        if (Object.hasOwn(node, RESERVED_KEYS.on)) this.checkOn(node[RESERVED_KEYS.on] as JsonValue, chain);
+
+        for (const [key, value] of Object.entries(node)) {
+            if (key === RESERVED_KEYS.on) continue;
+            if (key === RESERVED_KEYS.children && isObject(value)) {
+                for (const [childKey, child] of Object.entries(value)) {
+                    if (isNodeValue(child)) this.visit(child, `${path}.${key}.${childKey}`, chain);
+                }
+            } else if (isNodeValue(value)) {
+                this.visit(value, `${path}.${key}`, chain);
+            }
+        }
+    }
+
+    /** An `on` map, entry or list item that is not a command object or a list of them */
+    private malformed(statePath: string): void {
+        this.errors.push(buildError('SUI-ON-SHAPE', { path: statePath, statePath }));
+    }
+
+    private badTarget(target: string, event: string, chain: readonly Frame[], statePath: string): void {
+        const self = chain[chain.length - 1] as Frame;
+        this.errors.push(buildError('SUI-ON-TARGET', { target, event, path: self.path, statePath }));
+    }
+
+    private checkOn(on: JsonValue, chain: readonly Frame[]): void {
+        const self = chain[chain.length - 1] as Frame;
+        const onPath = `${self.path}.${RESERVED_KEYS.on}`;
+        if (!isObject(on)) {
+            this.malformed(onPath);
+            return;
+        }
+
+        const shape = shapeOf(this.library, self.node.component);
+        for (const [event, entry] of Object.entries(on)) {
+            const eventPath = `${onPath}.${event}`;
+            if (shape && !shape.events.includes(event)) {
+                this.errors.push(
+                    buildError('SUI-ON-EVENT', { component: self.node.component, path: self.path, event, statePath: eventPath })
+                );
+            }
+
+            if (!readEntry(entry)) {
+                this.reportMalformed(entry, eventPath);
+                continue;
+            }
+            const list = Array.isArray(entry);
+            const items: JsonValue[] = Array.isArray(entry) ? entry : [entry];
+            items.forEach((item, index) => {
+                const itemPath = list ? `${eventPath}.${index}` : eventPath;
+                this.checkCommand(readCommand(item) as OnCommand, event, chain, itemPath);
+            });
+        }
+    }
+
+    /** Points at each list item that is wrong, or at the entry itself */
+    private reportMalformed(entry: JsonValue, eventPath: string): void {
+        if (!Array.isArray(entry) || entry.length === 0) {
+            this.malformed(eventPath);
+            return;
+        }
+        entry.forEach((item, index) => {
+            if (!readCommand(item)) this.malformed(`${eventPath}.${index}`);
+        });
+    }
+
+    private checkCommand(command: OnCommand, event: string, chain: readonly Frame[], statePath: string): void {
+        if (command.command === 'emit') {
+            if (command.target === undefined) this.malformed(statePath);
+            return;
+        }
+        if (command.command === 'set' || command.command === 'toggle') {
+            this.checkWrite(command, event, chain, statePath);
+            return;
+        }
+        this.checkComponentCommand(command, event, chain, statePath);
+    }
+
+    /** `set` and `toggle` write to a property: they need a target that names one, and `set` needs a value */
+    private checkWrite(command: OnCommand, event: string, chain: readonly Frame[], statePath: string): void {
+        if (command.command === 'set' && !('value' in command)) this.malformed(statePath);
+        if (command.target === undefined) {
+            this.malformed(statePath);
+            return;
+        }
+
+        const located = this.locate(command.target, chain);
+        const ok =
+            located !== undefined &&
+            (located.kind === 'state' ||
+                located.kind === 'outside' ||
+                (located.kind === 'property' && this.declares(located.node.component, located.property)));
+        if (!ok) this.badTarget(command.target, event, chain, statePath);
+    }
+
+    private checkComponentCommand(command: OnCommand, event: string, chain: readonly Frame[], statePath: string): void {
+        const name = command.command;
+        if (command.target === '$parent') {
+            const provider = findProvider(chain, (frame) => this.commandsOf(frame.node.component)?.includes(name) === true);
+            if (!provider) this.badTarget(command.target, event, chain, statePath);
+            return;
+        }
+
+        const self = chain[chain.length - 1] as Frame;
+        const located: Located | undefined =
+            command.target === undefined
+                ? { kind: 'node', path: self.path, node: self.node }
+                : this.locate(command.target, chain);
+        if (!located || located.kind === 'state' || located.kind === 'property') {
+            this.badTarget(command.target ?? '', event, chain, statePath);
+            return;
+        }
+        if (located.kind === 'outside') return;
+
+        const commands = this.commandsOf(located.node.component);
+        if (commands && !commands.includes(name)) {
+            this.errors.push(
+                buildError('SUI-ON-COMMAND', { component: located.node.component, path: located.path, command: name, statePath })
+            );
+        }
+    }
+
+    private locate(text: string, chain: readonly Frame[]): Located | undefined {
+        const parsed = parseTarget(text);
+        return parsed ? resolveTarget(parsed, chain, this.rootPath) : undefined;
+    }
+
+    private commandsOf(component: string): readonly string[] | undefined {
+        return shapeOf(this.library, component)?.commands;
+    }
+
+    /** A component without a shape (unknown) cannot be checked, so every property is accepted */
+    private declares(component: string, property: string): boolean {
+        const shape = shapeOf(this.library, component);
+        return shape === undefined || Object.hasOwn(shape.properties, property);
+    }
+}
+
+/**
+ * Checks every `on` entry in a resolved tree and returns the errors, in tree order:
+ * - a malformed `on` (reported as `SUI-DOC-SHAPE` with the state path until the catalog has a `SUI-ON` code for it):
+ *   not a map of event to entry, an entry that is not one command object or a non-empty list of them, a command
+ *   object with other keys, an `emit` without a target (its event name), a `set` without a value, or a `set` or
+ *   `toggle` without a target
+ * - `SUI-ON-EVENT`: the node's component does not declare the event
+ * - `SUI-ON-COMMAND`: the target's component does not declare the command
+ * - `SUI-ON-TARGET`: the target text is not a valid form (including dot climbing), the ancestor or a step does not
+ *   exist, no ancestor provides the command for `$parent`, a component command targets a property or a path outside
+ *   `$.app`, or `set` and `toggle` do not target a property the component declares
+ *
+ * Target rules: a component command without a target acts on the node itself; `set` and `toggle` target a property
+ * (`$.data.name`, `.value`, `^form.children.name.value`); `emit` uses `target` as the event name and is not resolved.
+ * A node of an unknown component is skipped for event, command and property checks. Pure; never throws.
+ * `tree` is the result of `resolveNode`
+ */
+export function validateOn(tree: ResolvedTree, library: ComponentLibrary, options: ValidateOnOptions = {}): BuildError[] {
+    const rootPath = options.path ?? ROOT_PATH;
+    const validator = new OnValidator(library, tree.instances, rootPath);
+    validator.visit(tree.node, rootPath, []);
+    return validator.errors;
+}

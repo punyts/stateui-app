@@ -1,0 +1,107 @@
+{
+    "components": [
+        {
+            "name": "fieldRow",
+            "tier": "root",
+            "tag": "ui-field-row",
+            "size": "composite",
+            "summary": "A labelled row",
+            "shape": {
+                "summary": "A labelled row",
+                "properties": {
+                    "label": {
+                        "type": "node",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": false,
+                        "row": false
+                    }
+                },
+                "events": [],
+                "commands": [],
+                "layout": false
+            },
+            "content": [],
+            "slots": [
+                {
+                    "name": "label",
+                    "row": false
+                }
+            ],
+            "events": [],
+            "commands": [],
+            "layout": false,
+            "locales": [],
+            "example": {
+                "component": "fieldRow"
+            }
+        },
+        {
+            "name": "loginForm",
+            "tier": "composed",
+            "tag": "ui-login-form",
+            "size": "composite",
+            "tree": {
+                "component": "fieldRow",
+                "label": {
+                    "component": "textLabel",
+                    "_text": "Name"
+                }
+            },
+            "locales": [],
+            "example": {
+                "component": "loginForm"
+            }
+        },
+        {
+            "name": "textLabel",
+            "tier": "root",
+            "tag": "ui-text-label",
+            "size": "atom",
+            "summary": "A line of text",
+            "shape": {
+                "summary": "A line of text",
+                "properties": {
+                    "_text": {
+                        "type": "string",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": false,
+                        "row": false,
+                        "default": "Hello",
+                        "kind": "content"
+                    },
+                    "color": {
+                        "type": "string",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": false,
+                        "row": false,
+                        "default": "black"
+                    }
+                },
+                "events": [
+                    "press"
+                ],
+                "commands": [],
+                "layout": false
+            },
+            "content": [
+                "_text"
+            ],
+            "slots": [],
+            "events": [
+                "press"
+            ],
+            "commands": [],
+            "layout": false,
+            "locales": [],
+            "example": {
+                "component": "textLabel"
+            }
+        }
+    ]
+}

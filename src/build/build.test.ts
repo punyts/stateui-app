@@ -40,8 +40,8 @@ const SHAPE = '{ "summary": "A test component", "properties": { "text": { "type"
 
 function simple(name: string, view = '<p>{{ $.text }}</p>', extra: Record<string, string> = {}): Record<string, string> {
     return {
-        [`g/${name}/${name}.view.html`]: view,
-        [`g/${name}/${name}.state.json`]: SHAPE,
+        [`atoms/${name}/${name}.view.html`]: view,
+        [`atoms/${name}/${name}.state.json`]: SHAPE,
         ...extra
     };
 }
@@ -66,12 +66,12 @@ describe('buildLibrary', () => {
         expect(actual).toEqual(await snapshot(EXPECTED));
     });
 
-    it('should emit no module for a composed component', async () => {
+    it('should emit no module for a composed component and list catalog.json', async () => {
         const out = await scratch();
 
         const result = await buildLibrary(FIXTURE, out);
 
-        expect(result.files).toEqual(['fieldRow.d.ts', 'fieldRow.js', 'index.d.ts', 'index.js', 'textLabel.d.ts', 'textLabel.js']);
+        expect(result.files).toEqual(['catalog.json', 'fieldRow.d.ts', 'fieldRow.js', 'index.d.ts', 'index.js', 'textLabel.d.ts', 'textLabel.js']);
     });
 
     it('should produce identical bytes when the same input is built twice', async () => {
@@ -106,11 +106,11 @@ describe('buildLibrary', () => {
         const result = await buildLibrary(source, out);
 
         expect(result.errors).toHaveLength(1);
-        expect(result.errors[0]).toMatchObject({ code: 'SUI-BUILD-TEMPLATE', file: 'g/broken/broken.view.html' });
+        expect(result.errors[0]).toMatchObject({ code: 'SUI-BUILD-TEMPLATE', file: 'atoms/broken/broken.view.html' });
         expect(result.errors[0]?.line).toBeTypeOf('number');
         expect(result.errors[0]?.column).toBeTypeOf('number');
         expect(result.built.map((entry) => entry.component.name)).toEqual(['goodOne', 'goodTwo']);
-        expect(Object.keys(await snapshot(out))).toEqual(['goodOne.d.ts', 'goodOne.js', 'goodTwo.d.ts', 'goodTwo.js', 'index.d.ts', 'index.js']);
+        expect(Object.keys(await snapshot(out))).toEqual(['catalog.json', 'goodOne.d.ts', 'goodOne.js', 'goodTwo.d.ts', 'goodTwo.js', 'index.d.ts', 'index.js']);
     });
 
     it('should report a template compile error with its file', async () => {
@@ -119,34 +119,34 @@ describe('buildLibrary', () => {
         const result = await buildLibrary(source, await scratch());
 
         expect(result.errors).toHaveLength(1);
-        expect(result.errors[0]).toMatchObject({ code: 'SUI-BUILD-TEMPLATE', file: 'g/bad/bad.view.html' });
+        expect(result.errors[0]).toMatchObject({ code: 'SUI-BUILD-TEMPLATE', file: 'atoms/bad/bad.view.html' });
         expect(result.built).toEqual([]);
     });
 
     it('should report a style error with file and line', async () => {
         const source = await library(
-            simple('styled', '<p>{{ $.text }}</p>', { 'g/styled/styled.view.css': 'p { color: red; }\np { color: {{ $.a }}' })
+            simple('styled', '<p>{{ $.text }}</p>', { 'atoms/styled/styled.view.css': 'p { color: red; }\np { color: {{ $.a }}' })
         );
 
         const result = await buildLibrary(source, await scratch());
 
         expect(result.errors).toHaveLength(1);
-        expect(result.errors[0]).toMatchObject({ file: 'g/styled/styled.view.css', line: 2 });
+        expect(result.errors[0]).toMatchObject({ file: 'atoms/styled/styled.view.css', line: 2 });
     });
 
     it('should report shape errors and still check the template of the same component', async () => {
         const source = await library({
-            'g/odd/odd.view.html': '<p></div>',
-            'g/odd/odd.state.json': '{ "properties": {} }'
+            'atoms/odd/odd.view.html': '<p></div>',
+            'atoms/odd/odd.state.json': '{ "properties": {} }'
         });
 
         const result = await buildLibrary(source, await scratch());
 
-        expect(result.errors.map((error) => error.file).sort()).toEqual(['g/odd/odd.state.json', 'g/odd/odd.view.html']);
+        expect(result.errors.map((error) => error.file).sort()).toEqual(['atoms/odd/odd.state.json', 'atoms/odd/odd.view.html']);
     });
 
     it('should report convention errors from the scan and build the rest', async () => {
-        const source = await library({ ...simple('fine'), 'g/lonely/other.view.html': '<p></p>' });
+        const source = await library({ ...simple('fine'), 'atoms/lonely/other.view.html': '<p></p>' });
 
         const result = await buildLibrary(source, await scratch());
 
@@ -155,7 +155,7 @@ describe('buildLibrary', () => {
     });
 
     it('should run cssTransforms in order before compiling and cssChecks on the file text', async () => {
-        const source = await library(simple('themed', '<p>{{ $.text }}</p>', { 'g/themed/themed.view.css': 'p { color: TOKEN; }' }));
+        const source = await library(simple('themed', '<p>{{ $.text }}</p>', { 'atoms/themed/themed.view.css': 'p { color: TOKEN; }' }));
         const out = await scratch();
         const seen: string[] = [];
         const options: BuildOptions = {
@@ -177,7 +177,7 @@ describe('buildLibrary', () => {
 
     it('should fail a component when a cssCheck reports an error and keep its location', async () => {
         const source = await library(
-            simple('tokens', '<p>{{ $.text }}</p>', { 'g/tokens/tokens.view.css': 'p { color: var(--ui-palette-red); }' })
+            simple('tokens', '<p>{{ $.text }}</p>', { 'atoms/tokens/tokens.view.css': 'p { color: var(--ui-palette-red); }' })
         );
         const options: BuildOptions = {
             cssChecks: [(_css, context) => [buildError('SUI-BUILD-TOKEN', { file: context.file, token: '--ui-palette-red', line: 1, column: 18 })]]
@@ -186,7 +186,7 @@ describe('buildLibrary', () => {
         const result = await buildLibrary(source, await scratch(), options);
 
         expect(result.errors).toEqual([
-            expect.objectContaining({ code: 'SUI-BUILD-TOKEN', file: 'g/tokens/tokens.view.css', line: 1, column: 18 })
+            expect.objectContaining({ code: 'SUI-BUILD-TOKEN', file: 'atoms/tokens/tokens.view.css', line: 1, column: 18 })
         ]);
         expect(result.built).toEqual([]);
     });
@@ -204,7 +204,7 @@ describe('buildLibrary', () => {
     it('should compile a controller by path and import its default export', async () => {
         const source = await library(
             simple('active', '<p>{{ $.text }}</p>', {
-                'g/active/active.controller.ts':
+                'atoms/active/active.controller.ts':
                     'interface Options { a: number }\nconst make = (): Options => ({ a: 1 });\nexport default function controller(): Options { return make(); }\n'
             })
         );
@@ -229,22 +229,22 @@ describe('buildLibrary', () => {
         };
 
         for (const [name, text] of Object.entries(cases)) {
-            const source = await library(simple(name, '<p></p>', { [`g/${name}/${name}.controller.ts`]: text }));
+            const source = await library(simple(name, '<p></p>', { [`atoms/${name}/${name}.controller.ts`]: text }));
 
             const result = await buildLibrary(source, await scratch());
 
             expect(result.errors).toHaveLength(1);
-            expect(result.errors[0]?.file).toBe(`g/${name}/${name}.controller.ts`);
+            expect(result.errors[0]?.file).toBe(`atoms/${name}/${name}.controller.ts`);
             expect(result.built).toEqual([]);
         }
     });
 
     it('should locate a controller syntax error by line', async () => {
-        const source = await library(simple('syntax', '<p></p>', { 'g/syntax/syntax.controller.ts': 'const a = 1;\nexport default (\n' }));
+        const source = await library(simple('syntax', '<p></p>', { 'atoms/syntax/syntax.controller.ts': 'const a = 1;\nexport default (\n' }));
 
         const result = await buildLibrary(source, await scratch());
 
-        expect(result.errors[0]).toMatchObject({ file: 'g/syntax/syntax.controller.ts' });
+        expect(result.errors[0]).toMatchObject({ file: 'atoms/syntax/syntax.controller.ts' });
         expect(result.errors[0]?.line).toBeGreaterThanOrEqual(2);
     });
 
@@ -254,7 +254,7 @@ describe('buildLibrary', () => {
         const result = await buildLibrary(await scratch(), out);
 
         expect(result.errors).toEqual([]);
-        expect(result.files).toEqual(['index.d.ts', 'index.js']);
+        expect(result.files).toEqual(['catalog.json', 'index.d.ts', 'index.js']);
         expect(await readFile(join(out, 'index.js'), 'utf8')).toContain('export const components = [];');
     });
 });
