@@ -45,6 +45,16 @@ class TreeChecker {
         const shape = shapeOf(this.library, node.component);
         if (shape) this.errors.push(...validateNode(shape, withoutRuntimeDefaults(shape, node), path, { ...this.options, insideRow }));
         for (const child of nodeChildren(node, path, shape)) {
+            if (child.accepts !== undefined && !child.accepts.includes(child.node.component)) {
+                this.errors.push(
+                    buildError('SUI-NODE-CHILD', {
+                        component: child.node.component,
+                        path: child.path,
+                        statePath: child.path,
+                        other: child.accepts.join(', ')
+                    })
+                );
+            }
             this.visit(child.node as Node, child.path, insideRow || child.row);
         }
     }

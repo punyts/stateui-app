@@ -7,6 +7,8 @@ export interface NodeChild {
     path: string;
     node: JsonObject & { component: string };
     row: boolean;
+    /** The components the slot accepts, when its shape lists them; absent means any */
+    accepts?: readonly string[];
 }
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
@@ -29,13 +31,25 @@ export function nodeChildren(node: JsonObject, path: string, shape: Shape | unde
         if (key === RESERVED_KEYS.on || key === RESERVED_KEYS.component) continue;
         if (key === RESERVED_KEYS.children && isObject(value)) {
             for (const [childKey, child] of Object.entries(value)) {
-                if (isNode(child)) found.push({ path: `${path}.${key}.${childKey}`, node: child, row: false });
+                if (isNode(child)) {
+                    found.push({
+                        path: `${path}.${key}.${childKey}`,
+                        node: child,
+                        row: false,
+                        ...(shape?.childComponents === undefined ? {} : { accepts: shape.childComponents })
+                    });
+                }
             }
             continue;
         }
         const property = shape !== undefined && Object.hasOwn(shape.properties, key) ? shape.properties[key] : undefined;
         if (isNode(value)) {
-            found.push({ path: `${path}.${key}`, node: value, row: property?.row === true });
+            found.push({
+                path: `${path}.${key}`,
+                node: value,
+                row: property?.row === true,
+                ...(property?.childComponents === undefined ? {} : { accepts: property.childComponents })
+            });
             continue;
         }
         const items = property?.items;
@@ -45,7 +59,12 @@ export function nodeChildren(node: JsonObject, path: string, shape: Shape | unde
             for (const [field, fieldValue] of Object.entries(entry)) {
                 if (!isNode(fieldValue)) continue;
                 const fieldShape = Object.hasOwn(items, field) ? items[field] : undefined;
-                found.push({ path: `${path}.${key}.${mapKey}.${field}`, node: fieldValue, row: fieldShape?.row === true });
+                found.push({
+                    path: `${path}.${key}.${mapKey}.${field}`,
+                    node: fieldValue,
+                    row: fieldShape?.row === true,
+                    ...(fieldShape?.childComponents === undefined ? {} : { accepts: fieldShape.childComponents })
+                });
             }
         }
     }

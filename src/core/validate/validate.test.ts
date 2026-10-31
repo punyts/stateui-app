@@ -633,3 +633,83 @@ describe('validateDocument limits', () => {
         }
     });
 });
+
+describe('validateDocument child components', () => {
+    function parsed(json: Record<string, unknown>): Shape {
+        const result = parseShape({ summary: 'Test', ...json }, 'test.state.json');
+        expect(result.errors).toEqual([]);
+        return result.shape as Shape;
+    }
+
+    const RESTRICTED: ComponentLibrary = {
+        ...LIBRARY,
+        item: { tier: 'root', tag: 'ui-item', shape: parsed({ properties: { label: { type: 'string', default: '' } } }) },
+        stack: { tier: 'root', tag: 'ui-stack', shape: parsed({ childComponents: ['item'] }) },
+        card: {
+            tier: 'root',
+            tag: 'ui-card',
+            shape: parsed({ properties: { footer: { type: 'node', childComponents: ['button'] }, body: { type: 'node' } } })
+        },
+        wrapped: { tier: 'composed', tree: { component: 'item', label: 'wrapped' } }
+    };
+
+    function restricted(document: unknown): { code: string; statePath?: string }[] {
+        return validateDocument(document, RESTRICTED).errors.map((error) => ({ code: error.code, statePath: error.statePath }));
+    }
+
+    it('should accept children of a listed component', () => {
+        const document = doc({ component: 'stack', children: { a: { component: 'item' }, b: { component: 'item' } } });
+
+        expect(restricted(document)).toEqual([]);
+    });
+
+    it('should report SUI-NODE-CHILD with the state path for a child that is not listed', () => {
+        const document = doc({ component: 'stack', children: { a: { component: 'item' }, b: { component: 'text' } } });
+
+        expect(restricted(document)).toEqual([{ code: 'SUI-NODE-CHILD', statePath: '$.app.children.b' }]);
+    });
+
+    it('should name the accepted components in the message', () => {
+        const errors = validateDocument(doc({ component: 'stack', children: { a: { component: 'text' } } }), RESTRICTED).errors;
+
+        expect(errors[0]?.message).toContain('"text"');
+        expect(errors[0]?.message).toContain('item');
+    });
+
+    it('should accept a composed component that resolves to a listed component', () => {
+        const document = doc({ component: 'stack', children: { a: { component: 'wrapped' } } });
+
+        expect(restricted(document)).toEqual([]);
+    });
+
+    it('should check a node-typed slot that lists components', () => {
+        const wrong = doc({ component: 'card', footer: { component: 'text' }, body: { component: 'text' } });
+        const right = doc({ component: 'card', footer: { component: 'button' } });
+
+        expect(restricted(wrong)).toEqual([{ code: 'SUI-NODE-CHILD', statePath: '$.app.footer' }]);
+        expect(restricted(right)).toEqual([]);
+    });
+
+    it('should check the children inside a composed tree', () => {
+        const document = doc(
+            { component: 'panel' },
+            { composed: { bad: { component: 'stack', children: { a: { component: 'text' } } } } }
+        );
+
+        expect(restricted(document)).toContainEqual({ code: 'SUI-NODE-CHILD', statePath: '$.composed.bad.children.a' });
+    });
+
+    it('should read childComponents from the shape in a catalog', () => {
+        const catalog = {
+            components: [
+                { name: 'item', tier: 'root', tag: 'ui-item', shape: parsed({}) },
+                { name: 'text', tier: 'root', tag: 'ui-text', shape: parsed({}) },
+                { name: 'stack', tier: 'root', tag: 'ui-stack', shape: parsed({ childComponents: ['item'] }) }
+            ]
+        } as unknown as Parameters<typeof libraryFromCatalog>[0];
+
+        const result = validateDocument(doc({ component: 'stack', children: { a: { component: 'text' } } }), catalog);
+
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-NODE-CHILD']);
+    });
+});

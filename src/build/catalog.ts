@@ -20,6 +20,8 @@ export interface ShapeExtras {
     tokens?: ComponentToken[];
     /** The `placement` shape its children may carry */
     placement?: Record<string, PropertyShape>;
+    /** The components its `children` slot accepts; absent when it accepts any */
+    childComponents?: string[];
     /** The override paths that are the component's intended interface */
     exposes?: JsonValue;
 }
@@ -32,6 +34,8 @@ export interface CatalogSlot {
     name: string;
     /** True when the slot is a row template, where `$row` is legal */
     row: boolean;
+    /** The components the slot accepts; absent when it accepts any */
+    childComponents?: string[];
 }
 
 interface EntryBase {
@@ -120,12 +124,16 @@ function contentNames(properties: Record<string, PropertyShape>, prefix = ''): s
     return names;
 }
 
+function acceptsOf(property: PropertyShape): { childComponents?: string[] } {
+    return property.childComponents === undefined ? {} : { childComponents: property.childComponents };
+}
+
 function slotsOf(properties: Record<string, PropertyShape>): CatalogSlot[] {
     const slots: CatalogSlot[] = [];
     for (const [name, property] of Object.entries(properties)) {
-        if (typesOf(property).includes('node')) slots.push({ name, row: property.row });
+        if (typesOf(property).includes('node')) slots.push({ name, row: property.row, ...acceptsOf(property) });
         for (const [field, item] of fields(property.items)) {
-            if (typesOf(item).includes('node')) slots.push({ name: `${name}.${field}`, row: item.row });
+            if (typesOf(item).includes('node')) slots.push({ name: `${name}.${field}`, row: item.row, ...acceptsOf(item) });
         }
     }
     return slots;
@@ -188,6 +196,7 @@ function extrasOf(source: ShapeExtras): ShapeExtras {
     return {
         ...(source.tokens === undefined ? {} : { tokens: source.tokens }),
         ...(source.placement === undefined ? {} : { placement: source.placement }),
+        ...(source.childComponents === undefined ? {} : { childComponents: source.childComponents }),
         ...(source.exposes === undefined ? {} : { exposes: source.exposes })
     };
 }
@@ -207,6 +216,7 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
             events: shape.events,
             commands: shape.commands,
             layout: shape.layout,
+            ...(shape.childComponents === undefined ? {} : { childComponents: shape.childComponents }),
             ...(shape.commandValues === undefined ? {} : { commandValues: shape.commandValues }),
             ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
         },

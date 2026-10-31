@@ -37,6 +37,7 @@ export const ERROR_CATALOG = {
     'SUI-NODE-UNKNOWN': { template: 'Unknown component "{component}" at {path}' },
     'SUI-NODE-CYCLE': { template: 'Composed component "{component}" contains itself at {path}' },
     'SUI-NODE-MISSING': { template: 'No node at {path}' },
+    'SUI-NODE-CHILD': { template: 'Component "{component}" at {path} is not accepted by its parent slot; it takes {other}' },
     'SUI-NODE-NAME': { template: 'Property name "{name}" at {path} is not allowed' },
     'SUI-STATE-INVALID': { template: 'Property "{name}" at {path} does not fit the shape of "{component}"' },
     'SUI-STATE-UNKNOWN': { template: 'Property "{name}" at {path} is not in the shape of "{component}"' },

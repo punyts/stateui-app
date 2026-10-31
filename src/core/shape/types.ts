@@ -63,6 +63,8 @@ export interface PropertyShape {
     row: boolean;
     /** True when the property is a runtime property other nodes may link to by node reference (`^orders.current`) */
     exposed: boolean;
+    /** Set on a `node` property: the components the slot accepts; a node of any other component in it is `SUI-NODE-CHILD`. Absent means any */
+    childComponents?: string[];
 }
 
 /** A parsed `*.state.json`: defaults, validation rules and the catalog entry of one component */
@@ -80,6 +82,8 @@ export interface Shape {
      * "messages" }`), so `validateOn` can check a literal value. Absent when the shape declares none
      */
     commandValues?: Record<string, string>;
+    /** The components the `children` slot accepts (`accordion`: `disclosure`); a child of any other component is `SUI-NODE-CHILD`. Absent means any */
+    childComponents?: string[];
     /** True when the component lays out children, so a node may carry `layout` */
     layout: boolean;
     /**

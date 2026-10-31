@@ -106,6 +106,16 @@ interface PropertyDraft extends PropertyShape {
     typeSet: boolean;
 }
 
+/** A non-empty list of distinct component names (lower camel case), or undefined when the value is not one */
+function readComponentNames(value: JsonValue): string[] | undefined {
+    const list = value as JsonValue[];
+    const valid =
+        list.length > 0 &&
+        list.every((entry) => typeof entry === 'string' && EVENT_NAME.test(entry)) &&
+        new Set(list).size === list.length;
+    return valid ? (list as string[]) : undefined;
+}
+
 /** The keys of one property */
 export const PROPERTY_KEYS: readonly KeyRule<PropertyDraft>[] = [
     {
@@ -265,6 +275,19 @@ export const PROPERTY_KEYS: readonly KeyRule<PropertyDraft>[] = [
         rule(value, draft) {
             draft.exposed = value === true;
         }
+    },
+    {
+        name: 'childComponents',
+        type: 'array',
+        required: false,
+        rule(value, draft, context) {
+            const names = readComponentNames(value);
+            if (names === undefined) {
+                context.errors.push(invalid(context, 'childComponents'));
+                return;
+            }
+            draft.childComponents = names;
+        }
     }
 ];
 
@@ -279,6 +302,7 @@ function checkCombination(draft: PropertyDraft, where: string, context: RuleCont
     };
     if (types.includes('map') !== (draft.items !== undefined)) problem('items');
     if (draft.row && !types.includes('node')) problem('row');
+    if (draft.childComponents !== undefined && !types.includes('node')) problem('childComponents');
     if (draft.reflect && (context.nested || types.some((type) => NOT_REFLECTED.includes(type)))) problem('reflect');
     if (draft.runtime && (context.nested || draft.default === undefined || draft.required)) problem('runtime');
     if (draft.exposed && !draft.runtime) problem('exposed');
@@ -549,6 +573,19 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
                 return;
             }
             shape.commandValues = input as Record<string, string>;
+        }
+    },
+    {
+        name: 'childComponents',
+        type: 'array',
+        required: false,
+        rule(value, shape, context) {
+            const names = readComponentNames(value);
+            if (names === undefined) {
+                context.errors.push(invalid(context, 'childComponents'));
+                return;
+            }
+            shape.childComponents = names;
         }
     },
     {

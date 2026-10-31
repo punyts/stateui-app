@@ -573,3 +573,36 @@ describe('isSafeUrl', () => {
         expect(isSafeUrl('data:image/png;base64,AA\nAA')).toBe(false);
     });
 });
+
+describe('childComponents', () => {
+    it('should read the key on a shape and on a node property', () => {
+        const shape = shapeOf({
+            childComponents: ['disclosure'],
+            properties: { footer: { type: 'node', childComponents: ['button', 'link'] } }
+        });
+
+        expect(shape.childComponents).toEqual(['disclosure']);
+        expect(shape.properties.footer?.childComponents).toEqual(['button', 'link']);
+    });
+
+    it('should leave the key out when the shape does not declare it', () => {
+        const shape = shapeOf({ properties: { footer: { type: 'node' } } });
+
+        expect(shape.childComponents).toBeUndefined();
+        expect(shape.properties.footer?.childComponents).toBeUndefined();
+    });
+
+    it.each([[[]], [['a', 'a']], [['Bad']], [[1]], ['disclosure']])('should reject the shape key %j', (value) => {
+        expect(parseCodes({ summary: 'x', childComponents: value })).toEqual(['SUI-BUILD-SHAPE']);
+    });
+
+    it('should reject the key on a property that is not a node', () => {
+        expect(parseCodes({ summary: 'x', properties: { title: { type: 'string', childComponents: ['a'] } } })).toEqual([
+            'SUI-BUILD-SHAPE'
+        ]);
+    });
+
+    it('should reject an invalid list on a node property', () => {
+        expect(parseCodes({ summary: 'x', properties: { footer: { type: 'node', childComponents: [] } } })).toEqual(['SUI-BUILD-SHAPE']);
+    });
+});
