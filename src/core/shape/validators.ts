@@ -45,6 +45,50 @@ function compile(pattern: string): RegExp | undefined {
     }
 }
 
+/** True when a group that holds a quantifier is itself quantified, as in `(a+)+` or `(a*){2,}`: a shape that backtracks without end */
+function hasNestedQuantifier(pattern: string): boolean {
+    const groups: boolean[] = [];
+    let inClass = false;
+    let justClosed = false;
+    for (let i = 0; i < pattern.length; i++) {
+        const char = pattern[i] as string;
+        const afterGroup = justClosed;
+        justClosed = false;
+        if (char === '\\') {
+            i++;
+            continue;
+        }
+        if (inClass) {
+            if (char === ']') inClass = false;
+            continue;
+        }
+        if (char === '[') {
+            inClass = true;
+        } else if (char === '(') {
+            groups.push(false);
+        } else if (char === ')') {
+            const holdsQuantifier = groups.pop() === true;
+            justClosed = holdsQuantifier;
+            if (holdsQuantifier && groups.length > 0) groups[groups.length - 1] = true;
+        } else if (char === '+' || char === '*' || (char === '{' && /^\{\d+,\d*\}/.test(pattern.slice(i)))) {
+            if (afterGroup) return true;
+            if (groups.length > 0) groups[groups.length - 1] = true;
+        }
+    }
+    return false;
+}
+
+/** True when a regular expression is within `max` characters, compiles and has no nested quantifier */
+function isSafeExpression(value: string, max: number): boolean {
+    if (value.length > max) return false;
+    try {
+        new RegExp(value, 'u');
+    } catch {
+        return false;
+    }
+    return !hasNestedQuantifier(value);
+}
+
 function sameJson(a: JsonValue, b: JsonValue): boolean {
     return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -64,6 +108,12 @@ export const VALIDATORS: { [K in ValidatorName]: ValidatorRule<K> } = {
             const expression = compile(options);
             return expression !== undefined && expression.test(value);
         }
+    },
+    regex: {
+        parse: (options) =>
+            typeof options === 'number' && Number.isInteger(options) && options >= 1 && options <= MAX_PATTERN_LENGTH ? options : undefined,
+        applies: (type) => type === 'string',
+        check: (value, options) => typeof value === 'string' && isSafeExpression(value, options)
     },
     range: {
         parse: (options) => parseBounds(options, false),

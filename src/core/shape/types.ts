@@ -31,6 +31,8 @@ export interface Bounds {
 export interface ValidatorOptions {
     oneOf?: JsonValue[];
     pattern?: string;
+    /** The value is itself a regular expression of at most this many characters (1 to `MAX_PATTERN_LENGTH`) that compiles and has no nested quantifier */
+    regex?: number;
     range?: Bounds;
     length?: Bounds;
 }

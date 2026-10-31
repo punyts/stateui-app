@@ -422,6 +422,37 @@ describe('validateNode', () => {
             expect(codes(typed, { value: 'a'.repeat(10000) })).toEqual([]);
         });
 
+        it('should accept a value that is a short, compiling regular expression with the regex validator', () => {
+            const typed = propertyShape({ type: 'string', default: '', validators: { regex: 120 } });
+
+            expect(codes(typed, { value: '^[A-Z]{2}\\d$' })).toEqual([]);
+            expect(codes(typed, { value: 'email' })).toEqual([]);
+            expect(codes(typed, { value: '(a|b)+c' })).toEqual([]);
+            expect(codes(typed, { value: '[(a+)+]' })).toEqual([]);
+            expect(codes(typed, { value: '\\(a+\\)+' })).toEqual([]);
+        });
+
+        it.each(['(', '[a-', '(a+)+', '(a*)*', '(a+){2,}', '((a+)b)*', '(?:a+)+', 'x'.repeat(121)])(
+            'should refuse %s with the regex validator',
+            (value) => {
+                const typed = propertyShape({ type: 'string', default: '', validators: { regex: 120 } });
+
+                expect(codes(typed, { value })).toEqual(['SUI-STATE-INVALID']);
+            }
+        );
+
+        it.each([0, 1.5, 201, 'a', {}])('should reject malformed regex options %j', (options) => {
+            expect(parseCodes({ summary: 'x', properties: { a: { type: 'string', validators: { regex: options } } } })).toEqual([
+                'SUI-BUILD-SHAPE'
+            ]);
+        });
+
+        it('should reject the regex validator on a number', () => {
+            expect(parseCodes({ summary: 'x', properties: { a: { type: 'number', validators: { regex: 10 } } } })).toEqual([
+                'SUI-BUILD-SHAPE'
+            ]);
+        });
+
         it('should check range with both bounds inclusive', () => {
             const typed = propertyShape({ type: 'number', validators: { range: { min: 1, max: 5 } } });
 
