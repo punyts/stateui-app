@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { scanLibrary } from '../core/convention/index.js';
-import type { FileMap, ScannedComponent } from '../core/convention/index.js';
+import { checkComposedExposes, parseComposed, scanLibrary } from '../core/convention/index.js';
+import type { ExposedPath, FileMap, ParsedComposed, ScannedComponent } from '../core/convention/index.js';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import { validateComponentOverlay, validateLocaleOverlay } from '../core/locale/index.js';
@@ -160,6 +160,7 @@ async function compileComponent(
 interface PendingComposed {
     component: ScannedComponent;
     tree: Node;
+    exposes: ExposedPath[];
     size: CatalogSize;
     overlays: ReadOverlay[];
 }
@@ -175,13 +176,12 @@ function libraryOf(entries: readonly ComponentCatalogEntry[]): ComponentLibrary 
 
 /** Checks each overlay of a composed component against the paths of its resolved default tree */
 function checkComposedOverlays(item: PendingComposed, library: ComponentLibrary): BuildError[] {
-    const { exposes: _exposes, ...own } = item.tree as JsonObject;
-    const resolved = resolveNode(own as Node, library, {}, { path: '$' }).node as JsonObject;
+    const resolved = resolveNode(item.tree, library, {}, { path: '$' }).node as JsonObject;
     return item.overlays.flatMap((read) => inFile(validateLocaleOverlay(read.code, read.overlay, resolved, { library, path: '$' }), read.file));
 }
 
-/** Reads a composed file: one JSON object with a `component` name; anything else is a shape error on the file */
-async function readComposed(sourceDir: string, file: string, errors: BuildError[]): Promise<Node | undefined> {
+/** Reads a composed file with `parseComposed`: a JSON tree with a `component` name and a valid `exposes` map; anything else is an error on the file */
+async function readComposed(sourceDir: string, file: string, errors: BuildError[]): Promise<ParsedComposed | undefined> {
     let text: string;
     try {
         text = await readFile(join(sourceDir, file), 'utf8');
@@ -196,12 +196,9 @@ async function readComposed(sourceDir: string, file: string, errors: BuildError[
         errors.push(buildError('SUI-BUILD-SHAPE', { file, name: 'json' }));
         return undefined;
     }
-    const valid = typeof tree === 'object' && tree !== null && !Array.isArray(tree) && typeof (tree as Node).component === 'string';
-    if (!valid) {
-        errors.push(buildError('SUI-BUILD-SHAPE', { file, name: '$' }));
-        return undefined;
-    }
-    return tree as Node;
+    const parsed = parseComposed(tree, file);
+    errors.push(...parsed.errors);
+    return parsed.errors.length > 0 ? undefined : parsed;
 }
 
 /**
@@ -263,14 +260,14 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
                 errors.push(sizeError(component.name, file));
                 continue;
             }
-            const tree = await readComposed(sourceDir, file, errors);
-            if (tree === undefined) continue;
+            const parsed = await readComposed(sourceDir, file, errors);
+            if (parsed?.tree === undefined) continue;
             const overlays: ReadOverlay[] = [];
             for (const [code, localeFile] of Object.entries(component.locales)) {
                 const read = await readOverlay(sourceDir, code, localeFile, errors);
                 if (read !== undefined) overlays.push(read);
             }
-            pending.push({ component, tree, size, overlays });
+            pending.push({ component, tree: parsed.tree, exposes: parsed.exposes, size, overlays });
             continue;
         }
         const compiled = await compileComponent(stateui, sourceDir, component, options, library);
@@ -282,11 +279,16 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
     }
 
     const resolver = libraryOf(entries);
+    const withPending: Record<string, ComponentLibrary[string]> = { ...resolver };
+    for (const item of pending) withPending[item.component.name] = { tier: 'composed', tree: item.tree };
     for (const item of pending) {
-        const problems = checkComposedOverlays(item, resolver);
+        const problems = [
+            ...checkComposedExposes({ tree: item.tree, exposes: item.exposes, errors: [] }, withPending, item.component.files.composed as string),
+            ...checkComposedOverlays(item, resolver)
+        ];
         errors.push(...problems);
         if (problems.length > 0 || item.overlays.length !== Object.keys(item.component.locales).length) continue;
-        entries.push(composedEntry(item.component, item.tree, item.size));
+        entries.push(composedEntry(item.component, item.tree, item.size, item.exposes));
         for (const read of item.overlays) output.set(overlayFileName(item.component.name, read.code), emitOverlay(read.overlay));
     }
 

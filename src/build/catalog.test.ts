@@ -170,14 +170,14 @@ describe('shared and own properties', () => {
 });
 
 describe('composedEntry', () => {
-    it('should keep the default tree and move exposes to the entry', () => {
-        const tree = { component: 'card', body: { component: 'text' }, exposes: { body: 'The body' } } as Node;
+    it('should keep the default tree and list the exposed paths on the entry', () => {
+        const tree = { component: 'card', body: { component: 'text' } } as Node;
 
-        const entry = composedEntry({ ...scanned('panel', 'composed'), tier: 'composed' }, tree, 'composite');
+        const entry = composedEntry({ ...scanned('panel', 'composed'), tier: 'composed' }, tree, 'composite', [{ path: 'body', description: 'The body' }]);
 
         expect(entry).toMatchObject({ name: 'panel', tier: 'composed', size: 'composite', tree: { component: 'card', body: { component: 'text' } } });
         expect('exposes' in (entry.tree as Record<string, unknown>)).toBe(false);
-        expect(entry.exposes).toEqual({ body: 'The body' });
+        expect(entry.exposes).toEqual([{ path: 'body', description: 'The body' }]);
     });
 });
 
@@ -204,7 +204,7 @@ describe('catalog.json from buildLibrary', () => {
             'atoms/one/one.view.html': '<p></p>',
             'atoms/one/one.state.json': SHAPE,
             'atoms/one/one.locale.de.json': '{}',
-            'composites/two/two.composed.json': '{ "component": "one", "exposes": { "x": "y" } }'
+            'composites/two/two.composed.json': '{ "component": "one", "exposes": { "hidden": "Whether it shows" } }'
         });
         const out = await library({});
 
@@ -215,7 +215,7 @@ describe('catalog.json from buildLibrary', () => {
         expect(written).toEqual(JSON.parse(JSON.stringify(result.catalog)));
         expect(written.components.map((entry: { name: string }) => entry.name)).toEqual(['one', 'two']);
         expect(written.components[0]).toMatchObject({ size: 'atom', locales: ['de'] });
-        expect(written.components[1]).toMatchObject({ tier: 'composed', tree: { component: 'one' }, exposes: { x: 'y' } });
+        expect(written.components[1]).toMatchObject({ tier: 'composed', tree: { component: 'one' }, exposes: [{ path: 'hidden', description: 'Whether it shows' }] });
     });
 
     it('should leave out a component whose shape has no summary and report the file', async () => {

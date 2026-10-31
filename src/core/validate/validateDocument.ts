@@ -1,6 +1,7 @@
 import { buildError, isValid } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { checkLimits } from '../limits.js';
+import { checkExposes, EXPOSES_KEY } from '../convention/index.js';
 import { resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary, LibraryEntry } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
@@ -11,7 +12,6 @@ import type { CatalogSource, DocumentValidation, ValidateDocumentOptions } from 
 import { checkTree } from './tree.js';
 
 const APP_PATH = '$.app';
-const EXPOSES = 'exposes';
 
 function isCatalog(source: ComponentLibrary | CatalogSource): source is CatalogSource {
     return Array.isArray((source as { components?: unknown }).components);
@@ -53,12 +53,18 @@ function runChecks(
         if (!isObject(tree) || typeof tree['component'] !== 'string') continue;
         const path = `$.composed.${name}`;
         const own: JsonObject = { ...tree };
-        delete own[EXPOSES];
+        delete own[EXPOSES_KEY];
         const result = resolveNode(own as Node, library, composed, { path });
         errors.push(
             ...result.errors.filter((error) => error.code !== 'SUI-DOC-COMPOSED'),
             ...checkTree(result.node, result.instances, path, library, data, options)
         );
+        if (tree[EXPOSES_KEY] !== undefined) {
+            for (const issue of checkExposes(tree[EXPOSES_KEY], own as Node, library, composed)) {
+                const where = issue.path === '' ? `${path}.${EXPOSES_KEY}` : `${path}.${EXPOSES_KEY}.${issue.path}`;
+                errors.push(buildError('SUI-DOC-EXPOSES', { key: issue.path === '' ? EXPOSES_KEY : issue.path, name: issue.reason, statePath: where }));
+            }
+        }
     }
 
     const context = { document: document as unknown as AppDocument, library, tree: { node: resolved.node, instances: resolved.instances } };

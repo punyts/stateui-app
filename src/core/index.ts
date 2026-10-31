@@ -36,7 +36,16 @@ export type {
     ValidateContext,
     ValidatorOptions
 } from './shape/index.js';
-export { scanLibrary } from './convention/index.js';
+export {
+    checkComposedExposes,
+    checkExposes,
+    exposedPathResolves,
+    EXPOSES_KEY,
+    parseComposed,
+    scanLibrary,
+    withoutExposes
+} from './convention/index.js';
+export type { ExposedPath, ExposesIssue, ParsedComposed } from './convention/index.js';
 export type { ComponentFiles, ComponentTier, FileMap, ScanResult, ScannedComponent } from './convention/index.js';
 export { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks, resolveRowLinks, runtimePath } from './links/index.js';
 export type { ExtractOptions, ExtractResult, Link, LinkStore, ReferenceOptions, RowLinkOptions } from './links/index.js';

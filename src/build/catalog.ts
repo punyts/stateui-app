@@ -4,7 +4,7 @@ import type { BuildError } from '../core/errors/index.js';
 import type { ComponentToken } from '../core/theme/index.js';
 import { typesOf } from '../core/shape/index.js';
 import type { PropertyShape, Shape } from '../core/shape/index.js';
-import type { ScannedComponent } from '../core/convention/index.js';
+import type { ExposedPath, ScannedComponent } from '../core/convention/index.js';
 import type { JsonObject, JsonValue, Node } from '../core/types.js';
 
 /** The size of a component, from the group folder it sits in */
@@ -33,7 +33,7 @@ export interface CatalogSlot {
     row: boolean;
 }
 
-interface EntryBase extends ShapeExtras {
+interface EntryBase {
     name: string;
     tag: string;
     size: CatalogSize;
@@ -44,7 +44,7 @@ interface EntryBase extends ShapeExtras {
 }
 
 /** The catalog entry of a root component */
-export interface RootCatalogEntry extends EntryBase {
+export interface RootCatalogEntry extends EntryBase, ShapeExtras {
     tier: 'root';
     summary: string;
     /** What `validateNode` needs; the server validates a node against it without a DOM */
@@ -62,10 +62,12 @@ export interface RootCatalogEntry extends EntryBase {
     layout: boolean;
 }
 
-/** The catalog entry of a composed component: its default tree, without the `exposes` key */
+/** The catalog entry of a composed component: its default tree, without the `exposes` key, and the exposed paths */
 export interface ComposedCatalogEntry extends EntryBase {
     tier: 'composed';
     tree: Node;
+    /** The override paths that are the component's intended interface, in file order; absent when the file lists none */
+    exposes?: ExposedPath[];
 }
 
 export type ComponentCatalogEntry = RootCatalogEntry | ComposedCatalogEntry;
@@ -217,18 +219,22 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
     };
 }
 
-/** The entry of a composed component; the `exposes` key of its file moves from the tree to the entry */
-export function composedEntry(component: ScannedComponent, tree: Node, size: CatalogSize): ComposedCatalogEntry {
-    const { exposes, ...rest } = tree as JsonObject;
+/** The entry of a composed component: the default tree (no `exposes` key) and the exposed paths from `parseComposed` */
+export function composedEntry(
+    component: ScannedComponent,
+    tree: Node,
+    size: CatalogSize,
+    exposes: readonly ExposedPath[] = []
+): ComposedCatalogEntry {
     return {
         name: component.name,
         tier: 'composed',
         tag: component.tag,
         size,
-        tree: rest as Node,
+        tree,
         locales: Object.keys(component.locales),
         example: { component: component.name },
-        ...extrasOf(exposes === undefined ? {} : { exposes })
+        ...(exposes.length === 0 ? {} : { exposes: exposes.map(({ path, description }) => ({ path, description })) })
     };
 }
 

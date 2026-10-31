@@ -299,8 +299,33 @@ describe('validateDocument', () => {
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.composed.card.width']]);
     });
 
-    it('should accept an exposes key on a document composed entry', () => {
-        const document = doc({ component: 'card' }, { composed: { card: { component: 'panel', exposes: ['title'] } } });
+    it('should accept an exposes map on a document composed entry', () => {
+        const document = doc({ component: 'card' }, { composed: { card: { component: 'panel', exposes: { title: 'The heading', layout: 'How children sit' } } } });
+
+        expect(codes(document)).toEqual([]);
+    });
+
+    it('should report SUI-DOC-EXPOSES for a path that resolves nowhere, with its state path', () => {
+        const document = doc({ component: 'card' }, { composed: { card: { component: 'panel', exposes: { nope: 'Nothing' } } } });
+
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-DOC-EXPOSES', '$.composed.card.exposes.nope']]);
+    });
+
+    it('should report SUI-DOC-EXPOSES for an empty description and for an exposes that is not a map', () => {
+        const empty = doc({ component: 'card' }, { composed: { card: { component: 'panel', exposes: { title: '' } } } });
+        const list = doc({ component: 'card' }, { composed: { card: { component: 'panel', exposes: ['title'] } } });
+
+        expect(validateDocument(empty, LIBRARY).errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-DOC-EXPOSES', '$.composed.card.exposes.title']]);
+        expect(validateDocument(list, LIBRARY).errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-DOC-EXPOSES', '$.composed.card.exposes']]);
+    });
+
+    it('should resolve exposed paths through nested composed entries of the document', () => {
+        const document = doc(
+            { component: 'outer' },
+            { composed: { inner: { component: 'panel', title: 'T' }, outer: { component: 'inner', exposes: { title: 'The heading' } } } }
+        );
 
         expect(codes(document)).toEqual([]);
     });

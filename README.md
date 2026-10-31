@@ -130,6 +130,15 @@ and no DOM.
   components with the same name, including a root and a composed one; both files named), `SUI-BUILD-TIER` (root and
   composed files in one folder) and `SUI-BUILD-MISSING` (a root component without its view or state file).
 
+## Exposed paths of a composed component
+
+`exposes` in a `*.composed.json` (or in a document's `composed` entry) maps an override path to what it changes: `"footer.children.confirm.tone": "Confirm button tone"`. It is the interface the minion reads in `ui_component_get`.
+
+- `parseComposed(json, file)` returns the default tree without `exposes`, the `exposes` list and `SUI-BUILD-SHAPE` or `SUI-BUILD-EXPOSES` errors (an `exposes` that is not an object, a path with an empty segment, a description that is empty or not a string). `checkComposedExposes(parsed, library, file)` then reports each path that resolves nowhere, with the file. `buildLibrary` runs both and a component with an error gets no catalog entry or module.
+- A path resolves when every segment is a key of the resolved default tree (nested composed components are expanded), or when the last segment is a property, slot, `children` or `layout` the nested node's shape declares (`body.children` on a form that has no children yet), or `on` / `on.<event>` for an event the shape declares.
+- A document's `composed` entries are checked the same way by `validateDocument`: `SUI-DOC-EXPOSES` at `$.composed.<name>.exposes.<path>` (or `$.composed.<name>.exposes` when the value is not an object).
+- `checkExposes(exposes, tree, library, composed?)` and `exposedPathResolves(resolved, path, library)` are the shared checks.
+
 ## Resolving a node
 
 `resolveNode(node, library, composed?, { path? })` turns a node into one merged, fully resolved tree. It is pure and
@@ -141,7 +150,7 @@ never throws; problems come back in `errors`.
   another one.
 - Merging is deep and sparse. Arrays are replaced whole; `children` and slot maps merge by key; `null` removes a default
   child or slot node. A node that names a different component replaces the node under it.
-- A composed file's `exposes` key is metadata and never reaches a resolved node.
+- A composed file's `exposes` key is metadata and never reaches a resolved node. A node may still override a path that is not exposed; `exposes` is guidance, not a lock.
 - The document's `composed` entries win over the library; a name that is also a library name is `SUI-DOC-COMPOSED`
   (`checkComposedNames`).
 - A composed component that contains itself through default trees is `SUI-NODE-CYCLE`, with the chain in the message;
@@ -400,7 +409,7 @@ Composed components have no module; `catalog.json` describes them with their def
   `atoms`, `molecules`, `composites` or `composed` parent folder (a component elsewhere is `SUI-BUILD-GROUP`).
   `summary` is the shape's required `summary`. `shape` is what `validateNode` takes, `content` and `slots` list the `_`
   and `node` properties (`map.field` inside map items), and `example` is the component with its required properties and the ones a `requiredWhen` makes required.
-  An entry also carries `shared`, `tokens`, `placement` and `exposes` when the shape declares them. `catalog.json` also
+  An entry also carries `shared`, `tokens`, `placement` and `exposes` when the shape declares them. A composed entry has `tree` (the default tree, never an `exposes` key) and `exposes`: a list of `{ path, description }` in file order, absent when the file lists none. `catalog.json` also
   has a top-level `locales`: every language a built component has an overlay for, sorted. The same result is
   `BuildResult.catalog`.
 - **Locale overlays.** Each `<name>.locale.<code>.json` is checked while building. A root overlay may name only `_`
