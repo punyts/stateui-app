@@ -53,6 +53,23 @@ export const ERROR_CATALOG = {
     'SUI-LOCALE-MISSING': { template: 'Language "{locale}" does not translate {path}', severity: 'warning' },
     'SUI-BUILD-SHAPE': { template: 'Invalid shape file {file}: {name}' },
     'SUI-BUILD-NAME': { template: 'Name "{name}" in {file} is not allowed' },
+    'SUI-BUILD-KEY': { template: 'Unknown key "{key}" at {path} in {file}' },
+    'SUI-BUILD-VALIDATOR': { template: 'Unknown validator "{name}" on property "{key}" in {file}' },
+    'SUI-BUILD-KIND': {
+        template: 'Property "{name}" in {file} must have kind "content" exactly when its name starts with "_"'
+    },
+    'SUI-BUILD-DEFAULT': {
+        template: 'Default of property "{name}" in {file} does not fit its type, allowed values or validators'
+    },
+    'SUI-BUILD-PATTERN': {
+        template: 'Pattern of property "{name}" in {file} is not a valid expression or is over {limit} characters'
+    },
+    'SUI-BUILD-SUMMARY': { template: 'Shape {file} needs a one-line "summary" of at most {limit} characters' },
+    'SUI-BUILD-FILE': { template: 'File {file} is not inside a component folder' },
+    'SUI-BUILD-ROLE': { template: 'File {file} must be named "{name}.<role>" with a known role' },
+    'SUI-BUILD-DUPLICATE': { template: 'Component "{component}" is defined by both {file} and {other}' },
+    'SUI-BUILD-TIER': { template: 'Component "{component}" in {file} mixes root and composed files' },
+    'SUI-BUILD-MISSING': { template: 'Root component "{component}" in {file} needs {name}' },
     'SUI-BUILD-TOKEN': { template: 'CSS in {file} uses "{token}"; components may only use semantic and component tokens' },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' }

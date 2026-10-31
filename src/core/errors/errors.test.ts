@@ -31,7 +31,15 @@ describe('error catalog', () => {
     });
 
     it('includes the sub-codes the specs name', () => {
-        for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST', 'SUI-BUILD-TOKEN']) {
+        for (const code of ['SUI-THEME-NAME', 'SUI-THEME-OVERLAY', 'SUI-THEME-CONTRAST',
+            'SUI-BUILD-TOKEN',
+            'SUI-BUILD-KEY',
+            'SUI-BUILD-VALIDATOR',
+            'SUI-BUILD-KIND',
+            'SUI-BUILD-DEFAULT',
+            'SUI-BUILD-PATTERN',
+            'SUI-BUILD-SUMMARY'
+        ]) {
             expect(CODES).toContain(code);
         }
     });
