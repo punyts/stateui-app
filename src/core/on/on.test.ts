@@ -202,7 +202,7 @@ describe('parseTarget and readEntry', () => {
     });
 
     it('should refuse climbing and odd forms', () => {
-        for (const text of ['..x', '...x', '.', '$.', '$.a..b', 'x', '$row', '^', '^a..b']) {
+        for (const text of ['..x', '...x', '.', '$.', '$.a..b', 'x', '$row.', '$row..x', '^', '^a..b']) {
             expect(parseTarget(text)).toBeUndefined();
         }
     });

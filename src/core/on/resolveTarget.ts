@@ -13,7 +13,7 @@ function walk(start: TreeNode, startPath: string, segments: readonly string[]): 
     let node: TreeNode = start;
     let path = startPath;
 
-    for (const step of segments) {
+    for (const [index, step] of segments.entries()) {
         const next: JsonValue | undefined = isObject(current) && Object.hasOwn(current, step) ? current[step] : undefined;
         if (isNodeValue(current)) {
             if (isNodeValue(next)) {
@@ -22,7 +22,7 @@ function walk(start: TreeNode, startPath: string, segments: readonly string[]): 
             } else if (step === 'children' && isObject(next)) {
                 current = next;
             } else {
-                return { kind: 'property', path, node: current, property: step };
+                return { kind: 'property', path, node: current, property: step, rest: segments.slice(index + 1) };
             }
         } else {
             if (!isNodeValue(next)) return undefined;
@@ -43,16 +43,28 @@ function walk(start: TreeNode, startPath: string, segments: readonly string[]): 
  *   `name`; then the steps below it.
  * - Own subtree: the steps below the node itself.
  * - Absolute: `$.app...` is walked from the root; any other `$.` path is `state` and not checked.
+ * - `$row`: the record of a row template. `rowPath` is the path of the slot's `row` alias (the dispatcher) or any
+ *   marker (the validator); without it the target is outside a row template and does not resolve. The result is
+ *   `state`, so nothing is checked below it
  * - `$parent` needs the command, so it is not resolved here (see `findProvider`); it returns undefined
  *
  * Returns undefined when the ancestor or any step does not exist
  */
-export function resolveTarget(target: ParsedTarget, chain: readonly Frame[], rootPath: string): Located | undefined {
+export function resolveTarget(
+    target: ParsedTarget,
+    chain: readonly Frame[],
+    rootPath: string,
+    rowPath?: string
+): Located | undefined {
     const self = chain[chain.length - 1];
     const root = chain[0];
     if (!self || !root) return undefined;
 
     if (target.form === 'parent') return undefined;
+    if (target.form === 'row') {
+        if (rowPath === undefined) return undefined;
+        return { kind: 'state', path: [rowPath, ...target.segments].join('.') };
+    }
     if (target.form === 'own') return walk(self.node, self.path, target.segments);
 
     if (target.form === 'named') {
@@ -70,6 +82,18 @@ export function resolveTarget(target: ParsedTarget, chain: readonly Frame[], roo
     if (path === rootPath) return walk(root.node, rootPath, []);
     if (!path.startsWith(`${rootPath}.`)) return { kind: 'outside', path };
     return walk(root.node, rootPath, path.slice(rootPath.length + 1).split('.'));
+}
+
+/**
+ * A command aimed at `$row` is handled by the node that owns the row template: the nearest frame of `chain` (the
+ * owner's chain, the owner last) for which `declares` is true
+ */
+export function findRowProvider(chain: readonly Frame[], declares: (frame: Frame) => boolean): Frame | undefined {
+    for (let index = chain.length - 1; index >= 0; index -= 1) {
+        const frame = chain[index] as Frame;
+        if (declares(frame)) return frame;
+    }
+    return undefined;
 }
 
 /** `$parent`: the nearest ancestor (not the node itself) for which `declares` is true */

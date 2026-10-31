@@ -27,6 +27,8 @@ export type ParsedTarget =
     | { form: 'named'; name: string; segments: string[] }
     | { form: 'own'; segments: string[] }
     | { form: 'parent' }
+    /** `$row` or `$row.path`: the record a row template's slot shows */
+    | { form: 'row'; segments: string[] }
     | { form: 'absolute'; segments: string[] };
 
 /** A resolved node */
@@ -49,7 +51,7 @@ export type Located =
     /** A node of the tree */
     | { kind: 'node'; path: string; node: TreeNode }
     /** A property of a node: the node's path, the node and the property name */
-    | { kind: 'property'; path: string; node: TreeNode; property: string }
+    | { kind: 'property'; path: string; node: TreeNode; property: string; rest: string[] }
     /** A path outside `$.app` (`$.data...`, `$.theme...`): there is no node to check */
     | { kind: 'state'; path: string }
     /** A path under `$.app` but outside the validated subtree, which cannot be checked here */

@@ -1,4 +1,6 @@
 import type { BuildError } from '../errors/index.js';
+import type { Frame } from '../on/index.js';
+import type { ComponentLibrary } from '../resolve/index.js';
 import type { Node } from '../types.js';
 
 /** One `<-key` property of a node: the node's `key` becomes an alias of `target` */
@@ -7,7 +9,7 @@ export interface Link {
     statePath: string;
     /** The property name without the `<-` prefix */
     key: string;
-    /** `$.data...`, `$row...`, a node reference (`^name.path`, `.path`) or, once rewritten, a runtime path */
+    /** `$.data...`, `$row...`, a node reference (`^name.path`, `.path`) or a runtime path (`$.runtime...`) */
     target: string;
     /** Set on the `$row.x` links of a slot: a missing field reads as `undefined` instead of failing the link */
     allowMissing?: boolean;
@@ -26,12 +28,25 @@ export interface ExtractResult {
     errors: BuildError[];
 }
 
-export interface ExtractOptions {
+/** What resolving a node reference needs: the shapes, to find the exposed property, and the composed instances */
+export interface ReferenceOptions {
+    /** The components of the document. Without it node references are returned as written and not checked */
+    library?: ComponentLibrary;
+    /** `ResolveResult.instances`: where composed components were expanded, for `^name` references; empty when absent */
+    instances?: Readonly<Record<string, string[]>>;
+    /**
+     * The chain of the node that owns the extracted tree, the owner last. Set for a row template, whose relative
+     * references resolve against its owner and never against the slot's own nodes
+     */
+    owner?: readonly Frame[];
+}
+
+export interface ExtractOptions extends ReferenceOptions {
     /** The state path of the tree's root node; `$.app` when absent */
     path?: string;
 }
 
-export interface RowLinkOptions {
+export interface RowLinkOptions extends ReferenceOptions {
     /** The state path of the row node; the parent of `rowPath` (the slot) when absent */
     path?: string;
 }

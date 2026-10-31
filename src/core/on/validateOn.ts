@@ -1,12 +1,13 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
-import { isNodeValue, isObject } from '../resolve/merge.js';
+import { isObject } from '../resolve/merge.js';
 import type { ComponentLibrary, ResolveResult } from '../resolve/index.js';
+import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
 import { RESERVED_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 import { parseTarget, readCommand, readEntry } from './parse.js';
-import { findProvider, resolveTarget } from './resolveTarget.js';
+import { findProvider, findRowProvider, resolveTarget } from './resolveTarget.js';
 import type { Frame, Located, OnCommand, TreeNode } from './types.js';
 
 const ROOT_PATH = '$.app';
@@ -25,6 +26,20 @@ function shapeOf(library: ComponentLibrary, component: string): Shape | undefine
     return entry?.tier === 'root' ? entry.shape : undefined;
 }
 
+/** The chain of the node holding an `on` entry and, inside a row template, the index of the owning frame */
+interface Scope {
+    chain: readonly Frame[];
+    owner: number | undefined;
+}
+
+/** What stands for the slot's `row` alias while validating: the alias only exists at run time */
+const ROW_MARKER = '$row';
+
+/** The frames `^name.path` and `.path` resolve against: the whole chain, or only up to the owner inside a row template */
+function relativeChain(scope: Scope): readonly Frame[] {
+    return scope.owner === undefined ? scope.chain : scope.chain.slice(0, scope.owner + 1);
+}
+
 /** One check run over a tree whose nodes name root components */
 class OnValidator {
     readonly errors: BuildError[] = [];
@@ -35,7 +50,8 @@ class OnValidator {
         private readonly rootPath: string
     ) {}
 
-    visit(node: TreeNode, path: string, parents: readonly Frame[]): void {
+    /** `owner` is the index in the chain of the node that owns the row template this node is inside, if any */
+    visit(node: TreeNode, path: string, parents: readonly Frame[], owner?: number): void {
         const frame: Frame = {
             path,
             key: path.slice(path.lastIndexOf('.') + 1),
@@ -44,17 +60,10 @@ class OnValidator {
         };
         const chain = [...parents, frame];
 
-        if (Object.hasOwn(node, RESERVED_KEYS.on)) this.checkOn(node[RESERVED_KEYS.on] as JsonValue, chain);
+        if (Object.hasOwn(node, RESERVED_KEYS.on)) this.checkOn(node[RESERVED_KEYS.on] as JsonValue, chain, owner);
 
-        for (const [key, value] of Object.entries(node)) {
-            if (key === RESERVED_KEYS.on) continue;
-            if (key === RESERVED_KEYS.children && isObject(value)) {
-                for (const [childKey, child] of Object.entries(value)) {
-                    if (isNodeValue(child)) this.visit(child, `${path}.${key}.${childKey}`, chain);
-                }
-            } else if (isNodeValue(value)) {
-                this.visit(value, `${path}.${key}`, chain);
-            }
+        for (const child of nodeChildren(node, path, shapeOf(this.library, node.component))) {
+            this.visit(child.node as TreeNode, child.path, chain, child.row ? chain.length - 1 : owner);
         }
     }
 
@@ -68,7 +77,7 @@ class OnValidator {
         this.errors.push(buildError('SUI-ON-TARGET', { target, event, path: self.path, statePath }));
     }
 
-    private checkOn(on: JsonValue, chain: readonly Frame[]): void {
+    private checkOn(on: JsonValue, chain: readonly Frame[], owner: number | undefined): void {
         const self = chain[chain.length - 1] as Frame;
         const onPath = `${self.path}.${RESERVED_KEYS.on}`;
         if (!isObject(on)) {
@@ -93,7 +102,7 @@ class OnValidator {
             const items: JsonValue[] = Array.isArray(entry) ? entry : [entry];
             items.forEach((item, index) => {
                 const itemPath = list ? `${eventPath}.${index}` : eventPath;
-                this.checkCommand(readCommand(item) as OnCommand, event, chain, itemPath);
+                this.checkCommand(readCommand(item) as OnCommand, event, { chain, owner }, itemPath);
             });
         }
     }
@@ -109,27 +118,29 @@ class OnValidator {
         });
     }
 
-    private checkCommand(command: OnCommand, event: string, chain: readonly Frame[], statePath: string): void {
+    private checkCommand(command: OnCommand, event: string, scope: Scope, statePath: string): void {
+        const { chain } = scope;
         if (command.command === 'emit') {
             if (command.target === undefined) this.malformed(statePath);
             return;
         }
         if (command.command === 'set' || command.command === 'toggle') {
-            this.checkWrite(command, event, chain, statePath);
+            this.checkWrite(command, event, scope, statePath);
             return;
         }
-        this.checkComponentCommand(command, event, chain, statePath);
+        this.checkComponentCommand(command, event, scope, statePath);
     }
 
     /** `set` and `toggle` write to a property: they need a target that names one, and `set` needs a value */
-    private checkWrite(command: OnCommand, event: string, chain: readonly Frame[], statePath: string): void {
+    private checkWrite(command: OnCommand, event: string, scope: Scope, statePath: string): void {
+        const { chain } = scope;
         if (command.command === 'set' && !('value' in command)) this.malformed(statePath);
         if (command.target === undefined) {
             this.malformed(statePath);
             return;
         }
 
-        const located = this.locate(command.target, chain);
+        const located = this.locate(command.target, scope);
         const ok =
             located !== undefined &&
             (located.kind === 'state' ||
@@ -138,8 +149,15 @@ class OnValidator {
         if (!ok) this.badTarget(command.target, event, chain, statePath);
     }
 
-    private checkComponentCommand(command: OnCommand, event: string, chain: readonly Frame[], statePath: string): void {
+    private checkComponentCommand(command: OnCommand, event: string, scope: Scope, statePath: string): void {
+        const { chain } = scope;
         const name = command.command;
+        if (command.target !== undefined && parseTarget(command.target)?.form === 'row') {
+            const declares = (frame: Frame): boolean => this.commandsOf(frame.node.component)?.includes(name) === true;
+            const provider = scope.owner === undefined ? undefined : findRowProvider(relativeChain(scope), declares);
+            if (!provider || command.target !== '$row') this.badTarget(command.target, event, chain, statePath);
+            return;
+        }
         if (command.target === '$parent') {
             const provider = findProvider(chain, (frame) => this.commandsOf(frame.node.component)?.includes(name) === true);
             if (!provider) this.badTarget(command.target, event, chain, statePath);
@@ -150,7 +168,7 @@ class OnValidator {
         const located: Located | undefined =
             command.target === undefined
                 ? { kind: 'node', path: self.path, node: self.node }
-                : this.locate(command.target, chain);
+                : this.locate(command.target, scope);
         if (!located || located.kind === 'state' || located.kind === 'property') {
             this.badTarget(command.target ?? '', event, chain, statePath);
             return;
@@ -165,9 +183,12 @@ class OnValidator {
         }
     }
 
-    private locate(text: string, chain: readonly Frame[]): Located | undefined {
+    /** Relative targets inside a row template resolve against the owner's chain; `$row` is legal there only */
+    private locate(text: string, scope: Scope): Located | undefined {
         const parsed = parseTarget(text);
-        return parsed ? resolveTarget(parsed, chain, this.rootPath) : undefined;
+        return parsed
+            ? resolveTarget(parsed, relativeChain(scope), this.rootPath, scope.owner === undefined ? undefined : ROW_MARKER)
+            : undefined;
     }
 
     private commandsOf(component: string): readonly string[] | undefined {

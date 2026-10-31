@@ -48,11 +48,17 @@ export function readEntry(value: unknown): OnCommand[] | undefined {
 }
 
 /**
- * Reads a target text: `^name.path` (named ancestor), `.path` (own subtree), `$parent` and `$.path` (absolute).
+ * Reads a target text: `^name.path` (named ancestor), `.path` (own subtree), `$parent`, `$row` and `$row.path` (the
+ * record of a row template) and `$.path` (absolute).
  * Dot climbing (`..x`), empty steps and any other form return undefined
  */
 export function parseTarget(text: string): ParsedTarget | undefined {
     if (text === '$parent') return { form: 'parent' };
+    if (text === '$row') return { form: 'row', segments: [] };
+    if (text.startsWith('$row.')) {
+        const segments = text.slice(5).split('.');
+        return segments.every((step) => STEP.test(step)) ? { form: 'row', segments } : undefined;
+    }
 
     if (text.startsWith('$.')) {
         const segments = text.slice(2).split('.');

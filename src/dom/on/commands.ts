@@ -1,5 +1,5 @@
 import type { Frame, Located, OnCommand, TreeNode } from '../../core/on/index.js';
-import { findProvider, parseTarget, resolveTarget } from '../../core/on/index.js';
+import { findProvider, findRowProvider, parseTarget, resolveTarget } from '../../core/on/index.js';
 import { cloneJson } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { Shape } from '../../core/shape/index.js';
@@ -22,6 +22,13 @@ export class CommandFailure extends Error {
 /** What a command needs to run */
 export interface CommandContext {
     chain: readonly Frame[];
+    /**
+     * The frames `^name.path` and `.path` resolve against: the chain itself, or inside a row template only the
+     * frames down to the node that owns the template (the slot's own nodes live in the runtime branch)
+     */
+    relative: readonly Frame[];
+    /** The path of the `row` alias of the slot the node sits in; absent outside a row template */
+    rowPath?: string;
     rootPath: string;
     library: ComponentLibrary;
     host: Element;
@@ -38,7 +45,20 @@ function shapeOf(library: ComponentLibrary, component: string): Shape | undefine
 
 function locate(text: string, context: CommandContext): Located | undefined {
     const parsed = parseTarget(text);
-    return parsed ? resolveTarget(parsed, context.chain, context.rootPath) : undefined;
+    return parsed ? resolveTarget(parsed, context.relative, context.rootPath, context.rowPath) : undefined;
+}
+
+function isRowValue(value: JsonValue | undefined): value is string {
+    return typeof value === 'string' && (value === '$row' || value.startsWith('$row.'));
+}
+
+/** A command's `value`: `$row` and `$row.path` are read from the record the slot shows, anything else is as written */
+function valueOf(command: OnCommand, context: CommandContext): JsonValue | undefined {
+    const value = command.value;
+    if (!isRowValue(value)) return value;
+    if (context.rowPath === undefined) throw new CommandFailure(`${value} is used outside a row template`);
+    const read: unknown = context.store.get(`${context.rowPath}${value.slice('$row'.length)}`);
+    return read as JsonValue | undefined;
 }
 
 /** The state path a `set` or `toggle` target writes to; throws when the target names no writable property */
@@ -61,10 +81,24 @@ function write(path: string, value: JsonValue, context: CommandContext): void {
     if (!context.store.set(path, copy as never)) throw new CommandFailure(`the store refused the write to ${path}`);
 }
 
-/** The node a component command acts on: itself, the nearest provider (`$parent`) or the node the target names */
+/**
+ * The node a component command acts on: itself, the nearest provider (`$parent`), the node that owns the row
+ * template (`$row`) or the node the target names
+ */
 function commandTarget(command: OnCommand, context: CommandContext): { path: string; node: TreeNode } {
     const self = context.chain[context.chain.length - 1] as Frame;
     if (command.target === undefined) return self;
+    if (command.target === '$row') {
+        const provider =
+            context.rowPath === undefined
+                ? undefined
+                : findRowProvider(
+                      context.relative,
+                      (frame) => shapeOf(context.library, frame.node.component)?.commands.includes(command.command) === true
+                  );
+        if (!provider) throw new CommandFailure(`no node of the row template's owner provides ${command.command}`, '$row');
+        return provider;
+    }
     if (command.target === '$parent') {
         const provider = findProvider(
             context.chain,
@@ -100,14 +134,17 @@ function runComponentCommand(command: OnCommand, context: CommandContext): void 
     );
     const handler = element?.commands?.[command.command];
     if (typeof handler !== 'function') throw new CommandFailure(`no element at ${path} handles ${command.command}`);
-    handler.call(element?.commands, command.value, context.payload);
+    const row = command.target === '$row' ? context.rowPath : undefined;
+    const value = valueOf(command, context);
+    if (row === undefined) handler.call(element?.commands, value, context.payload);
+    else handler.call(element?.commands, value, context.payload, row);
 }
 
 /** Runs one command; throws when it fails */
 export function runCommand(command: OnCommand, context: CommandContext): void {
     if (command.command === 'set') {
         if (!('value' in command)) throw new CommandFailure('set needs a value');
-        write(writePath(command, context), command.value as JsonValue, context);
+        write(writePath(command, context), valueOf(command, context) as JsonValue, context);
     } else if (command.command === 'toggle') {
         const path = writePath(command, context);
         const current = context.store.get(path);
@@ -115,7 +152,7 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
         write(path, !current, context);
     } else if (command.command === 'emit') {
         if (command.target === undefined) throw new CommandFailure('emit needs an event name');
-        context.emit(command.target, 'value' in command ? command.value : context.payload);
+        context.emit(command.target, 'value' in command ? valueOf(command, context) : context.payload);
     } else {
         runComponentCommand(command, context);
     }

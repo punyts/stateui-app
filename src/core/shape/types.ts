@@ -58,6 +58,8 @@ export interface PropertyShape {
     reflect: boolean;
     /** True when a `node` property (or a node field of a map item) is a row template, where `$row` is legal */
     row: boolean;
+    /** True when the property is a runtime property other nodes may link to by node reference (`^orders.current`) */
+    exposed: boolean;
 }
 
 /** A parsed `*.state.json`: defaults, validation rules and the catalog entry of one component */

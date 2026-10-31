@@ -15,7 +15,8 @@
                         "validators": {},
                         "runtime": false,
                         "reflect": false,
-                        "row": false
+                        "row": false,
+                        "exposed": false
                     }
                 },
                 "events": [],
@@ -70,6 +71,7 @@
                         "runtime": false,
                         "reflect": false,
                         "row": false,
+                        "exposed": false,
                         "default": "Hello",
                         "kind": "content"
                     },
@@ -80,6 +82,7 @@
                         "runtime": false,
                         "reflect": false,
                         "row": false,
+                        "exposed": false,
                         "default": "black"
                     }
                 },

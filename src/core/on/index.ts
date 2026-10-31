@@ -1,4 +1,4 @@
-export { findProvider, resolveTarget } from './resolveTarget.js';
+export { findProvider, findRowProvider, resolveTarget } from './resolveTarget.js';
 export { isSystemCommand, parseTarget, readCommand, readEntry } from './parse.js';
 export { COMMAND_KEYS, SYSTEM_COMMANDS } from './types.js';
 export type { Frame, Located, OnCommand, OnEntry, ParsedTarget, SystemCommand, TreeNode } from './types.js';

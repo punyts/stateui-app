@@ -5,10 +5,12 @@ import type { JsonValue } from '../../core/types.js';
 
 /**
  * What a root component's `commands` object holds for one command: `value` is the command object's `value`
- * (absent when it has none), `payload` is the `detail` of the event that started the list. It throws to fail,
+ * (absent when it has none; `$row` and `$row.path` are already read from the record), `payload` is the `detail`
+ * of the event that started the list, and `row` is the store path of the record when the command was aimed at
+ * `$row` from a row template. It throws to fail,
  * which stops the rest of the list; it is synchronous
  */
-export type CommandHandler = (value: JsonValue | undefined, payload: unknown) => void;
+export type CommandHandler = (value: JsonValue | undefined, payload: unknown, row?: string) => void;
 
 /**
  * The command interface of a root component: the element carries a `commands` object with one function per command

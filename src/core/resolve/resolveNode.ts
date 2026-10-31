@@ -110,9 +110,28 @@ class Resolver {
                 result[key] = children;
             } else if (shape.properties[key]?.type === 'node' && isNodeValue(value)) {
                 result[key] = this.resolve(value, `${path}.${key}`);
+            } else if (typeof shape.properties[key]?.items === 'object' && isObject(value)) {
+                result[key] = this.resolveItems(value, `${path}.${key}`);
             } else {
                 result[key] = value;
             }
+        }
+        return result;
+    }
+
+    /** The node fields of the items of a map (a table column's `cell`) are nodes too: resolve each one */
+    private resolveItems(map: JsonObject, path: string): JsonObject {
+        const result: JsonObject = {};
+        for (const [mapKey, entry] of Object.entries(map)) {
+            if (!isObject(entry)) {
+                result[mapKey] = entry;
+                continue;
+            }
+            const item: JsonObject = {};
+            for (const [field, fieldValue] of Object.entries(entry)) {
+                item[field] = isNodeValue(fieldValue) ? this.resolve(fieldValue, `${path}.${mapKey}.${field}`) : fieldValue;
+            }
+            result[mapKey] = item;
         }
         return result;
     }

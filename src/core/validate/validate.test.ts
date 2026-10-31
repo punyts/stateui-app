@@ -40,6 +40,20 @@ const LIBRARY: ComponentLibrary = {
         tag: 'ui-modal',
         shape: shapeOf({ body: { type: 'node' }, footer: { type: 'node' } }, ['close'], ['open', 'close'])
     },
+    records: {
+        tier: 'root',
+        tag: 'ui-records',
+        shape: shapeOf({
+            title: { type: 'string', default: '' },
+            current: { type: 'any', runtime: true, exposed: true, default: {} },
+            hidden: { type: 'any', runtime: true, default: {} },
+            columns: {
+                type: 'map',
+                items: { cell: { type: 'node', row: true }, plain: { type: 'node' } },
+                default: {}
+            }
+        })
+    },
     list: {
         tier: 'root',
         tag: 'ui-list',
@@ -323,42 +337,85 @@ describe('validateDocument', () => {
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-MISSING', '$.app.children.a']]);
     });
 
-    it('should accept a node reference to a property of a sibling', () => {
+    it('should accept a node reference to an exposed runtime property', () => {
         const document = doc({
             component: 'panel',
-            children: { a: { component: 'text', label: 'x' }, b: { component: 'text', '<-label': '^app.children.a.label' } }
+            children: {
+                orders: { component: 'records' },
+                detail: { component: 'text', '<-label': '^app.children.orders.current.customer' }
+            }
         });
 
         expect(codes(document)).toEqual([]);
     });
 
-    it('should report SUI-LINK-MISSING for a node reference to a property the component lacks', () => {
-        const document = doc({
-            component: 'panel',
-            children: { a: { component: 'text' }, b: { component: 'text', '<-label': '^app.children.a.nope' } }
-        });
-
-        expect(codes(document)).toEqual(['SUI-LINK-MISSING']);
-    });
-
-    it('should report SUI-LINK-CYCLE for two links that point at each other', () => {
+    it('should report SUI-LINK-MISSING for a node reference to a property that is not exposed', () => {
         const document = doc({
             component: 'panel',
             children: {
-                a: { component: 'text', '<-label': '^app.children.b.label' },
-                b: { component: 'text', '<-label': '^app.children.a.label' }
+                a: { component: 'records' },
+                b: { component: 'text', '<-label': '^app.children.a.nope' },
+                c: { component: 'text', '<-label': '^app.children.a.hidden' },
+                d: { component: 'text', '<-label': '^app.children.a.title' }
             }
         });
 
         const errors = validateDocument(document, LIBRARY).errors;
 
-        expect(errors.map((error) => error.code)).toEqual(['SUI-LINK-CYCLE']);
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LINK-MISSING', '$.app.children.b'],
+            ['SUI-LINK-MISSING', '$.app.children.c'],
+            ['SUI-LINK-MISSING', '$.app.children.d']
+        ]);
     });
 
-    it('should report SUI-LINK-CYCLE for a link to its own property', () => {
-        const document = doc({ component: 'text', '<-label': '.label' });
+    it('should report SUI-LINK-TARGET for climbing and absolute app targets', () => {
+        const document = doc({
+            component: 'panel',
+            children: {
+                a: { component: 'text', '<-label': '..x' },
+                b: { component: 'text', '<-label': '$.app.children.a.label' }
+            }
+        });
 
-        expect(codes(document)).toEqual(['SUI-LINK-CYCLE']);
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LINK-TARGET', '$.app.children.a'],
+            ['SUI-LINK-TARGET', '$.app.children.b']
+        ]);
+    });
+
+    it('should validate a node field of a map item and resolve its node reference against the owner', () => {
+        const document = doc({
+            component: 'panel',
+            children: {
+                orders: {
+                    component: 'records',
+                    columns: {
+                        status: {
+                            cell: { component: 'text', '<-label': '$row.status', '<-_value': '^orders.current.status' }
+                        },
+                        bad: { cell: { component: 'text', nope: 1 } }
+                    }
+                }
+            }
+        });
+
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-STATE-UNKNOWN', '$.app.children.orders.columns.bad.cell.nope']
+        ]);
+    });
+
+    it('should report $row in a map-item node field that is not a row template', () => {
+        const document = doc({
+            component: 'panel',
+            children: { orders: { component: 'records', columns: { x: { plain: { component: 'text', '<-label': '$row.a' } } } } }
+        });
+
+        expect(codes(document)).toEqual(['SUI-LINK-ROW', 'SUI-LINK-ROW']);
     });
 
     it('should report SUI-ON-EVENT from the on validator', () => {

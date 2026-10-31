@@ -17,11 +17,13 @@ export {
     parseShape,
     reflectedProperties,
     typesOf,
+    nodeChildren,
     validateNode
 } from './shape/index.js';
 export type {
     Bounds,
     KeyRule,
+    NodeChild,
     PropertyShape,
     PropertyType,
     RequiredWhen,
@@ -34,7 +36,7 @@ export type {
 export { scanLibrary } from './convention/index.js';
 export type { ComponentFiles, ComponentTier, FileMap, ScanResult, ScannedComponent } from './convention/index.js';
 export { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks, resolveRowLinks, runtimePath } from './links/index.js';
-export type { ExtractOptions, ExtractResult, Link, LinkStore, RowLinkOptions } from './links/index.js';
+export type { ExtractOptions, ExtractResult, Link, LinkStore, ReferenceOptions, RowLinkOptions } from './links/index.js';
 export { checkComposedNames, cloneJson, mergeValues, resolveNode } from './resolve/index.js';
 export type {
     ComponentLibrary,
@@ -51,6 +53,7 @@ export {
     COMMAND_KEYS,
     SYSTEM_COMMANDS,
     findProvider,
+    findRowProvider,
     isSystemCommand,
     parseTarget,
     readCommand,

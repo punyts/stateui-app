@@ -250,12 +250,20 @@ export const PROPERTY_KEYS: readonly KeyRule<PropertyDraft>[] = [
         rule(value, draft) {
             draft.row = value === true;
         }
+    },
+    {
+        name: 'exposed',
+        type: 'boolean',
+        required: false,
+        rule(value, draft) {
+            draft.exposed = value === true;
+        }
     }
 ];
 
 const NOT_REFLECTED: readonly PropertyType[] = ['node', 'array', 'object', 'map', 'any'];
 
-/** The checks that need the whole property: its type decides whether `items`, `runtime`, `reflect` and `row` fit */
+/** The checks that need the whole property: its type decides whether `items`, `runtime`, `reflect`, `row` and `exposed` fit */
 function checkCombination(draft: PropertyDraft, where: string, context: RuleContext): void {
     if (!draft.typeSet) return;
     const types = typesOf(draft);
@@ -266,6 +274,7 @@ function checkCombination(draft: PropertyDraft, where: string, context: RuleCont
     if (draft.row && !types.includes('node')) problem('row');
     if (draft.reflect && (context.nested || types.some((type) => NOT_REFLECTED.includes(type)))) problem('reflect');
     if (draft.runtime && (context.nested || draft.default === undefined || draft.required)) problem('runtime');
+    if (draft.exposed && !draft.runtime) problem('exposed');
 }
 
 function readProperty(name: string, input: JsonValue, context: RuleContext): PropertyShape | undefined {
@@ -286,6 +295,7 @@ function readProperty(name: string, input: JsonValue, context: RuleContext): Pro
         runtime: false,
         reflect: false,
         row: false,
+        exposed: false,
         typeSet: false
     };
     applyKeys(PROPERTY_KEYS, asObject(input), draft, { ...context, where });

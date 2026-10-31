@@ -5,12 +5,14 @@ import { readEntry } from '../../core/on/index.js';
 import type { Frame, TreeNode } from '../../core/on/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
+import { runtimePath } from '../../core/links/index.js';
 import { RESERVED_KEYS } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import type { CommandContext } from './commands.js';
 import type { Dispatcher, DispatcherOptions } from './types.js';
 
 const DEFAULT_ROOT = '$.app';
+const RUNTIME_NODES = '$.runtime.nodes.';
 
 
 /** The names of the events every root component of the library declares */
@@ -78,6 +80,37 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         return last?.path === path ? chain : undefined;
     }
 
+    /**
+     * The frames of a node in the runtime branch (a record-view slot or a table cell): the node that owns it, found
+     * as the longest proper prefix of its app path that is a node of `$.app`, and then the runtime nodes below it.
+     * `owner` is the owner's chain; `rowPath` is the `row` alias of the nearest slot at or above the node
+     */
+    function runtimeChain(path: string): { chain: Frame[]; owner: Frame[]; rowPath?: string } | undefined {
+        let candidate = `$.${path.slice(RUNTIME_NODES.length)}`;
+        let owner: Frame[] | undefined;
+        while (owner === undefined && candidate.includes('.')) {
+            candidate = candidate.slice(0, candidate.lastIndexOf('.'));
+            owner = chainTo(candidate);
+        }
+        const last = owner?.[owner.length - 1];
+        if (!owner || !last) return undefined;
+
+        const base = runtimePath(last.path);
+        const steps = path.slice(base.length + 1).split('.');
+        const below: Frame[] = [];
+        let current = base;
+        for (const step of steps) {
+            current = `${current}.${step}`;
+            const value: unknown = store.get(current);
+            if (!isNodeValue(value)) continue;
+            below.push({ path: current, key: step, node: value as TreeNode, instances: [] });
+        }
+        if (below[below.length - 1]?.path !== path) return undefined;
+
+        const slot = [...below].reverse().find((frame) => store.get(`${frame.path}.row`) !== undefined);
+        return { chain: [...owner, ...below], owner, ...(slot ? { rowPath: `${slot.path}.row` } : {}) };
+    }
+
     function fail(statePath: string, error: BuildError, reason: string): void {
         report.error(error.message, { code: error.code, state: statePath, reason });
         try {
@@ -90,7 +123,9 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     function handle(event: Event): void {
         const raised = raisedBy(event, componentTags);
         if (!raised) return;
-        const chain = chainTo(raised.path);
+        const inRuntime = raised.path.startsWith(RUNTIME_NODES);
+        const found = inRuntime ? runtimeChain(raised.path) : undefined;
+        const chain = inRuntime ? found?.chain : chainTo(raised.path);
         const self = chain?.[chain.length - 1];
         if (!chain || !self) return;
 
@@ -108,6 +143,8 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
 
         const context: CommandContext = {
             chain,
+            relative: found?.owner ?? chain,
+            ...(found?.rowPath === undefined ? {} : { rowPath: found.rowPath }),
             rootPath,
             library,
             host,
