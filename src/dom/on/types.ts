@@ -2,7 +2,25 @@ import type { Store } from '@punyts/state';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
-import type { TransferFile } from '../../runtime/fileTransfer.js';
+import type { FileProgress, TransferFile } from '../../runtime/fileTransfer.js';
+import type { FileReference } from '../../runtime/messages.js';
+
+/** The event a component raises to hand a file to the host's `transferFile` hook; a controller cannot reach the hooks, so the dispatcher answers it. Bubbles and is composed */
+export const FILE_TRANSFER_EVENT = 'ui-file-transfer';
+
+/**
+ * The `detail` of `ui-file-transfer`. The dispatcher calls `respond` once, synchronously, with the promise
+ * `hooks.transferFile` returns, and stops the event. When the host gives no hook `respond` is never called, so a component
+ * treats an event that comes back unanswered as a transfer that cannot be made
+ */
+export interface FileTransferRequest {
+    readonly file: File;
+    /** Called for each progress report of the host */
+    readonly onProgress?: (progress: FileProgress) => void;
+    /** Aborting it cancels the transfer */
+    readonly signal?: AbortSignal;
+    respond(result: Promise<FileReference>): void;
+}
 
 /**
  * What a root component's `commands` object holds for one command: `value` is the command object's `value`

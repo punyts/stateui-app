@@ -9,7 +9,8 @@ import { runtimePath } from '../../core/links/index.js';
 import { RESERVED_KEYS } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import type { CommandContext } from './commands.js';
-import type { Dispatcher, DispatcherOptions } from './types.js';
+import { FILE_TRANSFER_EVENT } from './types.js';
+import type { Dispatcher, DispatcherOptions, FileTransferRequest } from './types.js';
 
 const DEFAULT_ROOT = '$.app';
 const RUNTIME_NODES = '$.runtime.nodes.';
@@ -29,6 +30,12 @@ function tags(library: ComponentLibrary): Set<string> {
     const result = new Set<string>();
     for (const entry of Object.values(library)) if (entry.tier === 'root') result.add(entry.tag);
     return result;
+}
+
+function isFileTransfer(value: unknown): value is FileTransferRequest {
+    if (typeof value !== 'object' || value === null) return false;
+    const request = value as Partial<FileTransferRequest>;
+    return request.file instanceof File && typeof request.respond === 'function';
 }
 
 /** The element that raised the event: the first one on its path that is a library component with a scope */
@@ -187,11 +194,27 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         }
     }
 
+    /** Answers `ui-file-transfer` with the host's `transferFile` hook; without one the event is left unanswered */
+    function transfer(event: Event): void {
+        const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
+        if (!isFileTransfer(request) || !hooks?.transferFile) return;
+        event.stopPropagation();
+        const { file, onProgress, signal } = request;
+        request.respond(
+            hooks.transferFile(file, {
+                ...(onProgress === undefined ? {} : { onProgress }),
+                ...(signal === undefined ? {} : { signal })
+            })
+        );
+    }
+
     for (const name of names) host.addEventListener(name, handle, true);
+    host.addEventListener(FILE_TRANSFER_EVENT, transfer);
 
     return {
         dispose(): void {
             for (const name of names) host.removeEventListener(name, handle, true);
+            host.removeEventListener(FILE_TRANSFER_EVENT, transfer);
         }
     };
 }

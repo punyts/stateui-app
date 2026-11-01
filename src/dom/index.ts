@@ -1,5 +1,5 @@
-export { createDispatcher } from './on/index.js';
-export type { CommandElement, CommandHandler, DispatchHooks, Dispatcher, DispatcherOptions } from './on/index.js';
+export { FILE_TRANSFER_EVENT, createDispatcher } from './on/index.js';
+export type { CommandElement, CommandHandler, DispatchHooks, Dispatcher, DispatcherOptions, FileTransferRequest } from './on/index.js';
 export { createNodeLocale, registerLocaleStep, switchLocale } from './locale/index.js';
 export type { LocaleStepHandle, LocaleStore, NodeLocale, NodeLocaleOptions, NodeLocaleStore } from './locale/index.js';
 export { generateSharedSheet } from './articulation/index.js';

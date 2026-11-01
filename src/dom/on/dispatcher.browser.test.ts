@@ -367,3 +367,69 @@ describe('on dispatch in Chromium', () => {
         expect(store.get('$.data.x')).toBe(0);
     });
 });
+
+describe('ui-file-transfer in Chromium', () => {
+    const reference = { id: 'f1', name: 'a.txt', size: 1, type: 'text/plain' };
+
+    afterEach(() => {
+        setNodeResolver(undefined);
+        for (const host of Array.from(document.body.children)) unmount(host);
+        document.body.replaceChildren();
+    });
+
+    function request(onProgress?: () => void, signal?: AbortSignal) {
+        const respond = vi.fn<(result: Promise<unknown>) => void>();
+        const file = new File(['a'], 'a.txt', { type: 'text/plain' });
+        const detail = { file, respond, ...(onProgress ? { onProgress } : {}), ...(signal ? { signal } : {}) };
+        return { respond, file, detail };
+    }
+
+    it('should hand the file, the progress callback and the signal to hooks.transferFile and respond with its promise', async () => {
+        // Arrange
+        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const transferFile = vi.fn(() => Promise.resolve(reference));
+        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, transferFile } });
+        const onProgress = vi.fn();
+        const controller = new AbortController();
+        const { respond, file, detail } = request(onProgress, controller.signal);
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-transfer', detail);
+
+        // Assert
+        expect(transferFile).toHaveBeenCalledWith(file, { onProgress, signal: controller.signal });
+        expect(respond).toHaveBeenCalledTimes(1);
+        await expect(respond.mock.calls[0]?.[0]).resolves.toEqual(reference);
+        dispatcher.dispose();
+    });
+
+    it('should leave the request unanswered when the host gives no transferFile hook', () => {
+        // Arrange
+        const { element } = mountApp(panel({ b: { component: 'button' } }));
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-transfer', detail);
+
+        // Assert
+        expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a detail that is not a file request and stop listening after dispose', () => {
+        // Arrange
+        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const transferFile = vi.fn(() => Promise.resolve(reference));
+        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { transferFile } });
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-transfer', { file: 'no', respond });
+        second.dispose();
+        raise(element('$.app.children.b'), 'ui-file-transfer', detail);
+
+        // Assert
+        expect(transferFile).not.toHaveBeenCalled();
+        expect(respond).not.toHaveBeenCalled();
+        dispatcher.dispose();
+    });
+});
