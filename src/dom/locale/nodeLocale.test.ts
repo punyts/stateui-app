@@ -204,6 +204,26 @@ describe('createNodeLocale', () => {
         expect(JSON.stringify(overlays)).not.toContain('note');
     });
 
+    it('should not record a node shown through a store link and leave the nodes behind the link alone on a switch', () => {
+        // Arrange
+        const { store, overlays, switchTo } = setup();
+        store.set('$.runtime', { pool: {} });
+        store.link('$.app.children.slots', '$.runtime.pool');
+        switchTo('de');
+
+        // Act
+        store.set('$.runtime.pool.0', { component: 'text', _text: 'Text (de)' });
+        store.set('$.runtime.pool.1', { component: 'text', _text: 'Text (de)' });
+        switchTo('en');
+        switchTo('de');
+
+        // Assert
+        expect(JSON.stringify(overlays)).not.toContain('slots');
+        expect(JSON.stringify(overlays)).not.toContain('pool');
+        expect(store.get('$.runtime.pool.0.component')).toBe('text');
+        expect(store.get('$.runtime.pool.1.component')).toBe('text');
+    });
+
     it('should stop listening when the returned function is called', () => {
         // Arrange
         const { store, overlays, stop } = setup();

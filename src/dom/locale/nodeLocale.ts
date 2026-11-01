@@ -79,6 +79,19 @@ function isEmpty(value: JsonObject): boolean {
     return Object.keys(value).length === 0;
 }
 
+/**
+ * Whether an event at `path` reports a value that lives somewhere else: a store link (alias) shows it at `path`, and
+ * the value of the event is a proxy of the resolved path. Such a node belongs to whatever owns the target (a record
+ * view's pooled slots are shown under the view's `slots` property but live under `$.runtime`) and is not a node of
+ * `$.app`: recording it would put a path that is not in `$.app` into the overlays, and a switch of language applying
+ * that overlay through the alias would overwrite the owner's nodes
+ */
+function isAlias(path: string, value: unknown): boolean {
+    if (value === null || typeof value !== 'object') return false;
+    const resolved = (value as { __path?: unknown }).__path;
+    return typeof resolved === 'string' && resolved !== path;
+}
+
 function holdsNode(value: JsonValue): boolean {
     if (isNodeValue(value)) return true;
     if (Array.isArray(value)) return false;
@@ -211,6 +224,7 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
 
     const listener: StoreListener = (path, value, _oldValue, action) => {
         if (applying) return;
+        if (action !== 'delete' && isAlias(path, value)) return;
         if (action === 'delete') {
             prepared.delete(path);
             forget(path);
