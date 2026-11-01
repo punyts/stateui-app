@@ -184,18 +184,24 @@ function scanOn(value: JsonValue, path: string, walk: Walk): void {
     }
 }
 
-/** Looks for `$row` links and `on` entries in a value that has no shape here, such as a nested node */
-function scanGeneric(value: JsonValue, path: string, walk: Walk): void {
+/**
+ * Looks for `$row` links and `on` entries in a value that has no shape here. A node is read only at its own level:
+ * a node below it (a row template in its slot) is left to the tree walk, which checks it against its own shape and
+ * knows whether it is a row template. `insideNode` is true once a node has been entered
+ */
+function scanGeneric(value: JsonValue, path: string, walk: Walk, insideNode = false): void {
     if (Array.isArray(value)) {
-        value.forEach((entry, index) => scanGeneric(entry, `${path}.${index}`, walk));
+        value.forEach((entry, index) => scanGeneric(entry, `${path}.${index}`, walk, insideNode));
     } else if (isObject(value)) {
+        const isNode = typeof value[RESERVED_KEYS.component] === 'string';
+        if (isNode && insideNode) return;
         for (const [key, entry] of Object.entries(value)) {
             if (key === RESERVED_KEYS.children) continue;
             const child = `${path}.${key}`;
             if (key === RESERVED_KEYS.on) scanOn(entry, child, walk);
             else if (key.startsWith(PREFIXES.link)) {
                 if (isRowReference(entry)) reportRow(walk, entry, child);
-            } else scanGeneric(entry, child, walk);
+            } else scanGeneric(entry, child, walk, insideNode || isNode);
         }
     }
 }

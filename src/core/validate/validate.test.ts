@@ -336,6 +336,28 @@ describe('validateDocument', () => {
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-ROW', '$.app.<-_value']]);
     });
 
+    it('should accept $row links in a row template of a list that sits directly in a node slot', () => {
+        const list = { component: 'list', row: { component: 'text', '<-_value': '$row.name' } };
+
+        expect(codes(doc({ component: 'modal', body: list }))).toEqual([]);
+        expect(codes(doc({ component: 'modal', body: { component: 'panel', children: { list } } }))).toEqual([]);
+    });
+
+    it('should report $row outside a row template once for a node that sits directly in a node slot', () => {
+        const errors = validateDocument(doc({ component: 'modal', body: { component: 'text', '<-_value': '$row.name' } }), LIBRARY).errors;
+
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-ROW', '$.app.body.<-_value']]);
+    });
+
+    it('should report $row outside a row template that sits beside a list in a node slot', () => {
+        const list = { component: 'list', row: { component: 'text', '<-_value': '$row.name' } };
+        const document = doc({ component: 'modal', body: list, footer: { component: 'text', '<-_value': '$row.name' } });
+
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-ROW', '$.app.footer.<-_value']]);
+    });
+
     it('should report SUI-LINK-TARGET for a link target that is not allowed', () => {
         const errors = validateDocument(doc({ component: 'text', '<-_value': '$.theme.x' }), LIBRARY).errors;
 
@@ -440,7 +462,9 @@ describe('validateDocument', () => {
             children: { orders: { component: 'records', columns: { x: { plain: { component: 'text', '<-label': '$row.a' } } } } }
         });
 
-        expect(codes(document)).toEqual(['SUI-LINK-ROW', 'SUI-LINK-ROW']);
+        expect(validateDocument(document, LIBRARY).errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LINK-ROW', '$.app.children.orders.columns.x.plain.<-label']
+        ]);
     });
 
     it('should report SUI-ON-EVENT from the on validator', () => {

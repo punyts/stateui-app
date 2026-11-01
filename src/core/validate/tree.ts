@@ -40,10 +40,23 @@ class TreeChecker {
         private readonly options: ValidateDocumentOptions
     ) {}
 
+    /**
+     * `validateNode` also reads the first level of each node in a slot, which the walk then checks itself, so a
+     * `$row` error it has already reported at the same path is left out
+     */
+    private addNodeErrors(found: BuildError[]): void {
+        for (const error of found) {
+            const seen =
+                error.code === 'SUI-LINK-ROW' &&
+                this.errors.some((known) => known.code === error.code && known.statePath === error.statePath);
+            if (!seen) this.errors.push(error);
+        }
+    }
+
     /** Checks every node against its shape; `insideRow` is true inside a `row: true` slot, where `$row` is legal */
     visit(node: Node, path: string, insideRow: boolean): void {
         const shape = shapeOf(this.library, node.component);
-        if (shape) this.errors.push(...validateNode(shape, withoutRuntimeDefaults(shape, node), path, { ...this.options, insideRow }));
+        if (shape) this.addNodeErrors(validateNode(shape, withoutRuntimeDefaults(shape, node), path, { ...this.options, insideRow }));
         for (const child of nodeChildren(node, path, shape)) {
             if (child.accepts !== undefined && !child.accepts.includes(child.node.component)) {
                 this.errors.push(

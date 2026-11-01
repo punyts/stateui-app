@@ -2,6 +2,7 @@ import { report } from '@punyts/core';
 import { defineComponent } from '@punyts/stateui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
+import { applyLinks, runtimePath, resolveRowLinks } from '../../core/index.js';
 import { parseShape } from '../../core/shape/index.js';
 import { DEFAULT_TOKENS } from '../../core/theme/index.js';
 import type { Shape } from '../../core/shape/index.js';
@@ -36,6 +37,16 @@ const library: ComponentLibrary = {
         tag: 'x-mount-records',
         shape: shapeOf({ title: { type: 'string', default: '' }, row: { type: 'node', row: true } })
     },
+    rows: {
+        tier: 'root',
+        tag: 'x-mount-rows',
+        shape: shapeOf({ row: { type: 'node', row: true }, slots: { type: 'any', runtime: true, default: {} } })
+    },
+    shell: {
+        tier: 'root',
+        tag: 'x-mount-shell',
+        shape: shapeOf({ body: { type: 'node' } })
+    },
     greeting: {
         tier: 'composed',
         tree: { component: 'label', text: 'Hello' }
@@ -48,6 +59,11 @@ defineComponent({
 });
 defineComponent({ tag: 'x-mount-label', template: '<p>{{ $.text }}</p>' });
 defineComponent({ tag: 'x-mount-button', template: '<b>button</b>' });
+defineComponent({
+    tag: 'x-mount-rows',
+    template: '<sui-node repeat="{{ $k,$i,$v in $.slots }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
+});
+defineComponent({ tag: 'x-mount-shell', template: '<sui-node state=".body"></sui-node>' });
 defineComponent({ tag: 'x-mount-records', template: '<i>{{ $.title }}</i>' });
 
 /** Every text node below `root`, crossing shadow roots */
@@ -315,5 +331,44 @@ describe('mountApp in Chromium', () => {
         expect(app.errors).toEqual([]);
         expect(template?.['<-text']).toBe('$row.name');
         expect(app.store?.get('$.app.title')).toBe('Ada');
+    });
+
+    it('should render the rows of a list whose row template has $row links and sits directly in a node slot', () => {
+        // Arrange
+        const host = freshHost();
+        const doc: AppDocument = {
+            data: { records: [{ name: 'Ada' }, { name: 'Grace' }, { name: 'Lin' }] },
+            app: { component: 'shell', body: { component: 'rows', row: { component: 'label', '<-text': '$row.name' } } } as AppDocument['app']
+        };
+
+        // Act
+        const remove = registerMountStep('rows', {
+            start: ({ store }) => {
+                const template = store.get<Record<string, unknown>>('$.app.body.row');
+                const pool = `${runtimePath('$.app.body')}.slots`;
+                const segments = pool.split('.');
+                for (let length = 3; length <= segments.length; length++) {
+                    const prefix = segments.slice(0, length).join('.');
+                    if (store.get(prefix) === undefined) store.set(prefix, {});
+                }
+                [0, 1, 2].forEach((index) => {
+                    const path = `${pool}.${index}`;
+                    const rewritten = resolveRowLinks(template as never, `${path}.row`, { path });
+                    store.set(path, rewritten.tree);
+                    store.link(`${path}.row`, `$.data.records.${index}`);
+                    expect(applyLinks(store, rewritten.links)).toEqual([]);
+                });
+                store.delete('$.app.body.slots');
+                store.link('$.app.body.slots', pool);
+            }
+        });
+        const app = start(host, doc);
+        remove();
+
+        // Assert
+        expect(app.errors).toEqual([]);
+        expect(textOf(host)).toContain('Ada');
+        expect(textOf(host)).toContain('Grace');
+        expect(textOf(host)).toContain('Lin');
     });
 });
