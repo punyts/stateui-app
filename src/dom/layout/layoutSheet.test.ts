@@ -42,6 +42,18 @@ describe('generateLayoutSheet', () => {
         expect(sheet).toContain('[layout-gap="none"] {\n    gap: 0;\n}');
     });
 
+    it('should keep the items that do not grow at their width in a row with a growing item', () => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet('row');
+
+        // Assert
+        expect(sheet).toContain(
+            '[layout=row]:has(> sui-node > [grow]:not([grow="0"])) > sui-node > :is(:not([grow]), [grow="0"]) {\n    flex-shrink: 0;\n}'
+        );
+        expect(sheet).toContain('[layout=row] > sui-node > [grow]:not([grow="0"]) {\n    min-width: 0;\n}');
+        expect(generateLayoutSheet('column')).not.toContain('flex-shrink');
+    });
+
     it('should draw grid columns from --layout-cols', () => {
         // Arrange and Act
         const sheet = generateLayoutSheet('grid');

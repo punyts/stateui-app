@@ -103,6 +103,8 @@ A component whose shape sets `"layout": true` marks the element that holds its c
 
 **Breakpoints.** `BREAKPOINTS` is `sm` 480, `md` 768, `lg` 1024 and `xl` 1280 px of container width. A `grid`, `row` or `region` with `collapseBelow` stacks its children as one column in key order when its container is narrower than that width; without `collapseBelow` it never collapses. A container query cannot restyle its own container, so the sheet makes the component host `display: block; container-type: inline-size` and the queries restyle the `layout-host` inside it. The width compared is the host's content box, so the host's own padding is not counted. A nested layout host responds to its own component host's width.
 
+**Shrinking.** In a `row` with at least one growing item (`grow` 1 or more), the growing items take the squeeze when the row runs short of space and the other items keep their content width, so a label, a badge or an amount beside a growing text is never cut. A `row` with no growing item shrinks every item, as plain flex does.
+
 Limits: `grow` has rules for whole numbers 0 to 12 only; `adhoc` placement (`x`, `y`, `width`, `height`) uses typed `attr()`, so it needs a browser that supports it (Chromium 133 and later), and the `adhoc` container needs its own height because its children are absolutely positioned; empty tracks of a `region` layout still take the gap.
 
 ## Convention scan

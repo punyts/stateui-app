@@ -58,6 +58,20 @@ function growRules(type: LayoutType): string[] {
     return Array.from({ length: max + 1 }, (_, grow) => block(item(type, `grow="${grow}"`), [`flex-grow: ${grow}`]));
 }
 
+/**
+ * In a row with a growing item (`grow` 1 or more), the growing items take the squeeze when space runs short and the
+ * others keep their content width, so a label or an amount beside a growing text is never cut. A row without a
+ * growing item shrinks every item, as plain flex does
+ */
+function rowShrinkRules(): string[] {
+    const growing = '[grow]:not([grow="0"])';
+    const row = `[layout=row]:has(> sui-node > ${growing})`;
+    return [
+        block(`${row} > sui-node > :is(:not([grow]), [grow="0"])`, ['flex-shrink: 0']),
+        block(`[layout=row] > sui-node > ${growing}`, ['min-width: 0'])
+    ];
+}
+
 /** `[col="1"]` through `[col="12"]` and the other integer fields of a grid */
 function gridPlacementRules(): string[] {
     const rules: string[] = [];
@@ -118,7 +132,8 @@ export function generateLayoutSheet(type: LayoutType): string {
                 block(container(type, 'wrap'), ['flex-wrap: wrap']),
                 ...alignRules(type),
                 ...gapRules(type),
-                ...growRules(type)
+                ...growRules(type),
+                ...rowShrinkRules()
             );
             break;
         case 'grid':

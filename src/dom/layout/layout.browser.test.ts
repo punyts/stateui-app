@@ -28,6 +28,7 @@ const TEMPLATE =
 
 defineComponent({ tag: 'x-lay-panel', template: TEMPLATE, styles: withSheets('') });
 defineComponent({ tag: 'x-lay-padded', template: TEMPLATE, styles: withSheets(':host { padding: 100px; }') });
+defineComponent({ tag: 'x-lay-word', template: '<span>{{ $.text }}</span>', styles: ':host { display: block; overflow-wrap: anywhere; }' });
 defineComponent({ tag: 'x-lay-box', template: '<i>box</i>', styles: ':host { display: block; min-width: 40px; height: 20px; }' });
 
 const panelShape = { properties: { children: { type: 'map', items: 'string', default: {} } }, layout: true };
@@ -35,7 +36,8 @@ const panelShape = { properties: { children: { type: 'map', items: 'string', def
 const library: ComponentLibrary = {
     panel: { tier: 'root', tag: 'x-lay-panel', shape: shapeOf(panelShape) },
     padded: { tier: 'root', tag: 'x-lay-padded', shape: shapeOf(panelShape) },
-    box: { tier: 'root', tag: 'x-lay-box', shape: shapeOf({ properties: {} }) }
+    box: { tier: 'root', tag: 'x-lay-box', shape: shapeOf({ properties: {} }) },
+    word: { tier: 'root', tag: 'x-lay-word', shape: shapeOf({ properties: { text: { type: 'string', default: '' } } }) }
 };
 
 type Children = Record<string, unknown>;
@@ -113,6 +115,36 @@ describe('layout sheets in Chromium', () => {
             expect(new Set(rects.map((r) => r.top)).size).toBe(1);
             expect(rects.map((r) => r.left)).toEqual([...rects.map((r) => r.left)].sort((a, b) => a - b));
             expect(rect(boxes()[1] as Element).width).toBeGreaterThan(300);
+        });
+
+        it('should squeeze the growing items of a narrow row and keep the others at their width', () => {
+            // Arrange
+            const label = { component: 'word', text: '#1234' };
+            const name = { component: 'word', text: 'A customer name that is far too long for the row', placement: { grow: 1 } };
+            const wide = start(panel({ type: 'row' }, { label }), 600);
+            const labelWidth = rect(findAll(host, 'x-lay-word')[0] as Element).width;
+            wide.app.dispose();
+            document.body.replaceChildren();
+            host = document.body.appendChild(document.createElement('div'));
+
+            // Act
+            start(panel({ type: 'row' }, { label, name, end: box() }), 160);
+            const [labelRect, nameRect] = findAll(host, 'x-lay-word').map(rect);
+
+            // Assert
+            expect(labelRect?.width).toBeCloseTo(labelWidth, 0);
+            expect(nameRect?.width).toBeLessThan(160 - labelWidth - 40 + 1);
+            expect(rect(findAll(host, 'x-lay-box')[0] as Element).width).toBe(40);
+        });
+
+        it('should still shrink every item of a row with no growing item', () => {
+            // Arrange and Act
+            const text = 'A sentence that is much wider than the row';
+            start(panel({ type: 'row' }, { a: { component: 'word', text }, b: { component: 'word', text } }), 160);
+            const rects = findAll(host, 'x-lay-word').map(rect);
+
+            // Assert
+            expect((rects[0]?.width ?? 0) + (rects[1]?.width ?? 0)).toBeLessThanOrEqual(160);
         });
 
         it('should wrap a row only when wrap is set', () => {
