@@ -152,8 +152,11 @@ never throws; problems come back in `errors`.
   tree; its values address nested nodes by path, such as `footer.children.confirm._title`.
 - Every nested node (`children` and node-typed slots) is resolved the same way, so a composed component can contain
   another one.
-- Merging is deep and sparse. Arrays are replaced whole; `children` and slot maps merge by key; `null` removes a default
-  child or slot node. A node that names a different component replaces the node under it.
+- Merging is deep and sparse. Arrays are replaced whole; `children`, slot maps and the entries of a keyed `map`
+  property (a table's `columns`) merge by key; `null` removes a default child, slot node or `map` entry
+  (`children.table.columns.actions: null`). Where the shape does not make the place a `map` property, `null` is a value
+  and stays one: a nullable property, `$.data`, or a `map` property set to `null` as a whole. A node that names a
+  different component replaces the node under it.
 - A composed file's `exposes` key is metadata and never reaches a resolved node. A node may still override a path that is not exposed; `exposes` is guidance, not a lock.
 - The document's `composed` entries win over the library; a name that is also a library name is `SUI-DOC-COMPOSED`
   (`checkComposedNames`).

@@ -64,6 +64,12 @@ class Resolver {
         private readonly composed: DocumentComposed
     ) {}
 
+    /** The shape of a root component; a composed one has none until it is expanded */
+    private readonly shapeOf = (component: string): Shape | undefined => {
+        const entry = lookup(component, this.library, this.composed);
+        return entry?.tier === 'root' ? entry.shape : undefined;
+    };
+
     /** `names` are the composed components expanded so far at this path */
     resolve(node: JsonValue, path: string, names: readonly string[] = []): JsonValue {
         if (!isNodeValue(node)) {
@@ -92,14 +98,14 @@ class Resolver {
         delete tree[EXPOSES];
         const overrides: JsonObject = { ...node };
         delete overrides[RESERVED_KEYS.component];
-        const merged = mergeValues(tree, overrides);
+        const merged = mergeValues(tree, overrides, false, this.shapeOf);
         const chain = [...names, name];
         this.instances[path] = chain;
         return this.resolve(merged, path, chain);
     }
 
     private resolveRoot(node: Node, shape: Shape, path: string): JsonValue {
-        const merged = mergeValues(buildDefaults(shape), node) as JsonObject;
+        const merged = mergeValues(buildDefaults(shape), node, false, this.shapeOf, shape) as JsonObject;
         const result: JsonObject = {};
         for (const [key, value] of Object.entries(merged)) {
             if (key === RESERVED_KEYS.children && isObject(value)) {

@@ -40,6 +40,21 @@ const LIBRARY: ComponentLibrary = {
         tier: 'composed',
         tree: { component: 'confirmDialog', _title: 'Delete it?', footer: { children: { cancel: null } } }
     },
+    grid: {
+        tier: 'root',
+        tag: 'ui-grid',
+        shape: shapeOf({
+            columns: { type: 'map', items: { _title: { type: 'string', kind: 'content', default: '' } }, default: {} },
+            note: { type: 'any', default: 'x' }
+        })
+    },
+    gridPage: {
+        tier: 'composed',
+        tree: {
+            component: 'toolbar',
+            children: { table: { component: 'grid', columns: { name: { _title: 'Name' }, actions: { _title: 'Actions' } } } }
+        }
+    },
     loopA: { tier: 'composed', tree: { component: 'toolbar', children: { inner: { component: 'loopB' } } } },
     loopB: { tier: 'composed', tree: { component: 'toolbar', children: { inner: { component: 'loopA' } } } }
 };
@@ -202,6 +217,51 @@ describe('resolveNode', () => {
         expect(JSON.stringify(node)).toBe(nodeCopy);
         expect(JSON.stringify(composed)).toBe(composedCopy);
         expect(JSON.stringify(LIBRARY)).toBe(libraryCopy);
+    });
+});
+
+describe('null in a map property', () => {
+    it('should remove an entry of a map property of a nested node in a composed override', () => {
+        const result = resolve({ component: 'gridPage', children: { table: { columns: { actions: null } } } });
+
+        expect(result.errors).toEqual([]);
+        expect(result.node).toEqual({
+            component: 'toolbar',
+            align: 'start',
+            children: { table: { component: 'grid', columns: { name: { _title: 'Name' } }, note: 'x' } }
+        });
+    });
+
+    it('should remove an entry of a map property of a root node, and ignore one that is not there', () => {
+        const result = resolve({ component: 'grid', columns: { gone: null, kept: { _title: 'K' } } });
+
+        expect(result.node).toEqual({ component: 'grid', columns: { kept: { _title: 'K' } }, note: 'x' });
+    });
+
+    it('should remove an entry through a composed component inside a composed component', () => {
+        const result = resolve(
+            { component: 'outerPage', children: { table: { columns: { actions: null } } } },
+            { outerPage: { component: 'gridPage' } }
+        );
+
+        expect(result.node).toMatchObject({ children: { table: { columns: { name: { _title: 'Name' } } } } });
+        expect(JSON.stringify(result.node)).not.toContain('actions');
+    });
+
+    it('should keep a null that is a value: a nullable property and a map set to null as a whole', () => {
+        const nullable = resolve({ component: 'gridPage', children: { table: { note: null } } });
+        const whole = resolve({ component: 'gridPage', children: { table: { columns: null } } });
+
+        expect(nullable.node).toMatchObject({ children: { table: { note: null } } });
+        expect(whole.node).toMatchObject({ children: { table: { columns: null } } });
+    });
+
+    it('should keep a null in a property that is not a map, even when it is an object', () => {
+        const merged = mergeValues({ component: 'grid', note: { a: 1 } }, { note: { a: null } }, false, (name) =>
+            name === 'grid' ? (LIBRARY['grid'] as { shape: Shape }).shape : undefined
+        );
+
+        expect(merged).toEqual({ component: 'grid', note: { a: null } });
     });
 });
 

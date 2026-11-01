@@ -76,6 +76,17 @@ const LIBRARY: ComponentLibrary = {
     }
 };
 
+const ORDERS_LIBRARY: ComponentLibrary = {
+    ...LIBRARY,
+    ordersTable: {
+        tier: 'composed',
+        tree: {
+            component: 'panel',
+            children: { table: { component: 'records', columns: { status: { plain: { component: 'text' } }, actions: { plain: { component: 'text' } } } } }
+        }
+    }
+};
+
 const registered: (() => void)[] = [];
 
 afterEach(() => {
@@ -356,6 +367,20 @@ describe('validateDocument', () => {
         const errors = validateDocument(document, LIBRARY).errors;
 
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-ROW', '$.app.footer.<-_value']]);
+    });
+
+    it('should accept null that removes an entry of a map property in a composed override', () => {
+        const document = doc({ component: 'panel', children: { c: { component: 'ordersTable', children: { table: { columns: { actions: null } } } } } });
+
+        expect(validateDocument(document, ORDERS_LIBRARY)).toEqual({ valid: true, errors: [] });
+    });
+
+    it('should still report a null that is a value of a property that does not allow it', () => {
+        const document = doc({ component: 'panel', children: { c: { component: 'ordersTable', children: { table: { title: null } } } } });
+
+        expect(validateDocument(document, ORDERS_LIBRARY).errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-STATE-INVALID', '$.app.children.c.children.table.title']
+        ]);
     });
 
     it('should report SUI-LINK-TARGET for a link target that is not allowed', () => {
