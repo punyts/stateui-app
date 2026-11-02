@@ -52,7 +52,9 @@ describe('error catalog', () => {
             'SUI-RUN-ICON',
             'SUI-RUN-WRITE',
             'SUI-LINK-ROW',
-            'SUI-LINK-TARGET'
+            'SUI-LINK-TARGET',
+            'SUI-LINK-SERVER',
+            'SUI-DOC-SERVER'
         ]) {
             expect(CODES).toContain(code);
         }

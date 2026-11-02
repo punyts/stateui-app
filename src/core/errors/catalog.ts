@@ -28,6 +28,9 @@ export const ERROR_CATALOG = {
     'SUI-DOC-COMPOSED': { template: 'Composed component "{name}" at {path} uses a reserved library name' },
     'SUI-DOC-EXPOSES': { template: 'Exposed path "{key}" of a composed entry {name}' },
     'SUI-DOC-TYPE': { template: 'Document key "{key}" at {path} has the wrong type' },
+    'SUI-DOC-SERVER': {
+        template: 'The document uses {target} at {path}; $.server needs Full mode, and the app runs in {name} mode'
+    },
     'SUI-DOC-VALIDATOR': { template: 'Validator "{name}" failed while checking the document' },
     'SUI-DOC-ORDER': { template: 'Key "{key}" at {path} is integer-like and would be reordered; use a prefixed key' },
     'SUI-DOC-LIMIT-NODES': { template: 'The document has {actual} nodes; the limit is {limit}' },
@@ -61,6 +64,9 @@ export const ERROR_CATALOG = {
     },
     'SUI-LINK-TARGET': {
         template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, or be a node reference (^name.path or .path)'
+    },
+    'SUI-LINK-SERVER': {
+        template: 'Link "{key}" at {path} has target {target}; $.server is server-only and never reaches the browser'
     },
     'SUI-LINK-CYCLE': { template: 'Link at {path} loops back through {target}' },
     'SUI-ON-EVENT': { template: 'Component "{component}" at {path} has no event "{event}"' },

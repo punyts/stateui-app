@@ -91,7 +91,8 @@ export type {
     DocumentValidation,
     DocumentValidationContext,
     DocumentValidator,
-    ValidateDocumentOptions
+    ValidateDocumentOptions,
+    AppMode
 } from './validate/index.js';
 export {
     DEFAULT_LEAVES,

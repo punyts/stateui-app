@@ -121,3 +121,26 @@ export function dataPathExists(data: JsonValue | undefined, target: string): boo
     }
     return true;
 }
+
+/** A value naming `$.server` or a path below it: a link or `on` target, a path in a command value */
+const SERVER_PATH = /^\$\.server(\.|$)/;
+
+/**
+ * Every string of the document that names `$.server` or a path below it, as `SUI-DOC-SERVER`. Only an app server
+ * (Full mode) has a `$.server` branch, so a Standalone or Persisted app may not use one
+ */
+export function checkServerUse(document: Record<string, JsonValue>, mode: string): BuildError[] {
+    const errors: BuildError[] = [];
+    const stack: { value: JsonValue; path: string }[] = Object.entries(document).map(([key, value]) => ({ value, path: `$.${key}` }));
+    while (stack.length > 0) {
+        const { value, path } = stack.pop() as { value: JsonValue; path: string };
+        if (typeof value === 'string') {
+            if (SERVER_PATH.test(value)) errors.push(buildError('SUI-DOC-SERVER', { target: value, name: mode, path, statePath: path }));
+        } else if (Array.isArray(value)) {
+            value.forEach((item, index) => stack.push({ value: item, path: `${path}.${index}` }));
+        } else if (isObject(value)) {
+            for (const [key, item] of Object.entries(value)) stack.push({ value: item, path: `${path}.${key}` });
+        }
+    }
+    return errors.sort((a, b) => (a.statePath as string).localeCompare(b.statePath as string));
+}

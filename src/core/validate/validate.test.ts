@@ -762,3 +762,50 @@ describe('validateDocument child components', () => {
         expect(result.errors.map((error) => error.code)).toEqual(['SUI-NODE-CHILD']);
     });
 });
+
+describe('validateDocument $.server', () => {
+    const usesServer = doc({
+        component: 'panel',
+        children: {
+            save: { component: 'button', on: { press: [{ command: 'set', target: '$.server.token', value: 'x' }] } },
+            name: { component: 'text', _value: 'A $.server mention in text is fine' }
+        }
+    });
+
+    it('should refuse a link into $.server in every mode', () => {
+        const document = doc({ component: 'text', '<-_value': '$.server.apiKey' });
+
+        const results = [undefined, 'full', 'standalone'].map((mode) =>
+            validateDocument(document, LIBRARY, mode === undefined ? {} : { mode: mode as 'full' | 'standalone' })
+        );
+
+        for (const result of results) {
+            expect(result.valid).toBe(false);
+            expect(result.errors.map((error) => error.code)).toContain('SUI-LINK-SERVER');
+        }
+        expect(results[0]?.errors[0]?.message).toContain('$.server.apiKey');
+    });
+
+    it('should refuse a document that uses $.server in Standalone and Persisted mode', () => {
+        for (const mode of ['standalone', 'persisted'] as const) {
+            const result = validateDocument(usesServer, LIBRARY, { mode });
+
+            expect(result.valid).toBe(false);
+            expect(result.errors.filter((error) => error.code === 'SUI-DOC-SERVER')).toEqual([
+                expect.objectContaining({ statePath: '$.app.children.save.on.press.0.target' })
+            ]);
+            expect(result.errors.find((error) => error.code === 'SUI-DOC-SERVER')?.message).toContain(`${mode} mode`);
+        }
+    });
+
+    it('should allow a document that uses $.server in Full mode and without a mode', () => {
+        expect(codes(usesServer)).not.toContain('SUI-DOC-SERVER');
+        expect(validateDocument(usesServer, LIBRARY, { mode: 'full' }).errors.map((error) => error.code)).not.toContain('SUI-DOC-SERVER');
+    });
+
+    it('should accept a Standalone document that does not use $.server', () => {
+        const document = doc({ component: 'text', '<-_value': '$.data.serverName' }, { data: { serverName: '$.serverless' } });
+
+        expect(validateDocument(document, LIBRARY, { mode: 'standalone' })).toEqual({ valid: true, errors: [] });
+    });
+});

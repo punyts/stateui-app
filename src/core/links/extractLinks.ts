@@ -15,6 +15,8 @@ const SEGMENT = '[A-Za-z0-9_-]+';
 const DATA_TARGET = new RegExp(`^\\$\\.data(\\.${SEGMENT})*$`);
 const ROW_TARGET = new RegExp(`^\\$row(\\.${SEGMENT})*$`);
 const NODE_REFERENCE = new RegExp(`^(\\^${SEGMENT}|)(\\.${SEGMENT})+$`);
+/** `$.server` and the paths below it: server-only, so never a link target */
+const SERVER_TARGET = /^\$\.server(\.|$)/;
 
 /** True for a target a link may have: `$.data`, `$row`, or a node reference (`^name.path`, `.path`) */
 function isLinkTarget(target: string): boolean {
@@ -99,6 +101,10 @@ class Extractor {
     private record(path: string, key: string, target: JsonValue): void {
         if (key === '') {
             this.errors.push(buildError('SUI-NODE-NAME', { name: PREFIXES.link, path, statePath: path }));
+            return;
+        }
+        if (typeof target === 'string' && SERVER_TARGET.test(target)) {
+            this.errors.push(buildError('SUI-LINK-SERVER', { key, target, path, statePath: path }));
             return;
         }
         if (typeof target !== 'string' || !isLinkTarget(target)) {

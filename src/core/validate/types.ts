@@ -26,7 +26,16 @@ export interface ValidateDocumentOptions {
      * lower-case letters, digits and `-` is accepted
      */
     isIconName?(name: string): boolean;
+    /**
+     * How the app keeps its state. In `standalone` and `persisted` mode there is no app server, so a document that
+     * names `$.server` anywhere is refused (`SUI-DOC-SERVER`); `full` and absent allow it. A link into `$.server` is
+     * refused in every mode (`SUI-LINK-SERVER`)
+     */
+    mode?: AppMode;
 }
+
+/** How an app keeps its state: browser only, the statenet without server logic, or an app server */
+export type AppMode = 'standalone' | 'persisted' | 'full';
 
 /** What a plug-in validator receives: the document whose own checks passed far enough to resolve `app` */
 export interface DocumentValidationContext {

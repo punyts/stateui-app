@@ -176,8 +176,8 @@ store alias (`store.link`) of its target, so reads, writes and change events fol
 - **`extractLinks(resolvedTree, { path? })`** returns `{ tree, links, linkedPaths, errors }`. `links` holds
   `{ statePath, key, target }` for every `<-key` (in nodes and in nested objects such as map items; `on` entries are
   skipped), `tree` is a copy without them. A target must start with `$.data` or `$row`, or be a node reference
-  (`^name.path`, `.path`) to an exposed runtime property; anything else is `SUI-LINK-TARGET`, an empty key is
-  `SUI-NODE-NAME`. `linkedPaths` lists every linked property path (`statePath.key`); locale overlays and the live-state
+  (`^name.path`, `.path`) to an exposed runtime property; `$.server` or a path below it is `SUI-LINK-SERVER`
+  (server-only), anything else is `SUI-LINK-TARGET`, an empty key is `SUI-NODE-NAME`. `linkedPaths` lists every linked property path (`statePath.key`); locale overlays and the live-state
   snapshot exclude them.
 - **Node references.** `^name.path` (nearest ancestor, the node itself included, named `name` or an instance of composed
   component `name`) and `.path` (own subtree) may be a link target when the property they reach is `exposed` in that
@@ -240,7 +240,10 @@ exported so the runtime dispatcher uses the same rules.
 `validateDocument(document, catalog, options?)` runs every structural check without a DOM and returns
 `{ valid, errors }`. `catalog` is a `ComponentLibrary` or the content of `catalog.json` (`libraryFromCatalog` converts
 it). `valid` ignores warnings. The function never throws; every error carries a state path (`$` when it concerns the
-whole document). `options.isIconName` checks icon names against the server's `icons.json`.
+whole document). `options.isIconName` checks icon names against the server's `icons.json`. `options.mode` (`standalone`,
+`persisted` or `full`) says how the app keeps its state: in `standalone` and `persisted` mode there is no app server, so
+every string of the document that names `$.server` or a path below it (an `on` target, a command value) is
+`SUI-DOC-SERVER`; `full` or no mode allows it.
 
 Order of checks:
 

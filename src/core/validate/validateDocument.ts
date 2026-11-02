@@ -6,7 +6,7 @@ import { resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary, LibraryEntry } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
 import type { AppDocument, JsonObject, JsonValue, Node } from '../types.js';
-import { checkOrderedKeys, checkRoot } from './document.js';
+import { checkOrderedKeys, checkRoot, checkServerUse } from './document.js';
 import { documentValidators } from './registry.js';
 import type { CatalogSource, DocumentValidation, ValidateDocumentOptions } from './types.js';
 import { checkTree } from './tree.js';
@@ -50,6 +50,7 @@ function runChecks(
     options: ValidateDocumentOptions
 ): BuildError[] {
     const errors: BuildError[] = [...checkRoot(document), ...checkOrderedKeys(document)];
+    if (options.mode === 'standalone' || options.mode === 'persisted') errors.push(...checkServerUse(document, options.mode));
     const app = document['app'];
     if (!isObject(app) || typeof app['component'] !== 'string') return errors;
 

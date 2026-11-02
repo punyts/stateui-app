@@ -1,6 +1,7 @@
 export { documentValidators, registerDocumentValidator } from './registry.js';
 export { libraryFromCatalog, validateDocument } from './validateDocument.js';
 export type {
+    AppMode,
     CatalogComponent,
     CatalogSource,
     DocumentValidation,

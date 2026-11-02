@@ -51,6 +51,14 @@ describe('extractLinks', () => {
         expect(links[0]?.statePath).toBe('$.composed.x');
     });
 
+    it('rejects a target in $.server as server-only', () => {
+        const result = extractLinks({ component: 'x', '<-a': '$.server', '<-b': '$.server.apiKey' });
+
+        expect(result.links).toEqual([]);
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-LINK-SERVER', 'SUI-LINK-SERVER']);
+        expect(result.errors[1]?.message).toContain('server-only');
+    });
+
     it('rejects a target outside $.data, $row and node references', () => {
         const result = extractLinks({
             component: 'x',
