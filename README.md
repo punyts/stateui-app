@@ -383,6 +383,17 @@ message.
 - The function returns what the store holds now; it does not know which values the user changed. The host loads the
   result over the document, so values equal to the document's are harmless.
 
+## Sync modes and offline use
+
+An app is mounted in a mode (`MountOptions.mode`, the `load` message's `mode`): `standalone` (the browser store is the
+authority), `persisted` (a statenet is) or `full` (an app server with server logic is). The runtime itself has no
+network: the host runs the `@punyts/state-sync` client, writes the authority's changes in with `write` and sends the
+runtime's `change` messages on. `$.runtime.sync` holds `{ mode, status, waiting }`, with `status` one of
+`standalone`, `connecting`, `online` and `offline` and `waiting` the number of changes not yet acknowledged, so a
+linked component can show "Offline – 3 changes waiting". A change the authority rejects comes back as the
+`sync.rejected` app event with `{ path, reason }`, handled by an `on` entry of the root node. `$.server` is
+server-only: a link into it is `SUI-LINK-SERVER`, and outside `full` mode any mention of it is `SUI-DOC-SERVER`.
+
 ## Preview runtime and message protocol
 
 Code is in `src/runtime/`. `protocol` holds the closed set of messages and the validator; `startRuntime` is the code that runs inside the preview iframe (E7.1).
