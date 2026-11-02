@@ -1,9 +1,10 @@
 import { report } from '@punyts/core';
+import { SYNC_ORIGIN, captureChanges } from '@punyts/state-sync';
+import type { Capture, Change } from '@punyts/state-sync';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
 import type { ComponentOverlays } from '../core/locale/index.js';
-import { snapshotState } from '../core/snapshot/index.js';
 import { buildOverlayCatalog } from '../core/theme/index.js';
 import type { ThemeOverlays } from '../core/theme/index.js';
 import { PREFIXES } from '../core/types.js';
@@ -19,6 +20,7 @@ import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
 import type {
     CommandMessage,
+    EventMessage,
     FileProgressMessage,
     FileResultMessage,
     IconsMap,
@@ -28,7 +30,7 @@ import type {
     OutboundMessage,
     PathWrite,
     ProtocolError,
-    StateSnapshotData,
+    RuntimeChange,
     ThemeMessage,
     WriteMessage
 } from './messages.js';
@@ -37,7 +39,6 @@ import { validateMessage } from './validate.js';
 
 const STEP_NAME = 'runtime-load';
 const ICONS_PATH = '$.runtime.icons';
-const WATCHED = ['$.data', '$.data.$all', '$.app', '$.app.$all'];
 const DATA_ROOT = '$.data';
 /** The runtime posts at most this many errors in its life, so a failing app cannot flood the host */
 const MAX_POSTED_ERRORS = 200;
@@ -99,6 +100,9 @@ function truncate(text: string): string {
     return text.length > MAX_ERROR_TEXT ? text.slice(0, MAX_ERROR_TEXT) : text;
 }
 
+/** Writes from the host are sync writes: the store tags their events, so capture does not post them back */
+const SYNC_WRITE = { origin: SYNC_ORIGIN };
+
 function protocolError(error: BuildError): ProtocolError {
     const result: ProtocolError = { code: error.code, message: truncate(error.message) };
     if (error.severity) result.severity = error.severity;
@@ -141,22 +145,25 @@ function applyArticulation(store: { get(path: string): unknown; set(path: string
  * `event.source === parent` (pass `window.parent`), it passes `validateMessage` and its `nonce` is `nonce`; anything
  * else is dropped and counted (`stats()`).
  *
- * - `load` mounts the application with `mountApp` (a running one is disposed first), puts the state snapshot over it
- *   and writes the `icons` map to `$.runtime.icons` before the first render, then posts `ready`. A document that does
- *   not mount posts `error` with the errors and no `ready`.
- * - `write` sets or removes the paths below `$.data` and `$.app` (a changed `component` re-renders only that node
- *   through `<sui-node>`), merges its `icons` into `$.runtime.icons`, and posts `snapshot`.
+ * - `load` mounts the application with `mountApp` in the message's `mode` (a running one is disposed first), puts the
+ *   state over it and writes the `icons` map to `$.runtime.icons` before the first render, then posts `ready`. A
+ *   document that does not mount posts `error` with the errors and no `ready`.
+ * - `write` sets or removes paths of the synced branches (`$.data`, `$.app`, `$.theme`, `$.locale`; a changed
+ *   `component` re-renders only that node through `<sui-node>`) and of the sync status `$.runtime.sync`, as sync
+ *   writes: they post no `change`. It merges its `icons` into `$.runtime.icons`.
+ * - `event` raises an app event (`sync.rejected`): the root node's `on` entry for it runs with the payload.
  * - `ping` is answered with `pong`.
  * - `command` runs a component command with the runner the dispatcher uses for `on` (`target` is a `$.app` node path;
  *   the system commands `set`, `toggle` and `emit` are refused). `locale` applies a language overlay (`switchLocale`,
  *   from the document's `locales` and `options.componentOverlays`) and leaves `$.data` alone. `theme` applies the
  *   overlay `name` of `kind` (`applyOverlay`: the shipped overlays and the document's `themes`). A failure posts
- *   `error` and changes nothing. With no application mounted these three are counted as `unhandled`.
+ *   `error` and changes nothing. With no application mounted these, `write` and `event` are counted as `unhandled`.
  *
- * It posts `snapshot` (also when the user changes `$.data` or articulation, only when it differs from the last one),
- * `emit` from the dispatcher hook and `error` for validation and runtime errors. A snapshot is built with
- * `snapshotState` and leaves out links, `$.runtime`, content, runtime articulation and the value of `inputType:
- * "password"` fields (and the data such a field is linked to). The host throttles snapshots.
+ * It posts one `change` for each change of the store that is not a host write (`captureChanges` of
+ * `@punyts/state-sync`: a user's typing, a controller, a command), batched to a microtask and folded; `$.runtime`,
+ * `$.server` and link aliases make none. The value of an `inputType: "password"` field (and the data such a field is
+ * linked to) never leaves the frame: such a change is not posted, and it is cut out of the value of a change above it.
+ * It posts `emit` from the dispatcher hook and `error` for validation and runtime errors.
  *
  * Posting uses the target origin `*`: a frame sandboxed without `allow-same-origin` has an opaque origin, and the
  * nonce is what the host checks
@@ -170,12 +177,10 @@ export function startRuntime(
 ): RuntimeHandle {
     const dropped: DroppedCounts = { invalid: 0, unknown: 0, oversized: 0, unhandled: 0, foreign: 0 };
     let mounted: MountedApp | undefined;
-    let watching: { store: NonNullable<MountedApp['store']>; listener: () => void } | undefined;
+    let capture: Capture | undefined;
     const localeStep = registerLocaleStep(options.componentOverlays ?? {});
     let themeOverlays: ThemeOverlays = buildOverlayCatalog(undefined).overlays;
     let passwordData = new Set<string>();
-    let lastSnapshot = '';
-    let scheduled = false;
     let postedErrors = 0;
     let disposed = false;
 
@@ -206,46 +211,50 @@ export function startRuntime(
         post({ type: 'error', errors: list });
     }
 
-    function snapshot(): StateSnapshotData | undefined {
-        const store = mounted?.store;
-        if (!store) return undefined;
-        return snapshotState(store, {
-            exclude: (path) => {
-                if (passwordData.has(path)) return true;
-                if (!path.startsWith('$.app.') || !path.endsWith('.value')) return false;
-                const owner: unknown = store.get(path.slice(0, path.lastIndexOf('.')));
-                return isRecord(owner) && owner['inputType'] === 'password';
+    /** A password field's value, or the data such a field is linked to */
+    function isSecret(store: NonNullable<MountedApp['store']>, path: string): boolean {
+        if (passwordData.has(path)) return true;
+        if (!path.startsWith('$.app.') || !path.endsWith('.value')) return false;
+        const owner: unknown = store.get(path.slice(0, path.lastIndexOf('.')));
+        return isRecord(owner) && owner['inputType'] === 'password';
+    }
+
+    /** A copy of the value without the secrets below `path` */
+    function withoutSecrets(store: NonNullable<MountedApp['store']>, path: string, value: JsonValue): JsonValue {
+        if (Array.isArray(value)) return value.map((item, index) => withoutSecrets(store, `${path}.${index}`, item));
+        if (!isRecord(value)) return value;
+        const kept: Record<string, JsonValue> = {};
+        for (const [key, item] of Object.entries(value)) {
+            const child = `${path}.${key}`;
+            if (!isSecret(store, child)) kept[key] = withoutSecrets(store, child, item as JsonValue);
+        }
+        return kept;
+    }
+
+    /** The change as posted: no base (the host's sync client gives it one), no secrets; undefined when it is one */
+    function postable(store: NonNullable<MountedApp['store']>, change: Change): RuntimeChange | undefined {
+        if (isSecret(store, change.path)) return undefined;
+        const { id, path, op } = change;
+        return change.value === undefined ? { id, path, op } : { id, path, op, value: withoutSecrets(store, path, change.value) };
+    }
+
+    function startCapture(store: NonNullable<MountedApp['store']>): void {
+        capture = captureChanges(store, {
+            base: () => 0,
+            onChanges(changes) {
+                if (disposed) return;
+                for (const change of changes) {
+                    const kept = postable(store, change);
+                    if (kept) post({ type: 'change', change: kept });
+                }
             }
         });
     }
 
-    function postSnapshot(): void {
-        const current = snapshot();
-        if (!current) return;
-        lastSnapshot = JSON.stringify(current);
-        post({ type: 'snapshot', ...current });
-    }
-
-    /** Store-driven changes (typing, controllers) post a snapshot once per tick, and only when it changed */
-    function scheduleSnapshot(): void {
-        if (scheduled) return;
-        scheduled = true;
-        queueMicrotask(() => {
-            scheduled = false;
-            if (disposed) return;
-            const current = snapshot();
-            if (current && JSON.stringify(current) !== lastSnapshot) postSnapshot();
-        });
-    }
-
-    function unwatch(): void {
-        if (watching) watching.store.off(WATCHED, watching.listener);
-        watching = undefined;
-    }
-
     function teardown(): void {
         files.cancelAll();
-        unwatch();
+        capture?.stop();
+        capture = undefined;
         mounted?.dispose();
         mounted = undefined;
     }
@@ -256,7 +265,6 @@ export function startRuntime(
 
     function load(message: LoadMessage): void {
         teardown();
-        lastSnapshot = '';
         passwordData = passwordDataPaths(message.document);
         themeOverlays = buildOverlayCatalog(message.document.themes).overlays;
         const unregister = registerMountStep(STEP_NAME, {
@@ -271,16 +279,22 @@ export function startRuntime(
         });
         let app: MountedApp;
         try {
-            app = mountApp(options.host ?? win.document.body, message.document, library, {
-                transferFile: files.transferFile,
-                onEmit(name, payload) {
-                    const json = payload === undefined ? undefined : toJson(payload);
-                    post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
+            app = mountApp(
+                options.host ?? win.document.body,
+                message.document,
+                library,
+                {
+                    transferFile: files.transferFile,
+                    onEmit(name, payload) {
+                        const json = payload === undefined ? undefined : toJson(payload);
+                        post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
+                    },
+                    onError(error) {
+                        postErrors([error]);
+                    }
                 },
-                onError(error) {
-                    postErrors([error]);
-                }
-            });
+                { mode: message.mode ?? 'standalone' }
+            );
         } finally {
             unregister();
         }
@@ -289,15 +303,13 @@ export function startRuntime(
             return;
         }
         mounted = app;
-        const listener = (): void => scheduleSnapshot();
-        app.store.on(WATCHED, listener);
-        watching = { store: app.store, listener };
+        startCapture(app.store);
         if (app.errors.length > 0) postErrors(app.errors);
         post({ type: 'ready' });
     }
 
     function applyWrite(store: NonNullable<MountedApp['store']>, write: PathWrite): BuildError | undefined {
-        const done = write.remove === true ? store.delete(write.path) : store.set(write.path, write.value as never);
+        const done = write.remove === true ? store.delete(write.path, SYNC_WRITE) : store.set(write.path, write.value as never, SYNC_WRITE);
         return done ? undefined : buildError('SUI-RUN-WRITE', { path: write.path, statePath: write.path });
     }
 
@@ -320,7 +332,14 @@ export function startRuntime(
             if (error) refused.push(error);
         }
         if (refused.length > 0) postErrors(refused);
-        postSnapshot();
+    }
+
+    function appEvent(message: EventMessage): void {
+        if (!mounted?.store) {
+            dropped.unhandled += 1;
+            return;
+        }
+        mounted.raise(message.name, message.payload);
     }
 
     function command(message: CommandMessage): void {
@@ -369,6 +388,9 @@ export function startRuntime(
                 return;
             case 'theme':
                 theme(message);
+                return;
+            case 'event':
+                appEvent(message);
                 return;
             case 'fileProgress':
                 files.progress(message as FileProgressMessage);

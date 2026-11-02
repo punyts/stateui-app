@@ -1,5 +1,6 @@
 import { isIconsMap } from './icons.js';
 import {
+    MAX_CHANGE_ID_LENGTH,
     MAX_ERROR_TEXT,
     MAX_ERRORS,
     MAX_FILE_BYTES,
@@ -12,7 +13,7 @@ import {
     MAX_WRITES,
     MESSAGE_BYTE_LIMITS
 } from './limits.js';
-import { FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { APP_EVENTS, CHANGE_OPS, FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
 
 /** Why a message was dropped */
@@ -21,7 +22,11 @@ export type DropReason = 'invalid' | 'unknown' | 'oversized';
 export type ValidationResult = { ok: true; message: RuntimeMessage } | { ok: false; reason: DropReason };
 
 const encoder = new TextEncoder();
-const WRITE_PATH = /^\$\.(data|app)(\.[^.\s]+)*$/;
+/** The synced branches, which changes and writes reach */
+const SYNC_PATH = /^\$\.(data|app|theme|locale)(\.[^.\s]+)*$/;
+/** The sync status the host writes */
+const STATUS_PATH = /^\$\.runtime\.sync(\.[^.\s]+)*$/;
+const MODES = ['standalone', 'persisted', 'full'];
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 const NAME = /^[A-Za-z][A-Za-z0-9_.:-]*$/;
 const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
@@ -52,10 +57,25 @@ function isStateSnapshot(message: Record<string, unknown>): boolean {
     return isJsonObject(message['data']) && isJsonObject(message['app']);
 }
 
-/** True when `path` is a state path below `$.data` or `$.app` that a write may reach */
-export function isWritablePath(path: unknown): path is string {
-    if (typeof path !== 'string' || path.length > MAX_PATH_LENGTH || !WRITE_PATH.test(path)) return false;
+function isSafePath(path: unknown, pattern: RegExp): path is string {
+    if (typeof path !== 'string' || path.length > MAX_PATH_LENGTH || !pattern.test(path)) return false;
     return path.split('.').every((segment) => !FORBIDDEN_SEGMENTS.has(segment));
+}
+
+/**
+ * True when `path` is a state path a write may reach: a synced branch (`$.data`, `$.app`, `$.theme`, `$.locale`) or
+ * the sync status (`$.runtime.sync`)
+ */
+export function isWritablePath(path: unknown): path is string {
+    return isSafePath(path, SYNC_PATH) || isSafePath(path, STATUS_PATH);
+}
+
+/** A change of a synced branch: a writer-made id, the path, the op and a value unless it deletes */
+function isRuntimeChange(value: unknown): boolean {
+    if (!isRecord(value) || !Object.keys(value).every((key) => ['id', 'path', 'op', 'value'].includes(key))) return false;
+    if (!isText(value['id'], MAX_CHANGE_ID_LENGTH) || !isSafePath(value['path'], SYNC_PATH)) return false;
+    if (typeof value['op'] !== 'string' || !(CHANGE_OPS as readonly string[]).includes(value['op'])) return false;
+    return value['op'] === 'delete' ? value['value'] === undefined : 'value' in value && isJson(value['value']);
 }
 
 function isPathWrite(value: unknown): boolean {
@@ -119,7 +139,8 @@ function isFileResult(m: Record<string, unknown>): boolean {
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
-        hasOnlyKeys(m, ['document', 'state', 'icons']) &&
+        hasOnlyKeys(m, ['document', 'state', 'icons', 'mode']) &&
+        (m['mode'] === undefined || MODES.includes(m['mode'] as string)) &&
         isJsonObject(m['document']) &&
         isRecord(m['document']['app']) &&
         (m['state'] === undefined || (isRecord(m['state']) && isStateSnapshot(m['state']))) &&
@@ -137,8 +158,12 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['value'] === undefined || isJson(m['value'])),
     locale: (m) => hasOnlyKeys(m, ['locale']) && typeof m['locale'] === 'string' && m['locale'].length <= MAX_NAME_LENGTH && LOCALE.test(m['locale']),
     theme: (m) => hasOnlyKeys(m, ['kind', 'name']) && isText(m['kind'], MAX_NAME_LENGTH) && isText(m['name'], MAX_NAME_LENGTH),
+    event: (m) =>
+        hasOnlyKeys(m, ['name', 'payload']) &&
+        (APP_EVENTS as readonly unknown[]).includes(m['name']) &&
+        (m['payload'] === undefined || isJson(m['payload'])),
     ready: (m) => hasOnlyKeys(m, []),
-    snapshot: (m) => hasOnlyKeys(m, ['data', 'app']) && isStateSnapshot(m),
+    change: (m) => hasOnlyKeys(m, ['change']) && isRuntimeChange(m['change']),
     emit: (m) => hasOnlyKeys(m, ['name', 'payload']) && isText(m['name'], MAX_NAME_LENGTH) && NAME.test(m['name']) && (m['payload'] === undefined || isJson(m['payload'])),
     error: (m) => hasOnlyKeys(m, ['errors']) && Array.isArray(m['errors']) && m['errors'].length > 0 && m['errors'].length <= MAX_ERRORS && m['errors'].every(isProtocolError),
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),

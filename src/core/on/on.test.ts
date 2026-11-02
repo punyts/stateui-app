@@ -151,6 +151,16 @@ describe('validateOn', () => {
         expect(errors[0]).toMatchObject({ code: 'SUI-ON-EVENT', statePath: '$.app.children.b.on.hover' });
     });
 
+    it('should accept an app event on the root node only', () => {
+        const rejected = { 'sync.rejected': { command: 'emit', target: 'rejected' } };
+        const root: Node = { component: 'toolbar', on: rejected, children: { b: { component: 'button', on: rejected } } };
+
+        const errors = check(root);
+
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatchObject({ code: 'SUI-ON-EVENT', statePath: '$.app.children.b.on.sync.rejected' });
+    });
+
     it('should report a bad command on the target component', () => {
         const app: Node = {
             component: 'toolbar',

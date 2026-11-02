@@ -59,6 +59,13 @@ describe('extractLinks', () => {
         expect(result.errors[1]?.message).toContain('server-only');
     });
 
+    it('accepts the sync status as a target', () => {
+        const result = extractLinks({ component: 'x', '<-a': '$.runtime.sync.status', '<-b': '$.runtime.sync', '<-c': '$.runtime.sync.other', '<-d': '$.runtime.icons' });
+
+        expect(result.links.map((link) => link.target)).toEqual(['$.runtime.sync.status', '$.runtime.sync']);
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-LINK-TARGET', 'SUI-LINK-TARGET']);
+    });
+
     it('rejects a target outside $.data, $row and node references', () => {
         const result = extractLinks({
             component: 'x',

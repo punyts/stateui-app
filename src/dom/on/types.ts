@@ -65,6 +65,8 @@ export interface DispatcherOptions {
 }
 
 export interface Dispatcher {
+    /** Runs the root node's `on` entry for an app event (`sync.rejected`) with the payload */
+    raise(name: string, payload?: unknown): void;
     /** Removes every listener; later events do nothing. Safe to call more than once */
     dispose(): void;
 }

@@ -5,7 +5,7 @@ export type { LocaleStepHandle, LocaleStore, NodeLocale, NodeLocaleOptions, Node
 export { generateSharedSheet } from './articulation/index.js';
 export { generateLayoutBase, generateLayoutSheet, generateLayoutSheets } from './layout/index.js';
 export { mountApp, mountSteps, registerMountStep } from './mount/index.js';
-export type { AppState, MountContext, MountedApp, MountStep, StartedContext } from './mount/index.js';
+export type { AppState, MountContext, MountedApp, MountOptions, MountStep, StartedContext } from './mount/index.js';
 export { APP_ROOT_TAG, CSS_VALUE, componentLeaves, ensureAppRoot, tokenSheet } from './app/index.js';
 export {
     DEFAULT_ACTIVE,

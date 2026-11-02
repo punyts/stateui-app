@@ -6,16 +6,19 @@
 /** Longest nonce, in characters */
 export const MAX_NONCE_LENGTH = 128;
 
+/** Longest change id, in characters */
+export const MAX_CHANGE_ID_LENGTH = 128;
+
 /** Largest `load`: a document (1 MiB), its data snapshot (512 KiB), articulation and icons, with room for the envelope */
 export const MAX_LOAD_BYTES = 3 * 1024 * 1024;
 
 /** Largest `write` message */
 export const MAX_WRITE_BYTES = 512 * 1024;
 
-/** Largest `snapshot`: the data (512 KiB) and the articulation values */
-export const MAX_SNAPSHOT_BYTES = 1024 * 1024;
+/** Largest `change`: one value, as large as a whole `write` */
+export const MAX_CHANGE_BYTES = MAX_WRITE_BYTES;
 
-/** Largest `emit`, `error` and `command` message */
+/** Largest `emit`, `error`, `command` and `event` message */
 export const MAX_EVENT_BYTES = 64 * 1024;
 
 /** Largest message of the small types: `locale`, `theme`, `ready`, `ping`, `pong` */
@@ -73,8 +76,9 @@ export const MESSAGE_BYTE_LIMITS = {
     command: MAX_EVENT_BYTES,
     locale: MAX_SMALL_BYTES,
     theme: MAX_SMALL_BYTES,
+    event: MAX_EVENT_BYTES,
     ready: MAX_SMALL_BYTES,
-    snapshot: MAX_SNAPSHOT_BYTES,
+    change: MAX_CHANGE_BYTES,
     emit: MAX_EVENT_BYTES,
     error: MAX_EVENT_BYTES,
     ping: MAX_SMALL_BYTES,

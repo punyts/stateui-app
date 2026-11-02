@@ -24,7 +24,7 @@ const library: ComponentLibrary = {
     input: {
         tier: 'root',
         tag: 'x-rt-input',
-        shape: shapeOf({ value: { type: 'string', default: '' }, inputType: { type: 'string', default: 'text' } })
+        shape: shapeOf({ value: { type: 'string', default: '' }, inputType: { type: 'string', default: 'text' } }, ['press'])
     },
     heading: { tier: 'root', tag: 'x-rt-heading', shape: shapeOf({ _text: { type: 'string', kind: 'content', default: 'Heading' } }) },
     modal: { tier: 'root', tag: 'x-rt-modal', shape: shapeOf({ title: { type: 'string', default: '' } }, [], ['open', 'toast']) },
@@ -119,18 +119,116 @@ describe('startRuntime in Chromium', () => {
         expect(postMessage.mock.calls[0]?.[1]).toBe('*');
     });
 
-    it('should put the state snapshot over the document and the icons into $.runtime.icons before rendering', () => {
+    it('should put the state over the document and the icons into $.runtime.icons before rendering', async () => {
         // Arrange
         const document: AppDocument = { data: { name: 'Ada' }, app: panel({ hello: { component: 'label', '<-text': '$.data.name' } }) };
         const icons = { star: { outline: ['M12 2l3 7h7z'] } };
 
         // Act
         send(message('load', { document, state: { data: { name: 'Grace' }, app: {} }, icons }));
-        send(message('write', { writes: [{ path: '$.data.name', value: 'Hopper' }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('label:Grace');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should post one change for a user edit, with an id and no base', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { name: 'Ada' },
+            app: panel({ go: { component: 'button', on: { press: { command: 'set', target: '$.data.name', value: 'Linus' } } } })
+        };
+        send(message('load', { document }));
+
+        // Act
+        find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+        await tick();
+
+        // Assert
+        const changes = ofType('change');
+        expect(changes).toHaveLength(1);
+        expect(changes[0]?.['change']).toEqual({ id: expect.any(String), path: '$.data.name', op: 'set', value: 'Linus' });
+    });
+
+    it('should post nothing for a host write', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { name: 'Ada' },
+            app: panel({ hello: { component: 'label', '<-text': '$.data.name' }, other: { component: 'label', text: 'a' } })
+        };
+        send(message('load', { document }));
+
+        // Act
+        send(message('write', { writes: [{ path: '$.data.name', value: 'Hopper' }, { path: '$.app.children.other.text', value: 'x' }] }));
+        await tick();
 
         // Assert
         expect(textOf(host)).toContain('label:Hopper');
-        expect(ofType('snapshot')[0]).toMatchObject({ data: { name: 'Hopper' } });
+        expect(textOf(host)).toContain('label:x');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should show a sync status write in a linked node', async () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ status: { component: 'label', '<-text': '$.runtime.sync.status' } }) };
+        send(message('load', { document, mode: 'full' }));
+        const initial = textOf(host);
+
+        // Act
+        send(message('write', { writes: [{ path: '$.runtime.sync', value: { mode: 'full', status: 'offline', waiting: 3 } }] }));
+        await tick();
+
+        // Assert
+        expect(initial).toContain('label:connecting');
+        expect(textOf(host)).toContain('label:offline');
+        expect(ofType('change')).toHaveLength(0);
+        expect(handle.stats().dropped.invalid).toBe(0);
+    });
+
+    it('should start a Standalone app with the standalone status and refuse $.server in it', () => {
+        // Arrange
+        const status: AppDocument = { app: panel({ status: { component: 'label', '<-text': '$.runtime.sync.status' } }) };
+        const secret: AppDocument = {
+            app: panel({ go: { component: 'button', on: { press: { command: 'set', target: '$.server.token', value: 'x' } } } })
+        };
+
+        // Act
+        send(message('load', { document: status }));
+        const text = textOf(host);
+        send(message('load', { document: secret, mode: 'persisted' }));
+
+        // Assert
+        expect(text).toContain('label:standalone');
+        const errors = ofType('error').flatMap((entry) => entry['errors'] as { code: string }[]);
+        expect(errors.map((error) => error.code)).toContain('SUI-DOC-SERVER');
+        expect(ofType('ready')).toHaveLength(1);
+    });
+
+    it('should run the root on entry for sync.rejected with the payload', () => {
+        // Arrange
+        const document: AppDocument = {
+            app: { ...panel({}), on: { 'sync.rejected': { command: 'emit', target: 'rejected' } } } as AppDocument['app']
+        };
+        send(message('load', { document, mode: 'full' }));
+
+        // Act
+        send(message('event', { name: 'sync.rejected', payload: { path: '$.data.stock', reason: 'sold out' } }));
+
+        // Assert
+        expect(ofType('error')).toHaveLength(0);
+        expect(ofType('emit')).toEqual([
+            { v: PROTOCOL_VERSION, nonce: NONCE, type: 'emit', name: 'rejected', payload: { path: '$.data.stock', reason: 'sold out' } }
+        ]);
+    });
+
+    it('should drop an event that is not an app event, and count one while nothing is mounted', () => {
+        // Act
+        send(message('event', { name: 'sync.rejected' }));
+        send(message('event', { name: 'press' }));
+
+        // Assert
+        expect(handle.stats().dropped).toMatchObject({ unhandled: 1, invalid: 1 });
     });
 
     it('should change the DOM on a path write without a reload', () => {
@@ -146,7 +244,6 @@ describe('startRuntime in Chromium', () => {
         expect(textOf(host)).toContain('label:Grace');
         expect(find(host, 'x-rt-label')).toBe(label);
         expect(ofType('ready')).toHaveLength(1);
-        expect(ofType('snapshot')).toHaveLength(1);
     });
 
     it('should replace only the node whose component changed', () => {
@@ -168,7 +265,7 @@ describe('startRuntime in Chromium', () => {
         expect(find(host, 'x-rt-label')).toBe(before);
     });
 
-    it('should accept the icons of a write and post a snapshot', () => {
+    it('should accept the icons of a write', () => {
         // Arrange
         send(message('load', { document: { app: panel({}) }, icons: { star: { outline: ['M0 0h24'] } } }));
 
@@ -176,7 +273,7 @@ describe('startRuntime in Chromium', () => {
         send(message('write', { writes: [], icons: { heart: { outline: ['M1 1h2'] } } }));
 
         // Assert
-        expect(ofType('snapshot')).toHaveLength(1);
+        expect(ofType('error')).toHaveLength(0);
         expect(handle.stats().dropped).toEqual({ invalid: 0, unknown: 0, oversized: 0, unhandled: 0, foreign: 0 });
     });
 
@@ -189,7 +286,6 @@ describe('startRuntime in Chromium', () => {
         send(message('write', { writes: [], icons: { big: { outline: ['M'.repeat(MAX_ICON_PATH_LENGTH + 1)] } } }));
 
         // Assert
-        expect(ofType('snapshot')).toHaveLength(0);
         expect(handle.stats().dropped.invalid).toBe(2);
     });
 
@@ -221,14 +317,15 @@ describe('startRuntime in Chromium', () => {
         expect(handle.stats().dropped).toEqual({ invalid: 2, unknown: 1, oversized: 1, unhandled: 0, foreign: 0 });
     });
 
-    it('should count command, locale and theme as unhandled while no application is mounted', () => {
+    it('should count command, locale, theme and write as unhandled while no application is mounted', () => {
         // Act
         send(message('command', { target: '$.app', command: 'open' }));
         send(message('locale', { locale: 'de' }));
         send(message('theme', { kind: 'mode', name: 'dark' }));
+        send(message('write', { writes: [] }));
 
         // Assert
-        expect(handle.stats().dropped.unhandled).toBe(3);
+        expect(handle.stats().dropped.unhandled).toBe(4);
         expect(posted()).toEqual([]);
     });
 
@@ -271,7 +368,6 @@ describe('startRuntime in Chromium', () => {
             const modal = find(host, 'x-rt-modal') as Commanded;
             const open = vi.fn();
             modal.commands = { open };
-            const before = ofType('snapshot').length;
 
             // Act
             send(message('command', { target: '$.app.children.nope', command: 'open' }));
@@ -281,7 +377,7 @@ describe('startRuntime in Chromium', () => {
             // Assert
             expect(errorCodes()).toEqual(['SUI-RUN-ON-TARGET', 'SUI-RUN-ON-COMMAND', 'SUI-RUN-ON-COMMAND']);
             expect(open).not.toHaveBeenCalled();
-            expect(ofType('snapshot')).toHaveLength(before);
+            expect(ofType('change')).toHaveLength(0);
             expect(textOf(host)).toContain('label:Ada');
         });
 
@@ -289,7 +385,6 @@ describe('startRuntime in Chromium', () => {
             // Arrange
             send(message('load', { document: modalDoc() }));
             send(message('write', { writes: [{ path: '$.data.name', value: 'Grace' }] }));
-            const dataBefore = JSON.stringify(ofType('snapshot').at(-1)?.['data']);
 
             // Act
             send(message('locale', { locale: 'de' }));
@@ -299,7 +394,8 @@ describe('startRuntime in Chromium', () => {
             expect(textOf(host)).toContain('Ueberschrift');
             expect(textOf(host)).toContain('label:Grace');
             expect(ofType('error')).toHaveLength(0);
-            expect(JSON.stringify(ofType('snapshot').at(-1)?.['data'])).toBe(dataBefore);
+            const paths = ofType('change').map((entry) => (entry['change'] as { path: string }).path);
+            expect(paths.filter((path) => path.startsWith('$.data'))).toEqual([]);
         });
 
         it('should post error for a language with no overlay', () => {
@@ -419,35 +515,38 @@ describe('startRuntime in Chromium', () => {
 
         // Assert
         expect(handle.stats().dropped.invalid).toBe(1);
-        expect(ofType('snapshot')).toHaveLength(0);
+        expect(ofType('change')).toHaveLength(0);
     });
 
-    it('should never put a password value or a $.runtime path in a snapshot', async () => {
+    it('should never post a password value', async () => {
         // Arrange
+        const press = (target: string, value: unknown) => ({ press: { command: 'set', target, value } });
         const document: AppDocument = {
-            data: { pw: 'secret-linked', name: 'Ada' },
+            data: { account: { pw: 'secret-linked', user: 'ada' }, name: 'Ada' },
             app: panel({
-                pass: { component: 'input', inputType: 'password', '<-value': '$.data.pw' },
-                literal: { component: 'input', inputType: 'password', value: 'hunter2' },
-                plain: { component: 'input', value: 'visible' }
+                pass: { component: 'input', inputType: 'password', '<-value': '$.data.account.pw', on: press('$.data.account', { pw: 'secret-typed', user: 'grace' }) },
+                literal: { component: 'input', inputType: 'password', value: 'hunter2', on: press('.value', 'hunter3') },
+                plain: { component: 'input', value: 'visible', on: press('.value', 'shown') }
             })
         };
-        send(message('load', { document, state: { data: { pw: 'secret-linked', name: 'Ada' }, app: { children: { literal: { value: 'hunter2' } } } } }));
+        send(message('load', { document }));
+        const inputs = Array.from(host.querySelectorAll('*')).filter((element) => element.localName === 'x-rt-input');
+        const all = (root: ParentNode): Element[] =>
+            Array.from(root.querySelectorAll('*')).flatMap((element) => [element, ...(element.shadowRoot ? all(element.shadowRoot) : [])]);
+        const fields = inputs.length > 0 ? inputs : all(host).filter((element) => element.localName === 'x-rt-input');
 
         // Act
-        send(message('write', { writes: [{ path: '$.app.children.literal.value', value: 'hunter3' }] }));
-        send(message('write', { writes: [{ path: '$.data.name', value: 'Grace' }] }));
+        for (const field of fields) field.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
         await tick();
 
         // Assert
-        const snapshots = ofType('snapshot');
-        expect(snapshots.length).toBeGreaterThanOrEqual(2);
-        const text = JSON.stringify(snapshots);
-        expect(text).not.toContain('secret-linked');
+        expect(fields).toHaveLength(3);
+        const changes = ofType('change').map((entry) => entry['change']);
+        const text = JSON.stringify(changes);
+        expect(text).not.toContain('secret');
         expect(text).not.toContain('hunter');
-        expect(text).not.toContain('runtime');
-        expect(text).toContain('visible');
-        expect(text).toContain('Grace');
+        expect(changes).toContainEqual(expect.objectContaining({ path: '$.data.account', value: { user: 'grace' } }));
+        expect(changes).toContainEqual(expect.objectContaining({ path: '$.app.children.plain.value', value: 'shown' }));
     });
 
     it('should stop listening after dispose', () => {

@@ -13,6 +13,7 @@ import { collectComponentTokens, reflectedProperties } from '../../core/shape/in
 import { PREFIXES } from '../../core/types.js';
 import type { AppDocument, JsonObject, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
+import type { AppMode } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
@@ -20,7 +21,7 @@ import { ensureAppRoot } from '../app/index.js';
 import { nodeThemeMapper } from '../theme/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
 import { mountSteps } from './steps.js';
-import type { AppState, MountContext, MountedApp, StartedContext } from './types.js';
+import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
 
 const DEFAULT_LOCALE = 'en';
 const APP_PATH = '$.app';
@@ -40,13 +41,18 @@ function baseOptions(library: ComponentLibrary, componentTokens: readonly Compon
     };
 }
 
-function initialState(document: AppDocument, app: Node): AppState {
+function initialState(document: AppDocument, app: Node, mode: AppMode): AppState {
     return {
         theme: { tokens: {}, active: {} },
         data: cloneJson((document.data ?? {}) as JsonObject) as JsonObject,
         locale: typeof document.locale === 'string' ? document.locale : DEFAULT_LOCALE,
         app,
-        runtime: { nodes: {}, icons: {}, empty: {} }
+        runtime: {
+            nodes: {},
+            icons: {},
+            empty: {},
+            sync: { mode, status: mode === 'standalone' ? 'standalone' : 'connecting', waiting: 0 }
+        }
     };
 }
 
@@ -82,7 +88,7 @@ function restoreRowLinks(tree: Node, rowLinks: readonly Link[]): void {
 }
 
 function failed(errors: BuildError[]): MountedApp {
-    return { store: undefined, baseOverlay: undefined, baseLocale: undefined, errors, dispose: () => undefined };
+    return { store: undefined, baseOverlay: undefined, baseLocale: undefined, errors, raise: () => undefined, dispose: () => undefined };
 }
 
 function stepError(name: string): BuildError {
@@ -98,6 +104,11 @@ function stepError(name: string): BuildError {
  *
  * A validation error (a warning does not count), a link that cannot be applied or a step that throws stops the run
  * before anything renders: `store` is undefined and `errors` says why. It does not throw for a bad document.
+ * `options.mode` (`standalone` when absent) is how the app keeps its state: the document is validated for it (no
+ * `$.server` in Standalone or Persisted) and `$.runtime.sync` starts as `{ mode, status, waiting: 0 }`, with the status
+ * `standalone` or `connecting`; the host writes later statuses. `raise` runs the root node's `on` entry for an app
+ * event (`sync.rejected`).
+ *
  * `dispose` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and the node resolver
  * and options, so a second `mountApp` on a fresh host starts clean
  */
@@ -105,9 +116,11 @@ export function mountApp(
     host: Element,
     document: AppDocument,
     library: ComponentLibrary,
-    hooks: DispatchHooks & SystemHooks = {}
+    hooks: DispatchHooks & SystemHooks = {},
+    options: MountOptions = {}
 ): MountedApp {
-    const validation = validateDocument(document, library);
+    const mode = options.mode ?? 'standalone';
+    const validation = validateDocument(document, library, { mode });
     if (!isValid(validation.errors)) return failed(validation.errors);
     const errors = [...validation.errors];
     const collected = collectComponentTokens(
@@ -129,7 +142,7 @@ export function mountApp(
         library,
         componentTokens: collected.tokens,
         instances: resolved.instances,
-        state: initialState(document, extracted.tree),
+        state: initialState(document, extracted.tree, mode),
         options: baseOptions(library, collected.tokens),
         hooks
     };
@@ -182,6 +195,9 @@ export function mountApp(
         baseOverlay,
         baseLocale: context.state.locale,
         errors,
+        raise(name, payload): void {
+            if (!disposed) dispatcher.raise(name, payload);
+        },
         dispose(): void {
             if (disposed) return;
             disposed = true;

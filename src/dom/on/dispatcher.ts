@@ -152,16 +152,21 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         const inRuntime = path.startsWith(RUNTIME_NODES);
         const found = inRuntime ? runtimeChain(path) : undefined;
         const chain = inRuntime ? found?.chain : chainTo(path);
-        const self = chain?.[chain.length - 1];
-        if (!chain || !self) return;
+        if (!chain) return;
+        run(event.type, event instanceof CustomEvent ? event.detail : undefined, chain, found);
+    }
 
+    /** Runs the `on` entry for `type` of the last node of `chain`, if it has one */
+    function run(type: string, payload: unknown, chain: Frame[], found?: { owner: Frame[]; rowPath?: string }): void {
+        const self = chain[chain.length - 1];
+        if (!self) return;
         const on: unknown = self.node[RESERVED_KEYS.on];
-        if (on === null || typeof on !== 'object' || Array.isArray(on) || !Object.hasOwn(on, event.type)) return;
-        const commands = readEntry((on as Record<string, unknown>)[event.type]);
+        if (on === null || typeof on !== 'object' || Array.isArray(on) || !Object.hasOwn(on, type)) return;
+        const commands = readEntry((on as Record<string, unknown>)[type]);
         if (!commands) {
             fail(
                 self.path,
-                buildError('SUI-RUN-ON-SHAPE', { event: event.type, path: self.path, statePath: self.path }),
+                buildError('SUI-RUN-ON-SHAPE', { event: type, path: self.path, statePath: self.path }),
                 'the on entry is not a command or a list of commands'
             );
             return;
@@ -175,7 +180,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             library,
             host,
             store,
-            payload: event instanceof CustomEvent ? event.detail : undefined,
+            payload,
             emit: (name, payload) => hooks?.onEmit?.(name, payload)
         };
         for (const command of commands) {
@@ -183,7 +188,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
                 runCommand(command, context);
             } catch (error) {
                 const failure = error instanceof CommandFailure ? error : undefined;
-                const details = { event: event.type, path: self.path, statePath: self.path };
+                const details = { event: type, path: self.path, statePath: self.path };
                 const built =
                     failure?.target !== undefined
                         ? buildError('SUI-RUN-ON-TARGET', { ...details, target: failure.target })
@@ -212,6 +217,10 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     host.addEventListener(FILE_TRANSFER_EVENT, transfer);
 
     return {
+        raise(name, payload): void {
+            const chain = chainTo(rootPath);
+            if (chain) run(name, payload, chain);
+        },
         dispose(): void {
             for (const name of names) host.removeEventListener(name, handle, true);
             host.removeEventListener(FILE_TRANSFER_EVENT, transfer);

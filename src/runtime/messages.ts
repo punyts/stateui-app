@@ -1,13 +1,16 @@
-import type { AppDocument, JsonObject, JsonValue } from '../core/types.js';
+import type { AppDocument, AppEventName, JsonObject, JsonValue } from '../core/types.js';
+
+export { APP_EVENTS } from '../core/types.js';
+export type { AppEventName } from '../core/types.js';
 
 /** The protocol version every message carries in `v`. A message with another version is dropped */
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'ping', 'fileProgress', 'fileResult'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'fileProgress', 'fileResult'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'snapshot', 'emit', 'error', 'pong', 'file', 'fileCancel'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -28,13 +31,13 @@ export interface IconData {
 /** Icon name to path data */
 export type IconsMap = Record<string, IconData>;
 
-/** The state a `load` carries and a `snapshot` returns (`snapshotState`) */
+/** The state a `load` carries over the document: the data and the node state (`snapshotState`) */
 export interface StateSnapshotData {
     data: JsonObject;
     app: JsonObject;
 }
 
-/** One path write: a value to set, or `remove: true` to delete the path */
+/** One path write: a value to set, or `remove: true` to delete the path. The runtime applies it as a sync write, so it posts no `change` */
 export interface PathWrite {
     path: string;
     value?: JsonValue;
@@ -80,9 +83,30 @@ interface Envelope<T extends MessageType> {
     type: T;
 }
 
-/** Mounts the application: the document, the state to load over it and the icons it uses beyond the core set */
+/** How an app keeps its state; the same names as `AppMode` of the validator */
+export type RuntimeMode = 'standalone' | 'persisted' | 'full';
+
+/** The operations of a change, as `@punyts/state-sync` names them */
+export const CHANGE_OPS = ['set', 'replace', 'merge', 'delete'] as const;
+
+export type ChangeOp = (typeof CHANGE_OPS)[number];
+
+/** A change the user (or a controller) made in the runtime's store, without the base revision the host's sync client adds */
+export interface RuntimeChange {
+    id: string;
+    path: string;
+    op: ChangeOp;
+    /** Absent for `delete` */
+    value?: JsonValue;
+}
+
+/**
+ * Mounts the application: the document, the state to load over it, the icons it uses beyond the core set and the
+ * mode (`standalone` when absent)
+ */
 export interface LoadMessage extends Envelope<'load'> {
     document: AppDocument;
+    mode?: RuntimeMode;
     state?: StateSnapshotData;
     icons?: IconsMap;
 }
@@ -119,11 +143,19 @@ export interface PongMessage extends Envelope<'pong'> {
     id: number;
 }
 
+/** Raises an app event: `sync.rejected` with the rejected path and the reason as its payload */
+export interface EventMessage extends Envelope<'event'> {
+    name: AppEventName;
+    payload?: JsonValue;
+}
+
 /** Posted after `load` mounted the application */
 export type ReadyMessage = Envelope<'ready'>;
 
-/** The state worth saving (`snapshotState`, minus links, `$.runtime`, content and password values) */
-export interface SnapshotMessage extends Envelope<'snapshot'>, StateSnapshotData {}
+/** One change of the store, posted as it is captured (never for a host write, `$.runtime` or a password value) */
+export interface ChangeMessage extends Envelope<'change'> {
+    change: RuntimeChange;
+}
 
 /** The `emit` command of an `on` entry: an event name and its payload */
 export interface EmitMessage extends Envelope<'emit'> {
@@ -173,12 +205,13 @@ export type InboundMessage =
     | CommandMessage
     | LocaleMessage
     | ThemeMessage
+    | EventMessage
     | PingMessage
     | FileProgressMessage
     | FileResultMessage;
 export type OutboundMessage =
     | ReadyMessage
-    | SnapshotMessage
+    | ChangeMessage
     | EmitMessage
     | ErrorMessage
     | PongMessage

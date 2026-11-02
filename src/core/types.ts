@@ -33,6 +33,11 @@ export interface AppDocument {
 }
 
 /** The top-level keys of a document */
+/** The app events the host raises, which the root node's (`$.app`) `on` entries may use */
+export const APP_EVENTS = ['sync.rejected'] as const;
+
+export type AppEventName = (typeof APP_EVENTS)[number];
+
 export const DOCUMENT_KEYS = ['theme', 'themes', 'locale', 'data', 'app', 'composed', 'locales'] as const;
 
 /** The node keys that are not component state */

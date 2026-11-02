@@ -6,18 +6,22 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['command', 'emit', 'error', 'file', 'fileCancel', 'fileProgress', 'fileResult', 'load', 'locale', 'ping', 'pong', 'ready', 'snapshot', 'theme', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileProgress', 'fileResult', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
         );
     });
 
     it.each([
         base('load', { document: { app: { component: 'panel' } }, state: { data: {}, app: {} }, icons: { a: { outline: ['M0 0'] } } }),
+        base('load', { document: { app: { component: 'panel' } }, mode: 'full' }),
         base('write', { writes: [{ path: '$.data.a', value: 1 }, { path: '$.app.children.x', remove: true }] }),
+        base('write', { writes: [{ path: '$.runtime.sync', value: { mode: 'full', status: 'offline', waiting: 2 } }, { path: '$.theme.mode', value: 'dark' }] }),
+        base('event', { name: 'sync.rejected', payload: { path: '$.data.a', reason: 'no' } }),
         base('command', { target: '$.app.children.x', command: 'open', value: 'a' }),
         base('locale', { locale: 'de-CH' }),
         base('theme', { kind: 'mode', name: 'dark' }),
         base('ready'),
-        base('snapshot', { data: { a: 1 }, app: {} }),
+        base('change', { change: { id: 'c1', path: '$.data.a', op: 'set', value: 1 } }),
+        base('change', { change: { id: 'c2', path: '$.app.children.x', op: 'delete' } }),
         base('emit', { name: 'order.saved', payload: { id: 1 } }),
         base('error', { errors: [{ code: 'SUI-RUN-WRITE', message: 'm', severity: 'error', statePath: '$.data.a' }] }),
         base('ping', { id: 1 }),
@@ -37,6 +41,15 @@ describe('runtime message validator', () => {
         ['no nonce', { v: 1, type: 'ping', id: 1 }],
         ['extra field', base('ping', { id: 1, more: true })],
         ['load without app', base('load', { document: {} })],
+        ['load with an unknown mode', base('load', { document: { app: { component: 'panel' } }, mode: 'cloud' })],
+        ['event that is not an app event', base('event', { name: 'press' })],
+        ['change without an id', base('change', { change: { path: '$.data.a', op: 'set', value: 1 } })],
+        ['change with an unknown op', base('change', { change: { id: 'c', path: '$.data.a', op: 'push', value: 1 } })],
+        ['change set without a value', base('change', { change: { id: 'c', path: '$.data.a', op: 'set' } })],
+        ['change to $.runtime', base('change', { change: { id: 'c', path: '$.runtime.sync.status', op: 'set', value: 'x' } })],
+        ['change to $.server', base('change', { change: { id: 'c', path: '$.server.token', op: 'set', value: 'x' } })],
+        ['change with a long id', base('change', { change: { id: 'x'.repeat(129), path: '$.data.a', op: 'set', value: 1 } })],
+        ['write to $.server', base('write', { writes: [{ path: '$.server.token', value: 1 }] })],
         ['write to $.runtime', base('write', { writes: [{ path: '$.runtime.icons.a', value: 1 }] })],
         ['write to a prototype path', base('write', { writes: [{ path: '$.data.__proto__.x', value: 1 }] })],
         ['write with value and remove', base('write', { writes: [{ path: '$.data.a', value: 1, remove: true }] })],
@@ -69,15 +82,17 @@ describe('runtime message validator', () => {
         const cyclic: Record<string, unknown> = {};
         cyclic['self'] = cyclic;
 
-        expect(validateMessage(base('snapshot', { data: cyclic, app: {} })).ok).toBe(false);
+        expect(validateMessage(base('change', { change: { id: 'c', path: '$.data.a', op: 'set', value: cyclic } })).ok).toBe(false);
     });
 
-    it('should accept writable paths only below $.data and $.app', () => {
+    it('should accept writable paths only in the synced branches and the sync status', () => {
         expect(isWritablePath('$.data')).toBe(true);
         expect(isWritablePath('$.app.children.a.component')).toBe(true);
+        expect(isWritablePath('$.theme.tokens')).toBe(true);
+        expect(isWritablePath('$.locale')).toBe(true);
+        expect(isWritablePath('$.runtime.sync.status')).toBe(true);
         expect(isWritablePath('$.runtime.icons')).toBe(false);
-        expect(isWritablePath('$.theme.tokens')).toBe(false);
-        expect(isWritablePath('$.locale')).toBe(false);
+        expect(isWritablePath('$.server.token')).toBe(false);
         expect(isWritablePath('$.data..a')).toBe(false);
     });
 

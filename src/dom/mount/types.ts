@@ -3,7 +3,8 @@ import type { NodeOptions } from '@punyts/stateui';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
-import type { AppDocument, JsonObject, Node } from '../../core/types.js';
+import type { AppDocument, AppEventName, JsonObject, Node } from '../../core/types.js';
+import type { AppMode } from '../../core/validate/index.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
 
@@ -25,6 +26,8 @@ export interface AppState {
         icons: JsonObject;
         /** The shared empty record that record views and `current` point at; protected, so nothing writes into it */
         empty: JsonObject;
+        /** The sync status the host writes: the mode, `standalone`, `connecting`, `online` or `offline`, and the changes waiting */
+        sync: { mode: AppMode; status: string; waiting: number };
     };
 }
 
@@ -59,6 +62,12 @@ export interface MountStep {
     start?(context: StartedContext): (() => void) | void;
 }
 
+/** How `mountApp` mounts an app */
+export interface MountOptions {
+    /** How the app keeps its state; `standalone` when absent */
+    mode?: AppMode;
+}
+
 /** What `mountApp` returns */
 export interface MountedApp {
     /** The store mounted on the host; undefined when `errors` holds an error and nothing was rendered */
@@ -69,6 +78,8 @@ export interface MountedApp {
     baseLocale: string | undefined;
     /** Validation warnings, or the errors that stopped the run; empty for a clean document */
     errors: BuildError[];
+    /** Runs the root node's `on` entry for an app event with the payload; nothing when the app did not mount */
+    raise(name: AppEventName, payload?: unknown): void;
     /** Unmounts, unlinks and removes listeners. Safe to call more than once */
     dispose(): void;
 }
