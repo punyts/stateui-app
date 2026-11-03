@@ -2,7 +2,7 @@ export { VERSION } from './version.js';
 export { ERROR_CATALOG, ERROR_PREFIXES, TEMPLATE_PLACEHOLDERS, buildError, isValid } from './errors/index.js';
 export type { BuildError, CatalogEntry, ErrorCode, ErrorDetails, Severity, TemplatePlaceholder } from './errors/index.js';
 export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';
-export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES } from './types.js';
+export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, isAppEvent } from './types.js';
 export type { AppDocument, AppEventName, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {
     MAX_PATTERN_INPUT,
@@ -191,3 +191,38 @@ export {
     validatePlacements
 } from './layout/index.js';
 export type { Breakpoint, FieldSpec, LayoutDefinition, LayoutType } from './layout/index.js';
+export {
+    LOGIC_COMMANDS,
+    LOGIC_COMMAND_KEYS,
+    LOGIC_FAILED_EVENT,
+    LOGIC_FUNCTIONS,
+    LOGIC_ORIGIN,
+    MAX_CHAIN_DEPTH,
+    NOTIFY_PREFIX,
+    LogicError,
+    compilePattern,
+    createLogicEngine,
+    createLogicIndex,
+    matchPattern,
+    readLogic
+} from './logic/index.js';
+export type {
+    LogicChange,
+    LogicCommand,
+    LogicCommandName,
+    LogicDocument,
+    LogicEngine,
+    LogicFailure,
+    LogicHost,
+    LogicIndex,
+    LogicMachine,
+    LogicResult,
+    LogicRule,
+    LogicTransition,
+    LogicTrigger,
+    LogicWrite,
+    PathPattern,
+    PatternMatch,
+    ReadLogicOptions,
+    ReadLogicResult
+} from './logic/index.js';

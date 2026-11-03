@@ -4,7 +4,7 @@ import { isObject } from '../resolve/merge.js';
 import type { ComponentLibrary, ResolveResult } from '../resolve/index.js';
 import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
-import { APP_EVENTS, RESERVED_KEYS } from '../types.js';
+import { RESERVED_KEYS, isAppEvent } from '../types.js';
 import type { JsonValue } from '../types.js';
 import { parseTarget, readCommand, readEntry } from './parse.js';
 import { findProvider, findRowProvider, resolveTarget } from './resolveTarget.js';
@@ -88,7 +88,7 @@ class OnValidator {
         const shape = shapeOf(this.library, self.node.component);
         for (const [event, entry] of Object.entries(on)) {
             const eventPath = `${onPath}.${event}`;
-            const appEvent = self.path === '$.app' && (APP_EVENTS as readonly string[]).includes(event);
+            const appEvent = self.path === '$.app' && isAppEvent(event);
             if (shape && !appEvent && !shape.events.includes(event)) {
                 this.errors.push(
                     buildError('SUI-ON-EVENT', { component: self.node.component, path: self.path, event, statePath: eventPath })
@@ -228,7 +228,7 @@ class OnValidator {
  *   object with other keys, an `emit` without a target (its event name), a `set` without a value, or a `set` or
  *   `toggle` without a target
  * - `SUI-ON-EVENT`: the node's component does not declare the event; the root node (`$.app`) may also use the app
- *   events (`APP_EVENTS`: `sync.rejected`) the host raises
+ *   events (`APP_EVENTS`: `sync.rejected`, `logic.failed`, and `notify.<name>`) the host raises
  * - `SUI-ON-COMMAND`: the target's component does not declare the command
  * - `SUI-ON-VALUE`: a literal `value` of a command the target's shape lists in `commandValues` is not a key of that map
  * - `SUI-ON-TARGET`: the target text is not a valid form (including dot climbing), the ancestor or a step does not

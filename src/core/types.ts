@@ -30,15 +30,26 @@ export interface AppDocument {
     app: Node;
     composed?: Record<string, Node>;
     locales?: Record<string, JsonObject>;
+    /** Machines and rules (`logic/types.ts`); document only, never in a snapshot */
+    logic?: JsonObject;
 }
 
 /** The top-level keys of a document */
 /** The app events the host raises, which the root node's (`$.app`) `on` entries may use */
-export const APP_EVENTS = ['sync.rejected'] as const;
+export const APP_EVENTS = ['sync.rejected', 'logic.failed'] as const;
 
-export type AppEventName = (typeof APP_EVENTS)[number];
+/** An app event: one of `APP_EVENTS`, or `notify.<name>` raised by the logic's `notify` command */
+export type AppEventName = (typeof APP_EVENTS)[number] | `notify.${string}`;
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'locale', 'data', 'app', 'composed', 'locales'] as const;
+/** `notify.<name>`: the app events the logic's `notify` command raises */
+const NOTIFY_EVENT = /^notify.[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+
+/** True for a name in `APP_EVENTS` or a `notify.<name>` event */
+export function isAppEvent(name: unknown): name is string {
+    return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
+}
+
+export const DOCUMENT_KEYS = ['theme', 'themes', 'locale', 'data', 'app', 'composed', 'locales', 'logic'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {

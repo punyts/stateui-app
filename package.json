@@ -53,7 +53,7 @@
         "@punyts/core": "^1.0.0",
         "@punyts/expression": "^1.4.0",
         "@punyts/state": "^1.2.0",
-        "@punyts/state-sync": "^0.7.0",
+        "@punyts/state-sync": "^0.8.0",
         "@punyts/stateui": "^0.2.0"
     },
     "devDependencies": {

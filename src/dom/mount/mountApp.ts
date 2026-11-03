@@ -11,7 +11,7 @@ import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
 import { PREFIXES } from '../../core/types.js';
-import type { AppDocument, JsonObject, Node } from '../../core/types.js';
+import type { AppDocument, AppEventName, JsonObject, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
 import type { AppMode } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
@@ -20,6 +20,7 @@ import type { SystemHooks } from '../theme/system.js';
 import { ensureAppRoot } from '../app/index.js';
 import { nodeThemeMapper } from '../theme/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
+import { startBrowserLogic } from './logic.js';
 import { mountSteps } from './steps.js';
 import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
 
@@ -109,6 +110,10 @@ function stepError(name: string): BuildError {
  * `standalone` or `connecting`; the host writes later statuses. `raise` runs the root node's `on` entry for an app
  * event (`sync.rejected`).
  *
+ * Outside Full mode the document's `logic` runs in the browser (`startBrowserLogic`): machines and rules look up the
+ * store's own writes, and their failures and `notify` events reach the root node's `on` as `logic.failed` and
+ * `notify.<name>`. In Full mode the app server runs it.
+ *
  * `dispose` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and the node resolver
  * and options, so a second `mountApp` on a fresh host starts clean
  */
@@ -190,6 +195,24 @@ export function mountApp(
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));
 
     let disposed = false;
+    let stopLogic: (() => void) | undefined;
+    try {
+        stopLogic =
+            mode === 'full'
+                ? undefined
+                : startBrowserLogic({
+                      store: store as never,
+                      document,
+                      library,
+                      tree: resolved,
+                      raise: (name, payload) => {
+                          if (!disposed) dispatcher.raise(name as AppEventName, payload);
+                      },
+                      emit: (name, payload) => hooks.onEmit?.(name, payload)
+                  });
+    } catch (error) {
+        report.error('mountApp could not start the logic', { reason: String(error) });
+    }
     return {
         store,
         baseOverlay,
@@ -201,6 +224,7 @@ export function mountApp(
         dispose(): void {
             if (disposed) return;
             disposed = true;
+            stopLogic?.();
             dispatcher.dispose();
             root.remove();
             unmount(host);

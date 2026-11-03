@@ -13,7 +13,8 @@ import {
     MAX_WRITES,
     MESSAGE_BYTE_LIMITS
 } from './limits.js';
-import { APP_EVENTS, CHANGE_OPS, FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { CHANGE_OPS, FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { isAppEvent } from '../core/types.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
 
 /** Why a message was dropped */
@@ -160,7 +161,7 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
     theme: (m) => hasOnlyKeys(m, ['kind', 'name']) && isText(m['kind'], MAX_NAME_LENGTH) && isText(m['name'], MAX_NAME_LENGTH),
     event: (m) =>
         hasOnlyKeys(m, ['name', 'payload']) &&
-        (APP_EVENTS as readonly unknown[]).includes(m['name']) &&
+        isAppEvent(m['name']) &&
         (m['payload'] === undefined || isJson(m['payload'])),
     ready: (m) => hasOnlyKeys(m, []),
     change: (m) => hasOnlyKeys(m, ['change']) && isRuntimeChange(m['change']),

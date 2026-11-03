@@ -10,6 +10,7 @@ export const ERROR_PREFIXES = [
     'SUI-LAYOUT',
     'SUI-THEME',
     'SUI-LOCALE',
+    'SUI-LOGIC',
     'SUI-BUILD',
     'SUI-RUN'
 ] as const;
@@ -146,6 +147,13 @@ export const ERROR_CATALOG = {
         template: 'Component token group "{name}" in {file} does not match the same group in {other}'
     },
     'SUI-BUILD-TOKENDESC': { template: 'Semantic token "{name}" needs a one-line description in {file}' },
+    'SUI-LOGIC-SHAPE': { template: 'Logic at {path} is not valid: {name}' },
+    'SUI-LOGIC-COMMAND': { template: 'Unknown logic command "{command}" at {path}' },
+    'SUI-LOGIC-PATH': {
+        template: 'Path {target} at {path} must be under $.app, $.data or $.server, use only the captures of its trigger, or be a node reference that resolves to one node'
+    },
+    'SUI-LOGIC-STATE': { template: 'State "{name}" at {path} is not a state of machine "{other}"' },
+    'SUI-LOGIC-EXPRESSION': { template: 'Expression at {path} does not compile: {name}' },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-ON-SHAPE': { template: 'The "{event}" entry at {path} is not a command or a list of commands' },
     'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },

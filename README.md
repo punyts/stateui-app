@@ -316,6 +316,58 @@ controller: ({ element }) => {
 A command aimed at `$row` from a row template is also given the store path of the record as a third argument. The function
 throws to fail. The dispatcher does not search closed shadow roots.
 
+## Logic
+
+The `logic` root of a document holds **machines** and **rules** that act on state changes with built-in commands, so a
+Save button saves and a count follows its records without an agent in the loop.
+
+```json
+"logic": {
+  "machines": {
+    "addContact": {
+      "state": "$.data.flags.phase", "initial": "editing",
+      "transitions": [
+        { "from": "editing", "when": { "path": "$.data.flags.saved", "is": true }, "to": "saving",
+          "do": [ { "command": "set", "target": "$.data.flags.saved", "value": false },
+                  { "command": "save-data", "into": "$.data.contacts", "value": { "form": "^entry" }, "as": "save" } ] },
+        { "from": "saving", "when": { "result": "save", "is": "accepted" }, "to": "editing",
+          "do": [ { "command": "reset", "target": "^entry" }, { "command": "notify", "target": "toast", "value": { "text": "Added" } } ] },
+        { "from": "saving", "when": { "result": "save", "is": "rejected" }, "to": "editing" }
+      ]
+    }
+  },
+  "rules": {
+    "count": { "when": { "path": "$.data.contacts" }, "do": [ { "command": "set", "target": "$.data.stats.count", "value": "{{ size($.data.contacts) }}" } ] },
+    "noDrafts": { "when": { "path": "$.data.contacts.{id}", "if": "$trigger.name == 'draft'" }, "do": [ { "command": "reject", "reason": "Draft is not a name" } ] },
+    "window": { "when": { "path": "$.app.children.contacts.window" }, "do": [ { "command": "query", "from": "$.data.contacts", "sort": "name", "window": "$trigger", "into": "^contacts" } ] }
+  }
+}
+```
+
+- **Triggers.** `path` is a state path whose steps may be `*` (one segment) or `{name}` (one segment, captured); it
+  matches a change at, below or above it. `result` is the `as` name of a `save-data` or `delete-data` command of the
+  same machine. `is` compares the value (or the result status, `accepted` or `rejected`), `if` is an expression.
+- **Machines.** The current state is the value at `state` (`initial` is written when it has none). The first
+  transition of the current state whose trigger matches fires; `from` absent matches any state, `to` absent keeps it.
+- **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
+  `save-data` (a record into a data map, with a new key or `key`), `delete-data`, `pull-data` (a record into a form),
+  `query` (sort, filter and window a data map into a list's records, by position, and its `total`), `notify` (app
+  event `notify.<name>`), `emit` (to the server) and `reject`. A rule whose only command is `reject` is a **guard**:
+  it refuses the change.
+- **Values.** `{{ expression }}` templates; `$.path`, `^node.path` (a unique node key or composed name), `$trigger`,
+  `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
+  `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
+  `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,
+  `string`, `now`.
+- **All or nothing.** A transition's commands run on a working copy and commit together. A failing command commits
+  nothing and raises `logic.failed` (`{ machine, from?, command?, reason }`) on the root node. A machine or rule fires
+  at most once per chain, a chain stops at depth 8, and command results start new chains after the current one.
+- **Where it runs.** `mountApp` runs it in the browser for Standalone and Persisted apps, for the store's own
+  (untagged) writes only, so writes that arrive through sync are not run again; logic writes carry the origin
+  `logic` and are synced. A refused change is undone. Full apps run it on the app server's authority
+  (`@punyts/stateui-mcp`). The engine itself (`createLogicEngine`, `createLogicIndex`, `readLogic`) has no
+  environment and runs on any `LogicHost`.
+
 ## Starting an application: `mountApp`
 
 `mountApp(host, document, library, hooks?)` is the single entry point (`src/dom/mount/`, exported from

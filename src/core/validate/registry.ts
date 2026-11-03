@@ -1,4 +1,5 @@
 import { validateLayouts, validatePlacements } from '../layout/index.js';
+import { createLogicIndex, readLogic } from '../logic/index.js';
 import { validateOn } from '../on/index.js';
 import type { DocumentValidator } from './types.js';
 
@@ -25,3 +26,8 @@ export function documentValidators(): [string, DocumentValidator][] {
 registerDocumentValidator('on', (context) => validateOn(context.tree, context.library));
 registerDocumentValidator('layout', validateLayouts);
 registerDocumentValidator('placement', validatePlacements);
+registerDocumentValidator('logic', (context) =>
+    context.document.logic === undefined
+        ? []
+        : readLogic(context.document.logic, { resolve: createLogicIndex(context.tree, context.library).resolve }).errors
+);

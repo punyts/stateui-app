@@ -37,7 +37,8 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
         ['themes', (value) => isMapOf(value, isObject)],
         ['locale', (value) => typeof value === 'string'],
         ['data', isObject],
-        ['locales', (value) => isMapOf(value, isObject)]
+        ['locales', (value) => isMapOf(value, isObject)],
+        ['logic', isObject]
     ];
     for (const [key, fits] of typed) {
         if (Object.hasOwn(document, key) && !fits(document[key] as JsonValue)) errors.push(wrongType(key, `$.${key}`));

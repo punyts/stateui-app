@@ -1,5 +1,6 @@
 import { report } from '@punyts/core';
 import { SYNC_ORIGIN, captureChanges } from '@punyts/state-sync';
+import { LOGIC_ORIGIN } from '../core/logic/index.js';
 import type { Capture, Change } from '@punyts/state-sync';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
@@ -241,6 +242,7 @@ export function startRuntime(
     function startCapture(store: NonNullable<MountedApp['store']>): void {
         capture = captureChanges(store, {
             base: () => 0,
+            origins: [LOGIC_ORIGIN],
             onChanges(changes) {
                 if (disposed) return;
                 for (const change of changes) {
