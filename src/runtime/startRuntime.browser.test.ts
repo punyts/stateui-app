@@ -28,7 +28,12 @@ const library: ComponentLibrary = {
     },
     heading: { tier: 'root', tag: 'x-rt-heading', shape: shapeOf({ _text: { type: 'string', kind: 'content', default: 'Heading' } }) },
     modal: { tier: 'root', tag: 'x-rt-modal', shape: shapeOf({ title: { type: 'string', default: '' } }, [], ['open', 'toast']) },
-    button: { tier: 'root', tag: 'x-rt-button', shape: shapeOf({ enabled: { type: 'boolean', default: true } }, ['press']) }
+    button: { tier: 'root', tag: 'x-rt-button', shape: shapeOf({ enabled: { type: 'boolean', default: true } }, ['press']) },
+    counter: {
+        tier: 'root',
+        tag: 'x-rt-counter',
+        shape: shapeOf({ count: { type: 'number', default: 0, runtime: true }, label: { type: 'string', default: '' }, note: { type: 'string' } })
+    }
 };
 
 defineComponent({
@@ -41,6 +46,15 @@ defineComponent({ tag: 'x-rt-input', template: '<i>input</i>' });
 defineComponent({ tag: 'x-rt-heading', template: '<h1>{{ $._text }}</h1>' });
 defineComponent({ tag: 'x-rt-modal', template: '<dialog>modal</dialog>' });
 defineComponent({ tag: 'x-rt-button', template: '<b>button</b>' });
+/** Computes its runtime property `count` on every mount, as a record view counts its records */
+defineComponent({
+    tag: 'x-rt-counter',
+    template: '<p>count:{{ $.count }} note:{{ $.note }}</p>',
+    controller: ({ store, basePath }) => {
+        store.set(`${basePath}.count`, 3);
+        return {};
+    }
+});
 
 function textOf(root: ParentNode): string {
     let text = '';
@@ -167,6 +181,38 @@ describe('startRuntime in Chromium', () => {
         expect(textOf(host)).toContain('label:Hopper');
         expect(textOf(host)).toContain('label:x');
         expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should neither post nor restore a runtime property of a node', async () => {
+        // Arrange
+        const document: AppDocument = { data: {}, app: panel({ rows: { component: 'counter' } }) };
+        const stale = { data: {}, app: { children: { rows: { count: 0, label: 'kept' } } } };
+
+        // Act
+        send(message('load', { document, state: stale }));
+        await tick();
+        send(message('write', { writes: [{ path: '$.app.children.rows.count', value: 0 }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('count:3');
+        expect(ofType('change').map((posted) => (posted['change'] as { path: string }).path)).not.toContain('$.app.children.rows.count');
+        expect(ofType('error')).toHaveLength(0);
+    });
+
+    it('should put a snapshot property the document does not set on its node, and skip a node that is gone', async () => {
+        // Arrange
+        const document: AppDocument = { data: {}, app: panel({ rows: { component: 'counter' } }) };
+        const snapshot = { data: {}, app: { children: { rows: { note: 'filled', other: 'x' }, gone: { label: 'old' } } } };
+
+        // Act
+        send(message('load', { document, state: snapshot }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('note:filled');
+        expect(textOf(host)).not.toContain('old');
+        expect(ofType('error')).toHaveLength(0);
     });
 
     it('should show a sync status write in a linked node', async () => {

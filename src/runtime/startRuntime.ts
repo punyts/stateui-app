@@ -36,6 +36,7 @@ import type {
     WriteMessage
 } from './messages.js';
 import { runCommandMessage } from './runCommandMessage.js';
+import { isRuntimeProperty } from './runtimeProperties.js';
 import { validateMessage } from './validate.js';
 
 const STEP_NAME = 'runtime-load';
@@ -129,18 +130,6 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
     return found;
 }
 
-/** Writes the articulation values of a snapshot where the node still exists; a value for a vanished node is skipped */
-function applyArticulation(store: { get(path: string): unknown; set(path: string, value: never): boolean }, path: string, value: unknown): void {
-    if (isRecord(value)) {
-        for (const [key, item] of Object.entries(value)) {
-            const child = `${path}.${key}`;
-            if (store.get(child) !== undefined) applyArticulation(store, child, item);
-        }
-    } else if (value !== undefined) {
-        store.set(path, value as never);
-    }
-}
-
 /**
  * Starts the runtime inside the iframe. It listens on `win` for `message` events and acts on a message only when
  * `event.source === parent` (pass `window.parent`), it passes `validateMessage` and its `nonce` is `nonce`; anything
@@ -162,7 +151,8 @@ function applyArticulation(store: { get(path: string): unknown; set(path: string
  *
  * It posts one `change` for each change of the store that is not a host write (`captureChanges` of
  * `@punyts/state-sync`: a user's typing, a controller, a command), batched to a microtask and folded; `$.runtime`,
- * `$.server` and link aliases make none. The value of an `inputType: "password"` field (and the data such a field is
+ * `$.server`, link aliases and the runtime properties of a node (`"runtime": true` in its shape) make none, and a
+ * snapshot or a write does not set a runtime property. The value of an `inputType: "password"` field (and the data such a field is
  * linked to) never leaves the frame: such a change is not posted, and it is cut out of the value of a change above it.
  * It posts `emit` from the dispatcher hook and `error` for validation and runtime errors.
  *
@@ -220,21 +210,57 @@ export function startRuntime(
         return isRecord(owner) && owner['inputType'] === 'password';
     }
 
-    /** A copy of the value without the secrets below `path` */
+    /** What never leaves the frame: a secret, or a runtime property the component computes itself on every mount */
+    function isKept(store: NonNullable<MountedApp['store']>, path: string): boolean {
+        return isSecret(store, path) || isRuntimeProperty(store, library, path);
+    }
+
+    /** A copy of the value without the secrets and runtime properties below `path` */
     function withoutSecrets(store: NonNullable<MountedApp['store']>, path: string, value: JsonValue): JsonValue {
         if (Array.isArray(value)) return value.map((item, index) => withoutSecrets(store, `${path}.${index}`, item));
         if (!isRecord(value)) return value;
         const kept: Record<string, JsonValue> = {};
         for (const [key, item] of Object.entries(value)) {
             const child = `${path}.${key}`;
-            if (!isSecret(store, child)) kept[key] = withoutSecrets(store, child, item as JsonValue);
+            if (!isKept(store, child)) kept[key] = withoutSecrets(store, child, item as JsonValue);
         }
         return kept;
     }
 
-    /** The change as posted: no base (the host's sync client gives it one), no secrets; undefined when it is one */
+    /**
+     * Whether a snapshot value may be written at a key the store does not hold yet. On a node only a declared property
+     * that is not a slot (`items` and `total` that logic fills, `error`); in a node's `children` nothing, as the child
+     * node is gone from the document; inside any other value (a map of records) every key
+     */
+    function mayCreate(parent: Record<string, unknown>, key: string, inChildren: boolean): boolean {
+        if (inChildren) return false;
+        const component = parent['component'];
+        if (typeof component !== 'string') return true;
+        const entry = library[component];
+        const property = entry?.tier === 'root' && Object.hasOwn(entry.shape.properties, key) ? entry.shape.properties[key] : undefined;
+        if (property === undefined) return false;
+        const types = Array.isArray(property.type) ? property.type : [property.type];
+        return !types.includes('node');
+    }
+
+    /** Writes the articulation values of a snapshot over the mounted app; a value for a vanished node or a runtime property is skipped */
+    function applyArticulation(store: NonNullable<MountedApp['store']>, path: string, value: unknown, inChildren = false): void {
+        const current = store.get(path);
+        if (!isRecord(value) || !isRecord(current)) {
+            if (value !== undefined) store.set(path, value as never);
+            return;
+        }
+        for (const [key, item] of Object.entries(value)) {
+            const child = `${path}.${key}`;
+            if (isRuntimeProperty(store, library, child)) continue;
+            if (store.get(child) === undefined && !mayCreate(current, key, inChildren)) continue;
+            applyArticulation(store, child, item, key === 'children' && typeof current['component'] === 'string');
+        }
+    }
+
+    /** The change as posted: no base (the host's sync client gives it one), no secrets or runtime properties; undefined when it is one */
     function postable(store: NonNullable<MountedApp['store']>, change: Change): RuntimeChange | undefined {
-        if (isSecret(store, change.path)) return undefined;
+        if (isKept(store, change.path)) return undefined;
         const { id, path, op } = change;
         return change.value === undefined ? { id, path, op } : { id, path, op, value: withoutSecrets(store, path, change.value) };
     }
@@ -311,6 +337,8 @@ export function startRuntime(
     }
 
     function applyWrite(store: NonNullable<MountedApp['store']>, write: PathWrite): BuildError | undefined {
+        // A runtime property the host still has from an older view is the component's own, so it is not written over
+        if (isRuntimeProperty(store, library, write.path)) return undefined;
         const done = write.remove === true ? store.delete(write.path, SYNC_WRITE) : store.set(write.path, write.value as never, SYNC_WRITE);
         return done ? undefined : buildError('SUI-RUN-WRITE', { path: write.path, statePath: write.path });
     }
