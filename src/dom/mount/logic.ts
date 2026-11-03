@@ -35,8 +35,9 @@ function plain(value: unknown): JsonValue | undefined {
  * runtime's sync capture sends and this capture skips, since the engine runs chains itself.
  *
  * A guard that refuses a change undoes it (the value before the turn is written back) and raises `logic.failed`.
- * Writes are batched to a microtask like the sync capture. Returns the function that stops it; undefined when the
- * document has no logic
+ * Writes are batched to a microtask like the sync capture. Timers (`after`, `debounce`) use `setTimeout` and live as
+ * long as the mount; `call` is never answered in the browser. Returns the function that stops it and its timers;
+ * undefined when the document has no logic
  */
 export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | undefined {
     const { store, document } = options;
@@ -71,6 +72,10 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
         records: index.records,
         notify: (name, payload) => options.raise(`${NOTIFY_PREFIX}${name}`, payload),
         emit: (name, payload) => options.emit?.(name, payload),
+        schedule(ms, run) {
+            const timer = setTimeout(run, ms);
+            return () => clearTimeout(timer);
+        },
         failed(failure) {
             report.error('Logic failed', { machine: failure.machine, from: failure.from, command: failure.command, reason: failure.reason });
             options.raise(LOGIC_FAILED_EVENT, { ...failure } as unknown as JsonValue);
@@ -105,8 +110,10 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
     const listener = (path: string, value: unknown, oldValue: unknown, action: string, origin?: string): void => {
         if (origin !== undefined || action.endsWith('-child') || action === 'relink') return;
         if (store.resolve(path) !== path) return;
+        const old = plain(oldValue);
         const change: LogicChange = action === 'delete' || value === undefined ? { path } : { path, value: plain(value) as JsonValue };
-        pending.push({ change, old: plain(oldValue) });
+        if (old !== undefined) change.previous = old;
+        pending.push({ change, old });
         if (!scheduled) {
             scheduled = true;
             queueMicrotask(flush);
@@ -117,6 +124,7 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
     store.on(WATCHED, listener);
     return () => {
         stopped = true;
+        engine.stop();
         store.off(WATCHED, listener);
     };
 }

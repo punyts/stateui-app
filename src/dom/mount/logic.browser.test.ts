@@ -127,6 +127,39 @@ describe('browser logic', () => {
         expect(mounted.store!.get('$.app.note')).toBe('notified');
     });
 
+    it('should give a rule the value before the store write as $previous', async () => {
+        const logic = { rules: { up: { when: { path: '$.data.qty', was: 1 }, do: [{ command: 'set', target: '$.app.note', value: '{{ $previous }} to {{ $trigger }}' }] } } };
+        const mounted = mount(documentWith(logic));
+
+        mounted.store!.set('$.data.qty', 4);
+        await flush();
+
+        expect(mounted.store!.get('$.app.note')).toBe('1 to 4');
+    });
+
+    it('should fire a debounced rule once after the writes stop, and drop its timer on dispose', async () => {
+        // Arrange
+        const logic = { rules: { later: { when: { path: '$.data.qty', debounce: 30 }, do: [{ command: 'increment', target: '$.data.stats.count' }] } } };
+        const mounted = mount(documentWith(logic));
+        const store = mounted.store!;
+
+        // Act
+        store.set('$.data.qty', 2);
+        await flush();
+        store.set('$.data.qty', 3);
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        const fired = store.get('$.data.stats.count');
+        store.set('$.data.qty', 4);
+        await flush();
+        mounted.dispose();
+        app = undefined;
+        await new Promise((resolve) => setTimeout(resolve, 60));
+
+        // Assert
+        expect(fired).toBe(2);
+        expect(store.get('$.data.stats.count')).toBe(2);
+    });
+
     it('should stop when the app is disposed', async () => {
         const mounted = mount(documentWith(COUNT));
         const store = mounted.store!;

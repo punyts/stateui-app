@@ -30,7 +30,7 @@ export const ERROR_CATALOG = {
     'SUI-DOC-EXPOSES': { template: 'Exposed path "{key}" of a composed entry {name}' },
     'SUI-DOC-TYPE': { template: 'Document key "{key}" at {path} has the wrong type' },
     'SUI-DOC-SERVER': {
-        template: 'The document uses {target} at {path}; $.server needs Full mode, and the app runs in {name} mode'
+        template: 'The document uses {target} at {path}, which needs Full mode (an app server), and the app runs in {name} mode'
     },
     'SUI-DOC-VALIDATOR': { template: 'Validator "{name}" failed while checking the document' },
     'SUI-DOC-ORDER': { template: 'Key "{key}" at {path} is integer-like and would be reordered; use a prefixed key' },

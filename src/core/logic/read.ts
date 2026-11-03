@@ -3,9 +3,9 @@ import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { captureNames, compilePattern, fillCaptures, isStatePath } from './pattern.js';
-import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS } from './types.js';
-import type { LogicCommand, LogicDocument, LogicMachine, LogicRule, LogicTransition, LogicTrigger } from './types.js';
-import { LogicError, compileExpression, templateExpressions } from './values.js';
+import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS, MAX_DELAY } from './types.js';
+import type { LogicCommand, LogicDocument, LogicMachine, LogicRow, LogicRule, LogicTable, LogicTransition, LogicTrigger } from './types.js';
+import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions } from './values.js';
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
 const LOGIC_ROOTS = ['app', 'data', 'server'];
@@ -13,7 +13,16 @@ const LOGIC_ROOTS = ['app', 'data', 'server'];
 const MACHINE_KEYS = ['state', 'initial', 'transitions'];
 const TRANSITION_KEYS = ['from', 'when', 'do', 'to'];
 const RULE_KEYS = ['when', 'do'];
-const TRIGGER_KEYS = ['path', 'result', 'is', 'if'];
+const TABLE_KEYS = ['when', 'inputs', 'rows'];
+const ROW_KEYS = ['match', 'if', 'do'];
+const TRIGGER_KEYS = ['path', 'result', 'is', 'was', 'if', 'after', 'debounce'];
+const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** Where a trigger is: a machine transition (with its result names and whether it has `from`), a rule or a table */
+interface TriggerPlace {
+    results?: readonly string[];
+    from?: boolean;
+}
 
 /** The keys each command needs */
 const REQUIRED: Record<LogicCommand['command'], readonly ('target' | 'from' | 'into' | 'value')[]> = {
@@ -29,6 +38,7 @@ const REQUIRED: Record<LogicCommand['command'], readonly ('target' | 'from' | 'i
     query: ['from', 'into'],
     notify: ['target'],
     emit: ['target'],
+    call: ['target'],
     reject: []
 };
 
@@ -98,7 +108,14 @@ class Reader {
         this.templates(text, path);
     }
 
-    trigger(value: JsonValue | undefined, path: string, results: readonly string[] | undefined): { trigger?: LogicTrigger; captures: string[] } {
+    delay(value: JsonValue | undefined, path: string): number | undefined {
+        if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_DELAY) return value;
+        this.shape(path, `a delay must be a whole number of milliseconds from 1 to ${MAX_DELAY}`);
+        return undefined;
+    }
+
+    trigger(value: JsonValue | undefined, path: string, place: TriggerPlace): { trigger?: LogicTrigger; captures: string[] } {
+        const results = place.results;
         if (!isObject(value)) {
             this.shape(path, '"when" must be an object');
             return { captures: [] };
@@ -109,7 +126,19 @@ class Reader {
         let captures: string[] = [];
         const hasPath = Object.hasOwn(value, 'path');
         const hasResult = Object.hasOwn(value, 'result');
-        if (hasPath === hasResult) this.shape(path, '"when" needs exactly one of "path" and "result"');
+        const hasAfter = Object.hasOwn(value, 'after');
+        if (Number(hasPath) + Number(hasResult) + Number(hasAfter) !== 1) this.shape(path, '"when" needs exactly one of "path", "result" and "after"');
+        if (hasAfter) {
+            if (results === undefined) this.shape(`${path}.after`, 'only a machine transition can wait for a time');
+            else if (!place.from) this.shape(`${path}.after`, '"after" needs "from" on its transition');
+            const ms = this.delay(value['after'], `${path}.after`);
+            if (ms !== undefined) trigger.after = ms;
+        }
+        if (Object.hasOwn(value, 'debounce')) {
+            if (!hasPath) this.shape(`${path}.debounce`, '"debounce" needs "path"');
+            const ms = this.delay(value['debounce'], `${path}.debounce`);
+            if (ms !== undefined) trigger.debounce = ms;
+        }
         if (hasPath) {
             const text = value['path'];
             const pattern = typeof text === 'string' ? compilePattern(text) : undefined;
@@ -128,6 +157,10 @@ class Reader {
             else trigger.result = name;
         }
         if (Object.hasOwn(value, 'is')) trigger.is = value['is'] as JsonValue;
+        if (Object.hasOwn(value, 'was')) {
+            if (!hasPath) this.shape(`${path}.was`, '"was" needs "path"');
+            trigger.was = value['was'] as JsonValue;
+        }
         if (Object.hasOwn(value, 'if')) {
             const text = value['if'];
             if (typeof text !== 'string' || text.trim() === '') {
@@ -141,7 +174,7 @@ class Reader {
         return this.errors.length === before ? { trigger, captures } : { captures };
     }
 
-    command(value: JsonValue, path: string, captures: readonly string[], guard: boolean): LogicCommand | undefined {
+    command(value: JsonValue, path: string, captures: readonly string[], guard: boolean, machine = false): LogicCommand | undefined {
         if (!isObject(value)) {
             this.shape(path, 'a command must be an object');
             return undefined;
@@ -155,6 +188,8 @@ class Reader {
         }
         const command = name as LogicCommand['command'];
         if (command === 'reject' && !guard) this.shape(path, '"reject" must be the only command of a rule');
+        if (command === 'call' && !machine) this.shape(path, '"call" runs only in a machine, which waits for its result');
+        if (command === 'call' && !Object.hasOwn(value, 'as')) this.shape(path, '"call" needs "as"');
         for (const key of REQUIRED[command]) {
             if (!Object.hasOwn(value, key)) this.shape(path, `"${command}" needs "${key}"`);
         }
@@ -163,7 +198,7 @@ class Reader {
             const text = value[key];
             if (typeof text !== 'string' || text === '') {
                 this.shape(`${path}.${key}`, `"${key}" must be a path`);
-            } else if (!((command === 'notify' || command === 'emit') && key === 'target')) {
+            } else if (!((command === 'notify' || command === 'emit' || command === 'call') && key === 'target')) {
                 this.statePath(text, `${path}.${key}`, captures);
             }
         }
@@ -177,13 +212,13 @@ class Reader {
         return this.errors.length === before ? (value as unknown as LogicCommand) : undefined;
     }
 
-    commands(value: JsonValue | undefined, path: string, captures: readonly string[], options: { required: boolean; guard: boolean }): LogicCommand[] | undefined {
+    commands(value: JsonValue | undefined, path: string, captures: readonly string[], options: { required: boolean; guard: boolean; machine?: boolean }): LogicCommand[] | undefined {
         if (value === undefined && !options.required) return [];
         if (!Array.isArray(value) || (options.required && value.length === 0)) {
             this.shape(path, '"do" must be a list of commands');
             return undefined;
         }
-        const commands = value.map((item, index) => this.command(item, `${path}.${index}`, captures, options.guard));
+        const commands = value.map((item, index) => this.command(item, `${path}.${index}`, captures, options.guard, options.machine));
         return commands.every((command) => command !== undefined) ? (commands as LogicCommand[]) : undefined;
     }
 
@@ -221,8 +256,8 @@ class Reader {
                 return;
             }
             this.unknownKeys(item, TRANSITION_KEYS, at);
-            const { trigger, captures } = this.trigger(item['when'], `${at}.when`, results);
-            const commands = this.commands(item['do'], `${at}.do`, captures, { required: false, guard: false });
+            const { trigger, captures } = this.trigger(item['when'], `${at}.when`, { results, from: Object.hasOwn(item, 'from') });
+            const commands = this.commands(item['do'], `${at}.do`, captures, { required: false, guard: false, machine: true });
             const transition: LogicTransition = { when: trigger ?? {}, do: commands ?? [] };
             for (const key of ['from', 'to'] as const) {
                 if (!Object.hasOwn(item, key)) continue;
@@ -243,16 +278,86 @@ class Reader {
         }
         const before = this.errors.length;
         this.unknownKeys(value, RULE_KEYS, path);
-        const { trigger, captures } = this.trigger(value['when'], `${path}.when`, undefined);
+        const { trigger, captures } = this.trigger(value['when'], `${path}.when`, {});
         const list = value['do'];
         const guard = Array.isArray(list) && list.length === 1 && isObject(list[0]) && list[0]['command'] === 'reject';
         const commands = this.commands(list, `${path}.do`, captures, { required: true, guard });
+        if (guard && trigger?.debounce !== undefined) this.shape(`${path}.when.debounce`, 'a guard answers at once and cannot debounce');
         return this.errors.length === before && trigger && commands ? { when: trigger, do: commands } : undefined;
+    }
+
+    table(value: JsonValue, path: string): LogicTable | undefined {
+        if (!isObject(value)) {
+            this.shape(path, 'a table must be an object');
+            return undefined;
+        }
+        const before = this.errors.length;
+        this.unknownKeys(value, TABLE_KEYS, path);
+        const { trigger, captures } = this.trigger(value['when'], `${path}.when`, {});
+        const names: string[] = [];
+        const inputs = value['inputs'];
+        if (inputs !== undefined) {
+            if (!isObject(inputs)) {
+                this.shape(`${path}.inputs`, '"inputs" must be a map of names to values');
+            } else {
+                for (const [name, input] of Object.entries(inputs)) {
+                    const at = `${path}.inputs.${name}`;
+                    if (!INPUT_NAME.test(name) || (SCOPE_NAMES as readonly string[]).includes(name) || captures.includes(name)) {
+                        this.shape(at, `"${name}" cannot be an input name`);
+                        continue;
+                    }
+                    names.push(name);
+                    if (typeof input === 'string' && (input.startsWith('$.') || input.startsWith('^'))) this.statePath(input, at, captures);
+                    else this.templates(input, at);
+                }
+            }
+        }
+        const list = value['rows'];
+        if (!Array.isArray(list) || list.length === 0) {
+            this.shape(`${path}.rows`, '"rows" must be a non-empty list');
+            return undefined;
+        }
+        const rows: LogicRow[] = [];
+        list.forEach((item, index) => {
+            const at = `${path}.rows.${index}`;
+            if (!isObject(item)) {
+                this.shape(at, 'a row must be an object');
+                return;
+            }
+            this.unknownKeys(item, ROW_KEYS, at);
+            const row: LogicRow = { do: [] };
+            const match = item['match'];
+            if (match !== undefined) {
+                if (!isObject(match)) {
+                    this.shape(`${at}.match`, '"match" must be a map of input names to values');
+                } else {
+                    for (const name of Object.keys(match)) if (!names.includes(name)) this.shape(`${at}.match.${name}`, `"${name}" is not an input of the table`);
+                    row.match = match;
+                }
+            }
+            if (Object.hasOwn(item, 'if')) {
+                const text = item['if'];
+                if (typeof text !== 'string' || text.trim() === '') {
+                    this.shape(`${at}.if`, '"if" must be an expression');
+                } else {
+                    const whole = /^\{\{([\s\S]+)\}\}$/.exec(text.trim());
+                    this.expression(whole ? (whole[1] as string).trim() : text, `${at}.if`);
+                    row.if = text;
+                }
+            }
+            if (row.match === undefined && row.if === undefined && index !== list.length - 1) this.shape(at, 'a row with neither "match" nor "if" is the default and must be last');
+            const commands = this.commands(item['do'], `${at}.do`, [...captures, ...names], { required: true, guard: false });
+            if (commands) row.do = commands;
+            rows.push(row);
+        });
+        const table: LogicTable = { when: trigger ?? {}, rows };
+        if (inputs !== undefined && isObject(inputs)) table.inputs = inputs;
+        return this.errors.length === before && trigger ? table : undefined;
     }
 }
 
 /**
- * Reads the `logic` root of a document: the keyed maps `machines` and `rules`. Reports `SUI-LOGIC-SHAPE` (an unknown
+ * Reads the `logic` root of a document: the keyed maps `machines`, `rules` and `tables`. Reports `SUI-LOGIC-SHAPE` (an unknown
  * key, a wrong type, a missing field), `SUI-LOGIC-COMMAND` (an unknown command), `SUI-LOGIC-PATH` (a path that is not
  * under `$.app`, `$.data` or `$.server`, a capture the trigger does not have, or a node reference that does not
  * resolve), `SUI-LOGIC-STATE` (a `from` or `to` that is neither the machine's `initial` nor the `to` of a transition)
@@ -268,8 +373,8 @@ export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadL
         return { logic, errors: reader.errors };
     }
     const root = value as JsonObject;
-    reader.unknownKeys(root, ['machines', 'rules'], '$.logic');
-    for (const key of ['machines', 'rules'] as const) {
+    reader.unknownKeys(root, ['machines', 'rules', 'tables'], '$.logic');
+    for (const key of ['machines', 'rules', 'tables'] as const) {
         if (!Object.hasOwn(root, key)) continue;
         const map = root[key];
         if (!isObject(map)) {
@@ -281,9 +386,12 @@ export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadL
             if (key === 'machines') {
                 const machine = reader.machine(entry, path);
                 if (machine) (logic.machines ??= {})[name] = machine;
-            } else {
+            } else if (key === 'rules') {
                 const rule = reader.rule(entry, path);
                 if (rule) (logic.rules ??= {})[name] = rule;
+            } else {
+                const table = reader.table(entry, path);
+                if (table) (logic.tables ??= {})[name] = table;
             }
         }
     }

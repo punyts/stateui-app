@@ -19,6 +19,8 @@ export interface CommandContext {
     results: { name: string; result: LogicResult }[];
     /** Events to raise after the transition commits */
     after: (() => void)[];
+    /** Server procedures to call after the transition commits, each answered as the named result `as` */
+    calls: { name: string; payload: JsonValue; as: string }[];
 }
 
 function required(command: LogicCommand, key: 'target' | 'from' | 'into'): string {
@@ -214,6 +216,10 @@ const RUNNERS: Record<LogicCommand['command'], Runner> = {
         const name = required(command, 'target');
         const payload = value(command, context);
         context.after.push(() => context.host.emit?.(name, payload));
+    },
+    call: (command, context) => {
+        if (command.as === undefined) throw new LogicError('"call" needs "as"');
+        context.calls.push({ name: required(command, 'target'), payload: value(command, context), as: command.as });
     },
     reject: () => {
         throw new LogicError('"reject" runs only in a guard rule');

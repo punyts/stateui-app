@@ -9,19 +9,23 @@ import type { LogicHost, LogicResult } from './types.js';
 export class LogicError extends Error {}
 
 /** The names an expression or a value reference may use besides captures */
-export const SCOPE_NAMES = ['trigger', 'result', 'key', 'record'] as const;
+export const SCOPE_NAMES = ['trigger', 'previous', 'result', 'key', 'record'] as const;
 
 /** What expressions and values of one transition read */
 export interface Scope {
     read(path: string): JsonValue | undefined;
     /** The value at the trigger's path after the change, or the proposed value for a guard */
     trigger?: JsonValue;
+    /** The value at the trigger's path before the change; for a guard, the value the change would replace */
+    previous?: JsonValue;
     result?: LogicResult;
     /** The key a `save-data` gave its record, for the commands after it */
     key?: string;
     /** The record a `query` filter looks at; its key is `key` */
     record?: JsonValue;
     captures: Readonly<Record<string, string>>;
+    /** The inputs of a decision table, read when it fired */
+    inputs?: Readonly<Record<string, JsonValue>>;
 }
 
 function entries(value: unknown): unknown[] {
@@ -101,14 +105,17 @@ function setIn(target: Record<string, unknown>, steps: readonly string[], value:
 
 /**
  * Runs an expression. State paths (`$.data.x`) are read from the scope; for a path that does not exist the nearest
- * existing parent is read, so `$.data.items.length` still works. `$trigger`, `$result`, `$key` and the captures are
+ * existing parent is read, so `$.data.items.length` still works. `$trigger`, `$previous`, `$result`, `$key`, the
+ * captures and a table's inputs are
  * names; functions come from `LOGIC_FUNCTIONS`. Throws `LogicError` on a compile or run error
  */
 export function evaluate(text: string, scope: Scope): unknown {
     const expression = compileExpression(text);
     const context: Record<string, unknown> = { ...LOGIC_FUNCTIONS };
-    for (const [name, key] of Object.entries(scope.captures)) context[`$${name}`] = key;
+    for (const [name, key] of Object.entries(scope.captures)) context[`${name}`] = key;
+    for (const [name, input] of Object.entries(scope.inputs ?? {})) context[`${name}`] = input;
     if (scope.trigger !== undefined) context['$trigger'] = scope.trigger;
+    if (scope.previous !== undefined) context['$previous'] = scope.previous;
     if (scope.result !== undefined) context['$result'] = scope.result;
     if (scope.key !== undefined) context['$key'] = scope.key;
     if (scope.record !== undefined) context['$record'] = scope.record;
@@ -180,10 +187,12 @@ function pathValue(value: JsonValue | undefined, steps: readonly string[]): Json
 /** The value of a `$name` reference, or undefined when the name is not in the scope */
 function named(name: string, steps: readonly string[], scope: Scope): JsonValue | undefined {
     if (name === 'trigger') return pathValue(scope.trigger, steps);
+    if (name === 'previous') return pathValue(scope.previous, steps);
     if (name === 'result') return pathValue(scope.result as JsonValue | undefined, steps);
     if (name === 'key') return scope.key;
     if (name === 'record') return pathValue(scope.record, steps);
     if (Object.hasOwn(scope.captures, name)) return scope.captures[name];
+    if (scope.inputs !== undefined && Object.hasOwn(scope.inputs, name)) return pathValue(scope.inputs[name], steps);
     throw new LogicError(`$${name} is not a name of this transition`);
 }
 
@@ -215,8 +224,8 @@ function formValues(reference: string, scope: Scope, host: LogicHost): JsonValue
 
 /**
  * The value of a command:
- * - a string `$.path` or `^node.path` is read when the command runs; `$trigger`, `$result`, `$key` and captures
- *   (`$task`) are names, with steps below them (`$trigger.name`);
+ * - a string `$.path` or `^node.path` is read when the command runs; `$trigger`, `$previous`, `$result`, `$key`,
+ *   captures (`$task`) and a table's inputs are names, with steps below them (`$trigger.name`);
  * - a string with `{{ … }}` is evaluated;
  * - `{ "form": ref }`, `{ "record": path }` and `{ "pick": { … } }` are sources;
  * - other arrays and objects are resolved member by member; anything else is a literal

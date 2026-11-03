@@ -14,9 +14,11 @@ export {
     LOGIC_FAILED_EVENT,
     LOGIC_ORIGIN,
     MAX_CHAIN_DEPTH,
+    MAX_DELAY,
     NOTIFY_PREFIX
 } from './types.js';
 export type {
+    LogicAnswer,
     LogicChange,
     LogicCommand,
     LogicCommandName,
@@ -25,11 +27,13 @@ export type {
     LogicHost,
     LogicMachine,
     LogicResult,
+    LogicRow,
     LogicRule,
+    LogicTable,
     LogicTransition,
     LogicTrigger,
     LogicWrite
 } from './types.js';
 export { LOGIC_FUNCTIONS, LogicError, SCOPE_NAMES, condition, evaluate, resolvePath, resolveValue, templateExpressions } from './values.js';
 export type { Scope } from './values.js';
-export { WorkingCopy, covers } from './working.js';
+export { WorkingCopy, covers, placed, within } from './working.js';

@@ -3,7 +3,8 @@ import type { JsonValue } from '../types.js';
 import { pathSteps } from './pattern.js';
 import type { LogicWrite } from './types.js';
 
-function within(value: JsonValue | undefined, steps: readonly string[]): JsonValue | undefined {
+/** The value at `steps` inside `value` */
+export function within(value: JsonValue | undefined, steps: readonly string[]): JsonValue | undefined {
     let current = value;
     for (const step of steps) {
         if (Array.isArray(current)) {
@@ -18,7 +19,7 @@ function within(value: JsonValue | undefined, steps: readonly string[]): JsonVal
 }
 
 /** Writes `value` (a delete when undefined) into a copy of `base` at `steps`, creating missing objects on the way */
-function placed(base: JsonValue | undefined, steps: readonly string[], value: JsonValue | undefined): JsonValue | undefined {
+export function placed(base: JsonValue | undefined, steps: readonly string[], value: JsonValue | undefined): JsonValue | undefined {
     if (steps.length === 0) return value === undefined ? undefined : cloneJson(value);
     const [step, ...rest] = steps as [string, ...string[]];
     if (Array.isArray(base)) {

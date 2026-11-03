@@ -198,6 +198,7 @@ export {
     LOGIC_FUNCTIONS,
     LOGIC_ORIGIN,
     MAX_CHAIN_DEPTH,
+    MAX_DELAY,
     NOTIFY_PREFIX,
     LogicError,
     compilePattern,
@@ -207,6 +208,7 @@ export {
     readLogic
 } from './logic/index.js';
 export type {
+    LogicAnswer,
     LogicChange,
     LogicCommand,
     LogicCommandName,
@@ -217,7 +219,9 @@ export type {
     LogicIndex,
     LogicMachine,
     LogicResult,
+    LogicRow,
     LogicRule,
+    LogicTable,
     LogicTransition,
     LogicTrigger,
     LogicWrite,

@@ -641,3 +641,384 @@ describe('validateDocument with logic', () => {
         expect(validateDocument(document, LIBRARY, { mode: 'full' }).errors.filter((error) => error.code.startsWith('SUI-LOGIC'))).toEqual([]);
     });
 });
+
+/** A clock whose timers run only when the test moves it on */
+function fakeClock() {
+    let now = 0;
+    let timers: { at: number; run: () => void; id: number }[] = [];
+    let next = 0;
+    const schedule = (ms: number, run: () => void): (() => void) => {
+        const id = (next += 1);
+        timers.push({ at: now + ms, run, id });
+        return () => {
+            timers = timers.filter((timer) => timer.id !== id);
+        };
+    };
+    const advance = (ms: number): void => {
+        const until = now + ms;
+        for (;;) {
+            const due = timers.filter((timer) => timer.at <= until).sort((a, b) => a.at - b.at)[0];
+            if (!due) break;
+            timers = timers.filter((timer) => timer.id !== due.id);
+            now = due.at;
+            due.run();
+        }
+        now = until;
+    };
+    return { schedule, advance, pending: () => timers.length };
+}
+
+describe('createLogicEngine: $previous and was', () => {
+    const STATUS: LogicDocument = Object.freeze({
+        rules: {
+            sent: {
+                when: { path: '$.data.invoices.{invoice}.status', was: 'draft', is: 'sent' },
+                do: [{ command: 'set', target: '$.data.log.{invoice}', value: '{{ $previous }} to {{ $trigger }}' }]
+            }
+        }
+    }) as LogicDocument;
+
+    it('should fire only when the value before the change matches was', () => {
+        // Arrange
+        const memory = memoryHost({ data: { invoices: { i1: { status: 'draft' }, i2: { status: 'paid' } }, log: {} } });
+        const engine = createLogicEngine(STATUS, memory.host);
+
+        // Act
+        memory.apply({ path: '$.data.invoices.i1.status', value: 'sent' });
+        engine.changes([{ path: '$.data.invoices.i1.status', value: 'sent', previous: 'draft' }]);
+        memory.apply({ path: '$.data.invoices.i2.status', value: 'sent' });
+        engine.changes([{ path: '$.data.invoices.i2.status', value: 'sent', previous: 'paid' }]);
+
+        // Assert
+        expect(memory.get('$.data.log')).toEqual({ i1: 'draft to sent' });
+    });
+
+    it('should derive $previous when the change is above or below the trigger path', () => {
+        // Arrange
+        const memory = memoryHost({ data: { invoices: { i1: { status: 'sent', total: 5 } }, log: {} } });
+        const below = createLogicEngine(
+            { rules: { r: { when: { path: '$.data.invoices.i1' }, do: [{ command: 'set', target: '$.data.log.before', value: '$previous' }] } } } as LogicDocument,
+            memory.host
+        );
+        const above = createLogicEngine(STATUS, memory.host);
+
+        // Act
+        below.changes([{ path: '$.data.invoices.i1.status', value: 'sent', previous: 'draft' }]);
+        above.changes([{ path: '$.data.invoices', value: { i1: { status: 'sent', total: 5 } }, previous: { i1: { status: 'draft', total: 5 } } }]);
+
+        // Assert
+        expect(memory.get('$.data.log.before')).toEqual({ status: 'draft', total: 5 });
+        expect(memory.get('$.data.log.i1')).toBe('draft to sent');
+    });
+
+    it('should give a guard the current value as $previous', () => {
+        const memory = memoryHost({ data: { level: 3 } });
+        const engine = createLogicEngine(
+            { rules: { g: { when: { path: '$.data.level', if: '$trigger < $previous' }, do: [{ command: 'reject', reason: 'no going down' }] } } } as LogicDocument,
+            memory.host
+        );
+
+        expect(engine.guard({ path: '$.data.level', value: 2 })).toBe('no going down');
+        expect(engine.guard({ path: '$.data.level', value: 4 })).toBeUndefined();
+    });
+
+    it('should pass the previous value of chained writes on', () => {
+        // Arrange
+        const memory = memoryHost({ data: { a: 1, b: 0, log: '' } });
+        const logic = {
+            rules: {
+                copy: { when: { path: '$.data.a' }, do: [{ command: 'set', target: '$.data.b', value: '$trigger' }] },
+                log: { when: { path: '$.data.b' }, do: [{ command: 'set', target: '$.data.log', value: '{{ $previous }}>{{ $trigger }}' }] }
+            }
+        } as LogicDocument;
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.a', 7);
+
+        // Assert
+        expect(memory.get('$.data.log')).toBe('0>7');
+    });
+});
+
+describe('createLogicEngine: decision tables', () => {
+    const SHIPPING: LogicDocument = Object.freeze({
+        tables: {
+            shipping: {
+                when: { path: '$.data.order' },
+                inputs: { country: '$.data.order.country', total: '$.data.order.total' },
+                rows: [
+                    { match: { country: 'NL' }, if: '$total >= 50', do: [{ command: 'set', target: '$.data.order.shipping', value: 0 }] },
+                    { match: { country: 'NL' }, do: [{ command: 'set', target: '$.data.order.shipping', value: 5 }] },
+                    { do: [{ command: 'set', target: '$.data.order.shipping', value: '{{ $total / 10 }}' }] }
+                ]
+            }
+        }
+    }) as LogicDocument;
+
+    it('should run the first row that its inputs match, and the default otherwise', () => {
+        // Arrange
+        const memory = memoryHost({ data: { order: {} } });
+        const engine = createLogicEngine(SHIPPING, memory.host);
+
+        // Act / Assert
+        userChange(memory, engine, '$.data.order', { country: 'NL', total: 60 });
+        expect(memory.get('$.data.order.shipping')).toBe(0);
+        userChange(memory, engine, '$.data.order', { country: 'NL', total: 20 });
+        expect(memory.get('$.data.order.shipping')).toBe(5);
+        userChange(memory, engine, '$.data.order', { country: 'DE', total: 80 });
+        expect(memory.get('$.data.order.shipping')).toBe(8);
+        expect(engine.names).toEqual(['shipping']);
+    });
+
+    it('should fire a table once per chain, so its own write does not loop', () => {
+        const memory = memoryHost({ data: { order: {} } });
+        const engine = createLogicEngine(SHIPPING, memory.host);
+
+        userChange(memory, engine, '$.data.order', { country: 'NL', total: 20 });
+
+        expect(memory.commits).toHaveLength(1);
+        expect(memory.failures).toEqual([]);
+    });
+
+    it('should report the errors of a table', () => {
+        // Arrange
+        const logic = {
+            tables: {
+                t: {
+                    when: { path: '$.data.x' },
+                    inputs: { trigger: '$.data.y', a: '$.data.z' },
+                    rows: [{ do: [{ command: 'set', target: '$.data.w', value: 1 }] }, { match: { b: 1 }, do: [] }]
+                }
+            }
+        };
+
+        // Act
+        const result = readLogic(logic);
+
+        // Assert
+        expect(result.errors.map((error) => error.statePath)).toEqual(
+            expect.arrayContaining(['$.logic.tables.t.inputs.trigger', '$.logic.tables.t.rows.0', '$.logic.tables.t.rows.1.match.b', '$.logic.tables.t.rows.1.do'])
+        );
+        expect(result.logic).toEqual({});
+    });
+});
+
+describe('createLogicEngine: timers', () => {
+    const TOAST: LogicDocument = Object.freeze({
+        machines: {
+            toast: {
+                state: '$.app.toast.phase',
+                initial: 'hidden',
+                transitions: [
+                    { from: 'hidden', when: { path: '$.app.toast.text' }, to: 'shown' },
+                    { from: 'shown', when: { after: 3000 }, do: [{ command: 'set', target: '$.app.toast.text', value: '' }], to: 'hidden' }
+                ]
+            }
+        }
+    }) as LogicDocument;
+
+    it('should fire an after transition once its machine has stayed in from that long', () => {
+        // Arrange
+        const clock = fakeClock();
+        const memory = memoryHost({ app: { toast: { text: '' } } }, { schedule: clock.schedule });
+        const engine = createLogicEngine(TOAST, memory.host);
+        engine.start();
+
+        // Act
+        userChange(memory, engine, '$.app.toast.text', 'Saved');
+        clock.advance(2999);
+        const before = memory.get('$.app.toast.phase');
+        clock.advance(1);
+
+        // Assert
+        expect(before).toBe('shown');
+        expect(memory.get('$.app.toast.phase')).toBe('hidden');
+        expect(memory.get('$.app.toast.text')).toBe('');
+        expect(clock.pending()).toBe(0);
+    });
+
+    it('should cancel an after timer when its machine leaves the state', () => {
+        // Arrange
+        const clock = fakeClock();
+        const memory = memoryHost({ app: { toast: { text: '' } } }, { schedule: clock.schedule });
+        const engine = createLogicEngine(TOAST, memory.host);
+        engine.start();
+        userChange(memory, engine, '$.app.toast.text', 'Saved');
+
+        // Act: an agent closes the toast by its state
+        userChange(memory, engine, '$.app.toast.phase', 'hidden');
+        clock.advance(5000);
+
+        // Assert
+        expect(memory.get('$.app.toast.text')).toBe('Saved');
+        expect(clock.pending()).toBe(0);
+    });
+
+    it('should arm an after timer on start for the state a machine is already in', () => {
+        const clock = fakeClock();
+        const memory = memoryHost({ app: { toast: { text: 'Old', phase: 'shown' } } }, { schedule: clock.schedule });
+        const engine = createLogicEngine(TOAST, memory.host);
+
+        engine.start();
+        clock.advance(3000);
+
+        expect(memory.get('$.app.toast.phase')).toBe('hidden');
+    });
+
+    it('should fire a debounced trigger once after the changes stop, with the last value', () => {
+        // Arrange
+        const clock = fakeClock();
+        const memory = memoryHost({ app: { search: '' }, data: { searches: 0, last: '' } }, { schedule: clock.schedule });
+        const logic = {
+            rules: {
+                search: {
+                    when: { path: '$.app.search', debounce: 300 },
+                    do: [
+                        { command: 'increment', target: '$.data.searches' },
+                        { command: 'set', target: '$.data.last', value: '$trigger' }
+                    ]
+                }
+            }
+        } as LogicDocument;
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.app.search', 'a');
+        clock.advance(200);
+        userChange(memory, engine, '$.app.search', 'an');
+        clock.advance(200);
+        userChange(memory, engine, '$.app.search', 'ana');
+        clock.advance(299);
+        const early = memory.get('$.data.searches');
+        clock.advance(1);
+
+        // Assert
+        expect(early).toBe(0);
+        expect(memory.get('$.data.searches')).toBe(1);
+        expect(memory.get('$.data.last')).toBe('ana');
+    });
+
+    it('should cancel its timers when stopped', () => {
+        const clock = fakeClock();
+        const memory = memoryHost({ app: { toast: { text: '' } } }, { schedule: clock.schedule });
+        const engine = createLogicEngine(TOAST, memory.host);
+        engine.start();
+        userChange(memory, engine, '$.app.toast.text', 'Saved');
+
+        engine.stop();
+        clock.advance(5000);
+
+        expect(memory.get('$.app.toast.phase')).toBe('shown');
+    });
+
+    it('should refuse timers where they cannot run', () => {
+        // Arrange
+        const logic = {
+            machines: {
+                m: {
+                    state: '$.app.m',
+                    initial: 'a',
+                    transitions: [{ when: { after: 10 }, to: 'a' }, { from: 'a', when: { after: 0.5 } }, { from: 'a', when: { path: '$.data.x', after: 10 } }]
+                }
+            },
+            rules: {
+                r: { when: { after: 10 }, do: [{ command: 'set', target: '$.data.x', value: 1 }] },
+                g: { when: { path: '$.data.x', debounce: 10 }, do: [{ command: 'reject', reason: 'no' }] }
+            }
+        };
+
+        // Act
+        const paths = readLogic(logic).errors.map((error) => error.statePath);
+
+        // Assert
+        expect(paths).toEqual(
+            expect.arrayContaining([
+                '$.logic.machines.m.transitions.0.when.after',
+                '$.logic.machines.m.transitions.1.when.after',
+                '$.logic.machines.m.transitions.2.when',
+                '$.logic.rules.r.when.after',
+                '$.logic.rules.g.when.debounce'
+            ])
+        );
+    });
+});
+
+describe('createLogicEngine: call', () => {
+    const LOOKUP: LogicDocument = Object.freeze({
+        machines: {
+            lookup: {
+                state: '$.app.lookup.phase',
+                initial: 'idle',
+                transitions: [
+                    { from: 'idle', when: { path: '$.app.lookup.query' }, do: [{ command: 'call', target: 'findCompany', value: { name: '$trigger' }, as: 'found' }], to: 'waiting' },
+                    { from: 'waiting', when: { result: 'found', is: 'accepted' }, do: [{ command: 'set', target: '$.app.lookup.answer', value: '$result.value' }], to: 'idle' },
+                    { from: 'waiting', when: { result: 'found', is: 'rejected' }, do: [{ command: 'set', target: '$.app.lookup.answer', value: '$result.reason' }], to: 'idle' }
+                ]
+            }
+        }
+    }) as LogicDocument;
+
+    it('should wait for the answer of a call and give it to the machine', async () => {
+        // Arrange
+        const calls: [string, JsonValue][] = [];
+        const memory = memoryHost(
+            { app: { lookup: {} } },
+            {
+                call: async (name, payload) => {
+                    calls.push([name, payload]);
+                    return { status: 'accepted', value: { id: 'k1' } };
+                }
+            }
+        );
+        const engine = createLogicEngine(LOOKUP, memory.host);
+        engine.start();
+
+        // Act
+        userChange(memory, engine, '$.app.lookup.query', 'Acme');
+        const waiting = memory.get('$.app.lookup.phase');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Assert
+        expect(waiting).toBe('waiting');
+        expect(calls).toEqual([['findCompany', { name: 'Acme' }]]);
+        expect(memory.get('$.app.lookup.answer')).toEqual({ id: 'k1' });
+        expect(memory.get('$.app.lookup.phase')).toBe('idle');
+    });
+
+    it('should reject a call when nothing answers calls, and when the answer fails', async () => {
+        // Arrange
+        const plain = memoryHost({ app: { lookup: {} } });
+        const failing = memoryHost({ app: { lookup: {} } }, { call: () => Promise.reject(new Error('offline')) });
+        const first = createLogicEngine(LOOKUP, plain.host);
+        const second = createLogicEngine(LOOKUP, failing.host);
+        first.start();
+        second.start();
+
+        // Act
+        userChange(plain, first, '$.app.lookup.query', 'Acme');
+        userChange(failing, second, '$.app.lookup.query', 'Acme');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Assert
+        expect(plain.get('$.app.lookup.answer')).toBe('no server answers "findCompany"');
+        expect(failing.get('$.app.lookup.answer')).toBe('offline');
+    });
+
+    it('should refuse call outside a machine, without as, and outside Full mode', () => {
+        // Arrange
+        const logic = {
+            rules: { r: { when: { path: '$.data.x' }, do: [{ command: 'call', target: 'p', as: 'x' }] } },
+            machines: { m: { state: '$.app.m', initial: 'a', transitions: [{ when: { path: '$.data.y' }, do: [{ command: 'call', target: 'p' }] }] } }
+        };
+        const document = { app: APP, logic: LOOKUP as unknown as JsonValue };
+
+        // Act
+        const paths = readLogic(logic).errors.map((error) => error.statePath);
+
+        // Assert
+        expect(paths).toEqual(expect.arrayContaining(['$.logic.rules.r.do.0', '$.logic.machines.m.transitions.0.do.0']));
+        expect(validateDocument(document, LIBRARY, { mode: 'persisted' }).errors.map((error) => error.code)).toContain('SUI-DOC-SERVER');
+        expect(validateDocument(document, LIBRARY, { mode: 'full' }).errors.filter((error) => error.code === 'SUI-DOC-SERVER')).toEqual([]);
+    });
+});

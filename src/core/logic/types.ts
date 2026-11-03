@@ -3,6 +3,9 @@ import type { JsonValue } from '../types.js';
 /** The origin a browser store write of the logic carries, so the logic capture skips it and sync sends it */
 export const LOGIC_ORIGIN = 'logic';
 
+/** The longest delay of an `after` or `debounce` trigger: 24 hours */
+export const MAX_DELAY = 24 * 60 * 60 * 1000;
+
 /** The longest chain: writes of a transition that trigger more transitions, at most this many levels deep */
 export const MAX_CHAIN_DEPTH = 8;
 
@@ -26,6 +29,7 @@ export const LOGIC_COMMANDS = [
     'query',
     'notify',
     'emit',
+    'call',
     'reject'
 ] as const;
 
@@ -54,6 +58,12 @@ export interface LogicTrigger {
     result?: string;
     /** The value at the path, or the result status (`accepted`, `rejected`), must equal this */
     is?: JsonValue;
+    /** The value at the path before the change (`$previous`) must equal this */
+    was?: JsonValue;
+    /** Milliseconds a machine stays in `from` before the transition fires; no `path` or `result` with it */
+    after?: number;
+    /** Milliseconds without another matching change before a `path` trigger fires */
+    debounce?: number;
     /** An expression that must be true */
     if?: string;
 }
@@ -95,20 +105,40 @@ export interface LogicRule {
     do: LogicCommand[];
 }
 
+/** A row of a decision table: every `match` input equals its literal and `if` is true; neither makes it the default */
+export interface LogicRow {
+    match?: Record<string, JsonValue>;
+    if?: string;
+    do: LogicCommand[];
+}
+
+/** A decision table: one trigger, named inputs read when it fires (`$name`), and rows of which the first match runs */
+export interface LogicTable {
+    when: LogicTrigger;
+    inputs?: Record<string, JsonValue>;
+    rows: LogicRow[];
+}
+
 /** The `logic` root of a document */
 export interface LogicDocument {
     machines?: Record<string, LogicMachine>;
     rules?: Record<string, LogicRule>;
+    tables?: Record<string, LogicTable>;
 }
 
 /** A change the engine looks up: a value written at a path, or a delete when `value` is absent */
 export interface LogicChange {
     path: string;
     value?: JsonValue;
+    /** The value at the path before the change, for `$previous`; absent when there was none */
+    previous?: JsonValue;
 }
 
 /** A write of a transition; a delete when `value` is absent */
-export type LogicWrite = LogicChange;
+export interface LogicWrite {
+    path: string;
+    value?: JsonValue;
+}
 
 /** A transition that failed or a change a guard refused, for `logic.failed` and the reporter */
 export interface LogicFailure {
@@ -121,12 +151,21 @@ export interface LogicFailure {
     reason: string;
 }
 
+/** The answer to a `call`: `accepted` with a value, or `rejected` with a reason */
+export interface LogicAnswer {
+    status: 'accepted' | 'rejected';
+    value?: JsonValue;
+    reason?: string;
+}
+
 /** What a `save-data` or `delete-data` command gives to the transitions that wait for it (`$result`) */
 export interface LogicResult {
     status: 'accepted' | 'rejected';
     reason?: string;
     /** The key of the saved or deleted record */
     key?: string;
+    /** The value a `call` was answered with */
+    value?: JsonValue;
 }
 
 /**
@@ -154,4 +193,8 @@ export interface LogicHost {
     failed?(failure: LogicFailure): void;
     /** A new record key; it must not be integer-like */
     newKey?(): string;
+    /** Runs `run` after `ms` milliseconds; returns the function that cancels it. Without it timers never fire */
+    schedule?(ms: number, run: () => void): () => void;
+    /** Runs a named server procedure (Full mode); without it every `call` is rejected */
+    call?(name: string, payload: JsonValue): Promise<LogicAnswer>;
 }

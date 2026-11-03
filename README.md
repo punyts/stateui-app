@@ -318,7 +318,7 @@ throws to fail. The dispatcher does not search closed shadow roots.
 
 ## Logic
 
-The `logic` root of a document holds **machines** and **rules** that act on state changes with built-in commands, so a
+The `logic` root of a document holds **machines**, **rules** and decision **tables** that act on state changes with built-in commands, so a
 Save button saves and a count follows its records without an agent in the loop.
 
 ```json
@@ -346,16 +346,29 @@ Save button saves and a count follows its records without an agent in the loop.
 
 - **Triggers.** `path` is a state path whose steps may be `*` (one segment) or `{name}` (one segment, captured); it
   matches a change at, below or above it. `result` is the `as` name of a `save-data` or `delete-data` command of the
-  same machine. `is` compares the value (or the result status, `accepted` or `rejected`), `if` is an expression.
+  same machine (or a `call`). `is` compares the value (or the result status, `accepted` or `rejected`), `was` the value
+  before the change (`$previous`), `if` is an expression. `debounce` (milliseconds) fires a path trigger once the path
+  has been quiet that long, with the last change. `after` (milliseconds, a machine transition with `from` only) fires
+  that long after the machine entered the state; an `after` transition that stays in its state repeats.
 - **Machines.** The current state is the value at `state` (`initial` is written when it has none). The first
   transition of the current state whose trigger matches fires; `from` absent matches any state, `to` absent keeps it.
+- **Tables.** `tables.<name>` has `when`, `inputs` (names to values, read once and named `$<name>` in the rows) and
+  `rows` of `{ match?, if?, do }`. The first row whose `match` (input names to values) and `if` hold runs its
+  commands; a row with neither is the default and must be last. A table fires once per chain.
+  ```json
+  "shipping": { "when": { "path": "$.data.order" }, "inputs": { "country": "$.data.order.country", "total": "$.data.order.total" },
+    "rows": [ { "match": { "country": "NL" }, "if": "$total >= 50", "do": [ { "command": "set", "target": "$.data.order.shipping", "value": 0 } ] },
+              { "do": [ { "command": "set", "target": "$.data.order.shipping", "value": 5 } ] } ] }
+  ```
 - **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
   `save-data` (a record into a data map, with a new key or `key`), `delete-data`, `pull-data` (a record into a form),
   `query` (sort, filter and window a data map into a list's records, by position, and its `total`), `notify` (app
-  event `notify.<name>`), `emit` (to the server) and `reject`. A rule whose only command is `reject` is a **guard**:
+  event `notify.<name>`), `emit` (to the server), `call` (a server procedure `target` with `value`; machines only and
+  Full mode only, `SUI-DOC-SERVER` elsewhere; the answer comes back as the result `as`, with `$result.value` or
+  `$result.reason`) and `reject`. A rule whose only command is `reject` is a **guard**:
   it refuses the change.
 - **Values.** `{{ expression }}` templates; `$.path`, `^node.path` (a unique node key or composed name), `$trigger`,
-  `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
+  `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
   `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
   `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,
   `string`, `now`.
@@ -366,7 +379,9 @@ Save button saves and a count follows its records without an agent in the loop.
   (untagged) writes only, so writes that arrive through sync are not run again; logic writes carry the origin
   `logic` and are synced. A refused change is undone. Full apps run it on the app server's authority
   (`@punyts/stateui-mcp`). The engine itself (`createLogicEngine`, `createLogicIndex`, `readLogic`) has no
-  environment and runs on any `LogicHost`.
+  environment and runs on any `LogicHost`; the host's `schedule(ms, run)` (returning a cancel function) runs the timers
+  and its `call(name, payload)` answers `call` (with none, a call is rejected). Timers live in memory: they are armed
+  again when the engine starts and `engine.stop()` cancels them.
 
 ## Starting an application: `mountApp`
 

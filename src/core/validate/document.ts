@@ -127,8 +127,9 @@ export function dataPathExists(data: JsonValue | undefined, target: string): boo
 const SERVER_PATH = /^\$\.server(\.|$)/;
 
 /**
- * Every string of the document that names `$.server` or a path below it, as `SUI-DOC-SERVER`. Only an app server
- * (Full mode) has a `$.server` branch, so a Standalone or Persisted app may not use one
+ * Every string of the document that names `$.server` or a path below it, and every logic `call` command, as
+ * `SUI-DOC-SERVER`. Only an app server (Full mode) has a `$.server` branch and answers calls, so a Standalone or
+ * Persisted app may use neither
  */
 export function checkServerUse(document: Record<string, JsonValue>, mode: string): BuildError[] {
     const errors: BuildError[] = [];
@@ -140,6 +141,9 @@ export function checkServerUse(document: Record<string, JsonValue>, mode: string
         } else if (Array.isArray(value)) {
             value.forEach((item, index) => stack.push({ value: item, path: `${path}.${index}` }));
         } else if (isObject(value)) {
+            if (path.startsWith('$.logic.') && value['command'] === 'call') {
+                errors.push(buildError('SUI-DOC-SERVER', { target: '"call"', name: mode, path, statePath: path }));
+            }
             for (const [key, item] of Object.entries(value)) stack.push({ value: item, path: `${path}.${key}` });
         }
     }
