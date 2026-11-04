@@ -3,7 +3,7 @@ export { ERROR_CATALOG, ERROR_PREFIXES, TEMPLATE_PLACEHOLDERS, buildError, isVal
 export type { BuildError, CatalogEntry, ErrorCode, ErrorDetails, Severity, TemplatePlaceholder } from './errors/index.js';
 export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';
 export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, isAppEvent } from './types.js';
-export type { AppDocument, AppEventName, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
+export type { AppDocument, AppEventName, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {
     COMPONENT_CATEGORIES,
     MAX_PATTERN_INPUT,
@@ -276,3 +276,5 @@ export type {
     ThemePart,
     ThemePartOverlay
 } from './blueprint/index.js';
+export { assembleApp, nearestNames, validateApp } from './assemble/index.js';
+export type { AppValidation, AppValidationError, AssembleOptions, AssembleResult, PartSource, ValidateAppOptions } from './assemble/index.js';

@@ -12,6 +12,7 @@ export const ERROR_PREFIXES = [
     'SUI-LOCALE',
     'SUI-LOGIC',
     'SUI-BLUEPRINT',
+    'SUI-USES',
     'SUI-BUILD',
     'SUI-RUN'
 ] as const;
@@ -157,6 +158,7 @@ export const ERROR_CATALOG = {
     'SUI-BUILD-TOKENDESC': { template: 'Semantic token "{name}" needs a one-line description in {file}' },
     'SUI-LOGIC-SHAPE': { template: 'Logic at {path} is not valid: {name}' },
     'SUI-BLUEPRINT-SHAPE': { template: 'Blueprint at {path} is not valid: {name}' },
+    'SUI-USES-MISSING': { template: 'The app uses the {target} "{name}" at {path}, and the owner has no such part; nearest names: {other}' },
     'SUI-LOGIC-COMMAND': { template: 'Unknown logic command "{command}" at {path}' },
     'SUI-LOGIC-PATH': {
         template: 'Path {target} at {path} must be under $.app, $.data or $.server, use only the captures of its trigger, or be a node reference that resolves to one node'

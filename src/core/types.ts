@@ -21,13 +21,24 @@ export interface ThemeState {
     active?: Record<string, string>;
 }
 
+/** One screen of an assembled app: shown in the shell's `outlet` */
+export interface DocumentScreen {
+    title?: string;
+    /** Typed param declarations by name */
+    params?: JsonObject;
+    root: Node;
+}
+
 /** An application is one document */
 export interface AppDocument {
     theme?: ThemeState;
     themes?: Record<string, ThemeOverlay>;
     locale?: string;
     data?: JsonObject;
+    /** The shell when the app has screens */
     app: Node;
+    /** The screens of an app assembled from a blueprint; not yet a key of `DOCUMENT_KEYS`, so `validateApp` checks them */
+    screens?: Record<string, DocumentScreen>;
     composed?: Record<string, Node>;
     locales?: Record<string, JsonObject>;
     /** Machines and rules (`logic/types.ts`); document only, never in a snapshot */

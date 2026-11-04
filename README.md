@@ -11,7 +11,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
 
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-USES`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
 - **Types.** `AppDocument` (`theme`, `themes`, `locale`, `data`, `app`, `composed`, `locales`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
 - **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
 
@@ -805,6 +805,22 @@ Save button saves and a count follows its records without an agent in the loop.
   `root`, no screens, a screen name that is not a part name, a `start` that names no screen, and params that are not typed
   declarations. The contents of `logic`, the parts `uses` names and the shell's `outlet` are checked when the app is
   assembled.
+- **Assembling.** `assembleApp(blueprint, parts, { library? })` takes a `PartSource` (plain maps of `themes`, `modules`,
+  `models`, `datasets` and `components` by name; no IO) and returns `{ document, errors, uses }`. The document is today's
+  `AppDocument` plus `screens`: `app` is the shell, `theme.tokens` and `themes` (the overlays) come from the first of
+  `uses.themes`, `data.{binding}` holds the bound dataset's records (an empty map for a persona binding), `composed` holds
+  the owner components that a node of the shell, a screen or another used component names (their trees with `exposes`,
+  without the search keys; an owner component wins over a library component of the same name), and `logic` and
+  `locales` are the app's own. A part named in `uses` that the owner does not have is `SUI-USES-MISSING` with up to
+  three nearest names (`nearestNames`); with a `library`, so is a component name in neither. `uses` lists each part the
+  app reads (`{ kind, name }`) once. Pure: the result shares nothing with the inputs, so changing one theme part shows
+  in every app assembled from it.
+- **Validating.** `validateApp(blueprint, parts, catalog, { name?, ...ValidateDocumentOptions })` assembles and runs
+  `validateDocument` on the shell document, then on each screen's root in the place of `$.app`, moving those errors to
+  `$.screens.{screen}.root`. Each error gains `part`: the owner component (`$.composed.{name}`), the first theme
+  (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`) or the app. A component already reported
+  `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. Until `screens` is a document key, a screen's links
+  cannot point into the shell.
 
 ## Starting an application: `mountApp`
 
