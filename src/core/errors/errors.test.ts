@@ -59,7 +59,8 @@ describe('error catalog', () => {
             'SUI-LINK-ROW',
             'SUI-LINK-TARGET',
             'SUI-LINK-SERVER',
-            'SUI-DOC-SERVER'
+            'SUI-DOC-SERVER',
+            'SUI-BLUEPRINT-SHAPE'
         ]) {
             expect(CODES).toContain(code);
         }

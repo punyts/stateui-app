@@ -244,3 +244,35 @@ export type {
 } from './logic/index.js';
 export { BM25_B, BM25_K1, FIELD_WEIGHTS, STOP_WORDS, SYNONYM_GROUPS, createSearchIndex, stem, synonymExpander, tokenize, words } from './search/index.js';
 export type { SearchEntry, SearchFields, SearchHit, SearchIndex, SearchOptions, SynonymExpander } from './search/index.js';
+export {
+    FIELD_TYPES,
+    PART_KINDS,
+    isPartName,
+    readBlueprint,
+    slugifyName
+} from './blueprint/index.js';
+export type {
+    AppBlueprint,
+    BlueprintScreen,
+    BlueprintUses,
+    ComposedPart,
+    DataBinding,
+    DatasetBinding,
+    DatasetPart,
+    FieldDeclaration,
+    FieldType,
+    LogicModule,
+    ModelPart,
+    ModuleNeed,
+    ModuleUse,
+    ParamDeclaration,
+    PartKind,
+    PartRef,
+    PatternParam,
+    PatternPart,
+    PatternSlot,
+    PersonaBinding,
+    ReadBlueprintResult,
+    ThemePart,
+    ThemePartOverlay
+} from './blueprint/index.js';
