@@ -8,6 +8,7 @@ import type { Link } from '../../core/links/index.js';
 import { extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
+import { isNodeValue } from '../../core/resolve/merge.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
 import { PREFIXES } from '../../core/types.js';
@@ -61,10 +62,10 @@ function initialState(document: AppDocument, app: Node, mode: AppMode): AppState
  * The resolved tree still holds the default of a linked property, and the store refuses to alias a path that holds
  * data, so each linked property is removed from the tree before the store is built
  */
-function removeLinked(tree: Node, links: readonly Link[]): void {
+function removeLinked(tree: Node, links: readonly Link[], treePath = APP_PATH): void {
     for (const link of links) {
         let holder: unknown = tree;
-        for (const segment of link.statePath.split('.').slice(2)) {
+        for (const segment of below(link.statePath, treePath)) {
             holder = typeof holder === 'object' && holder !== null ? (holder as Record<string, unknown>)[segment] : undefined;
         }
         if (typeof holder === 'object' && holder !== null) delete (holder as Record<string, unknown>)[link.key];
@@ -73,15 +74,47 @@ function removeLinked(tree: Node, links: readonly Link[]): void {
 
 const ROW_LINK_TARGET = /^\$row(\.|$)/;
 
+/** True when `path` is `base` or below it */
+function atOrBelow(path: string, base: string): boolean {
+    return path === base || path.startsWith(`${base}.`);
+}
+
+/** The segments of `path` after `base` (`path` is `base` or below it) */
+function below(path: string, base: string): string[] {
+    return path === base ? [] : path.slice(base.length + 1).split('.');
+}
+
+/**
+ * The nodes from `$.app` down to the nearest node above `path`, in a copy of the store's tree that holds `node` at
+ * `path`, so the node references of a node written after mount resolve as they would in the whole app. Empty when the
+ * parent of `path` does not exist
+ */
+function ancestorsOf(app: JsonObject, path: string, node: Node): { node: Node; path: string }[] {
+    const root = cloneJson(app);
+    const segments = below(path, APP_PATH);
+    const ancestors: { node: Node; path: string }[] = [{ node: root as unknown as Node, path: APP_PATH }];
+    let holder: JsonObject = root;
+    let holderPath = APP_PATH;
+    for (const segment of segments.slice(0, -1)) {
+        const next = holder[segment];
+        if (typeof next !== 'object' || next === null || Array.isArray(next)) return [];
+        holder = next;
+        holderPath = `${holderPath}.${segment}`;
+        if (isNodeValue(holder)) ancestors.push({ node: holder as unknown as Node, path: holderPath });
+    }
+    holder[segments[segments.length - 1] as string] = node as unknown as JsonObject;
+    return ancestors;
+}
+
 /**
  * A `$row` link in a row template has no target until a record view makes a runtime copy of the template, so it is not
  * applied at start: it goes back into the tree as written (`<-key`), where the component finds it and passes the
  * template to `resolveRowLinks`
  */
-function restoreRowLinks(tree: Node, rowLinks: readonly Link[]): void {
+function restoreRowLinks(tree: Node, rowLinks: readonly Link[], treePath = APP_PATH): void {
     for (const link of rowLinks) {
         let holder: unknown = tree;
-        for (const segment of link.statePath.split('.').slice(2)) {
+        for (const segment of below(link.statePath, treePath)) {
             holder = typeof holder === 'object' && holder !== null ? (holder as Record<string, unknown>)[segment] : undefined;
         }
         if (typeof holder === 'object' && holder !== null) (holder as Record<string, unknown>)[`${PREFIXES.link}${link.key}`] = link.target;
@@ -89,7 +122,16 @@ function restoreRowLinks(tree: Node, rowLinks: readonly Link[]): void {
 }
 
 function failed(errors: BuildError[]): MountedApp {
-    return { store: undefined, baseOverlay: undefined, baseLocale: undefined, errors, raise: () => undefined, dispose: () => undefined };
+    return {
+        store: undefined,
+        baseOverlay: undefined,
+        baseLocale: undefined,
+        errors,
+        raise: () => undefined,
+        writeNode: (path) => [buildError('SUI-RUN-WRITE', { path, statePath: path })],
+        removeNode: () => false,
+        dispose: () => undefined
+    };
 }
 
 function stepError(name: string): BuildError {
@@ -195,6 +237,13 @@ export function mountApp(
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));
 
     let disposed = false;
+    const instances = resolved.instances;
+    /** Removes the links of the node at `path` and below, before the node is replaced or removed */
+    const dropLinks = (path: string): void => {
+        const gone = appLinks.filter((link) => atOrBelow(link.statePath, path));
+        disposeLinks(store, gone);
+        for (const link of gone) appLinks.splice(appLinks.indexOf(link), 1);
+    };
     let stopLogic: (() => void) | undefined;
     try {
         stopLogic =
@@ -220,6 +269,35 @@ export function mountApp(
         errors,
         raise(name, payload): void {
             if (!disposed) dispatcher.raise(name, payload);
+        },
+        writeNode(path, node, writeOptions): BuildError[] {
+            const refused = [buildError('SUI-RUN-WRITE', { path, statePath: path })];
+            if (disposed || !path.startsWith(`${APP_PATH}.`) || !isNodeValue(node)) return refused;
+            const one = resolveNode(cloneJson(node as unknown as JsonObject) as Node, library, document.composed, { path });
+            if (!isValid(one.errors)) return one.errors;
+            const ancestors = ancestorsOf(JSON.parse(JSON.stringify(store.get(APP_PATH))) as JsonObject, path, one.node);
+            if (ancestors.length === 0) return refused;
+            for (const key of Object.keys(instances)) if (atOrBelow(key, path)) delete instances[key];
+            Object.assign(instances, one.instances);
+            const extracted = extractLinks(one.node, { library, instances, path, ancestors });
+            if (!isValid(extracted.errors)) return extracted.errors;
+            const rows = extracted.links.filter((link) => ROW_LINK_TARGET.test(link.target));
+            const links = extracted.links.filter((link) => !ROW_LINK_TARGET.test(link.target));
+            removeLinked(extracted.tree, extracted.links, path);
+            restoreRowLinks(extracted.tree, rows, path);
+            dropLinks(path);
+            if (!store.set(path as never, extracted.tree as never, writeOptions)) return refused;
+            appLinks.push(...links);
+            // The node is already rendered and a new store link notifies nobody, so each property is first linked to the
+            // empty record and then re-pointed at its target: a re-point notifies the listeners the new node registered
+            for (const link of links) store.link(`${link.statePath}.${link.key}`, RUNTIME_PATHS.empty);
+            return applyLinks(store, links);
+        },
+        removeNode(path, writeOptions): boolean {
+            if (disposed || !path.startsWith(`${APP_PATH}.`)) return false;
+            dropLinks(path);
+            for (const key of Object.keys(instances)) if (atOrBelow(key, path)) delete instances[key];
+            return store.delete(path as never, writeOptions);
         },
         dispose(): void {
             if (disposed) return;

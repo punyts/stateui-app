@@ -33,7 +33,8 @@ const library: ComponentLibrary = {
         tier: 'root',
         tag: 'x-rt-counter',
         shape: shapeOf({ count: { type: 'number', default: 0, runtime: true }, label: { type: 'string', default: '' }, note: { type: 'string' } })
-    }
+    },
+    picker: { tier: 'root', tag: 'x-rt-picker', shape: shapeOf({ current: { type: 'string', runtime: true, exposed: true, default: '' } }) }
 };
 
 defineComponent({
@@ -52,6 +53,21 @@ defineComponent({
     template: '<p>count:{{ $.count }} note:{{ $.note }}</p>',
     controller: ({ store, basePath }) => {
         store.set(`${basePath}.count`, 3);
+        return {};
+    }
+});
+
+/** Writes its exposed property `current` in its runtime branch when it starts, as a list exposes its selection */
+defineComponent({
+    tag: 'x-rt-picker',
+    template: '<p>picker</p>',
+    controller: ({ store, basePath }) => {
+        const segments = `$.runtime.nodes.${basePath.slice(2)}`.split('.');
+        for (let length = 3; length <= segments.length; length += 1) {
+            const prefix = segments.slice(0, length).join('.');
+            if (store.get(prefix) === undefined) store.set(prefix, {});
+        }
+        store.set(`${segments.join('.')}.current`, 'picked');
         return {};
     }
 });
@@ -342,11 +358,7 @@ describe('startRuntime in Chromium', () => {
             app: panel({ kpis: panel({ cash: { component: 'label', text: 'cash' }, other: { component: 'label', text: 'o' } }) })
         };
         send(message('load', { document }));
-        const writes = [
-            { path: '$.app.children.kpis.children.cash.component', value: 'panel' },
-            { path: '$.app.children.kpis.children.cash.children', value: { inner: { component: 'badge', text: 'deep' } } },
-            { path: '$.app.children.kpis.children.cash.text', remove: true }
-        ];
+        const writes = [{ path: '$.app.children.kpis.children.cash', value: panel({ inner: { component: 'badge', text: 'deep' } }) }];
 
         // Act
         send(message('write', { writes }));
@@ -358,6 +370,93 @@ describe('startRuntime in Chromium', () => {
         expect(textOf(host)).toContain('badge:deep');
         expect(textOf(host)).not.toContain('label:cash');
         expect(textOf(host)).toContain('label:o');
+    });
+
+    describe('a node written after load', () => {
+        const DOCUMENT: AppDocument = Object.freeze({
+            data: Object.freeze({ total: 'ten', other: 'eleven' }),
+            app: Object.freeze(
+                panel({
+                    source: Object.freeze({ component: 'picker' }),
+                    stat: Object.freeze({ component: 'label', '<-text': '$.data.total' })
+                })
+            )
+        }) as AppDocument;
+
+        const load = async (): Promise<void> => {
+            send(message('load', { document: JSON.parse(JSON.stringify(DOCUMENT)) }));
+            await tick();
+        };
+        const write = async (writes: unknown[]): Promise<void> => {
+            send(message('write', { writes }));
+            await tick();
+        };
+
+        it('should apply the links of a node swapped for another component', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.stat', value: { component: 'badge', '<-text': '$.data.other' } }]);
+
+            // Assert
+            expect(JSON.stringify(ofType('error'))).toBe('[]');
+            expect(textOf(host)).toContain('badge:eleven');
+            expect(textOf(host)).not.toContain('label:ten');
+        });
+
+        it('should apply the links and defaults of a new node', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.added', value: { component: 'badge', '<-text': '$.data.total' } }, { path: '$.app.children.titled', value: { component: 'heading' } }]);
+
+            // Assert
+            expect(ofType('error')).toEqual([]);
+            expect(textOf(host)).toContain('badge:ten');
+            expect(textOf(host)).toContain('Heading');
+        });
+
+        it('should drop the links of the node it replaces', async () => {
+            // Arrange
+            await load();
+            await write([{ path: '$.app.children.stat', value: { component: 'label', text: 'plain' } }]);
+
+            // Act
+            await write([{ path: '$.data.total', value: 'changed' }]);
+
+            // Assert
+            expect(ofType('error')).toEqual([]);
+            expect(textOf(host)).toContain('label:plain');
+            expect(textOf(host)).not.toContain('changed');
+        });
+
+        it('should drop the links of a removed node', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.stat', remove: true }]);
+            await write([{ path: '$.data.total', value: 'changed' }]);
+
+            // Assert
+            expect(ofType('error')).toEqual([]);
+            expect(textOf(host)).not.toContain('ten');
+            expect(textOf(host)).not.toContain('changed');
+        });
+
+        it('should resolve a node reference to a node outside the written node', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.stat', value: { component: 'badge', '<-text': '^source.current' } }]);
+
+            // Assert
+            expect(JSON.stringify(ofType('error'))).toBe('[]');
+            expect(textOf(host)).toContain('badge:picked');
+        });
     });
 
     it('should accept the icons of a write', () => {

@@ -69,7 +69,7 @@ class Extractor {
     }
 
     /** Pushes the node's frame and notes which of its slots are row templates */
-    private enter(node: TreeNode, path: string): void {
+    enter(node: TreeNode, path: string): void {
         if (this.rowPaths.has(path)) this.rowOwner = this.frames.length - 1;
         const instances = this.options.instances;
         this.frames.push({
@@ -147,6 +147,7 @@ class Extractor {
  */
 export function extractLinks(resolvedTree: Node, options: ExtractOptions = {}): ExtractResult {
     const extractor = new Extractor(options);
+    for (const ancestor of options.ancestors ?? []) extractor.enter(ancestor.node as TreeNode, ancestor.path);
     const tree = extractor.walk(resolvedTree, options.path ?? ROOT_PATH) as Node;
     return {
         tree,

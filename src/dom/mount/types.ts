@@ -1,4 +1,4 @@
-import type { Store } from '@punyts/state';
+import type { Store, WriteOptions } from '@punyts/state';
 import type { NodeOptions } from '@punyts/stateui';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
@@ -80,6 +80,14 @@ export interface MountedApp {
     errors: BuildError[];
     /** Runs the root node's `on` entry for an app event with the payload; nothing when the app did not mount */
     raise(name: AppEventName, payload?: unknown): void;
+    /**
+     * Mounts a node written after start at `path` (below `$.app`), as a load would: component defaults and composed
+     * components resolved, its `<-` links applied (node references resolve against the whole app) and the links of the
+     * node it replaces removed. A plain store write of a node does none of this. Returns the errors; empty when it mounted
+     */
+    writeNode(path: string, node: Node, options?: WriteOptions): BuildError[];
+    /** Removes the node at `path` with its links. False when nothing was removed */
+    removeNode(path: string, options?: WriteOptions): boolean;
     /** Unmounts, unlinks and removes listeners. Safe to call more than once */
     dispose(): void;
 }

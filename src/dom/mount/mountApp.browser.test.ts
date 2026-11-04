@@ -371,4 +371,71 @@ describe('mountApp in Chromium', () => {
         expect(textOf(host)).toContain('Grace');
         expect(textOf(host)).toContain('Lin');
     });
+
+    describe('writeNode', () => {
+        const DOC: AppDocument = Object.freeze({
+            data: Object.freeze({ total: 'ten', other: 'eleven' }),
+            app: Object.freeze(panel({ stat: Object.freeze({ component: 'label', '<-text': '$.data.total' }) }))
+        }) as AppDocument;
+        const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+        it('should link a node swapped in for a linked node', async () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const errors = app.writeNode('$.app.children.stat', { component: 'label', '<-text': '$.data.other' } as never);
+            await tick();
+
+            // Assert
+            expect(errors).toEqual([]);
+            expect(app.store?.get('$.app.children.stat.text' as never)).toBe('eleven');
+            expect(textOf(host)).toContain('eleven');
+        });
+
+        it('should expand a composed component and fill defaults in a written node', async () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const errors = app.writeNode('$.app.children.hi', { component: 'greeting' } as never);
+            await tick();
+
+            // Assert
+            expect(errors).toEqual([]);
+            expect(app.store?.get('$.app.children.hi.mood' as never)).toBe('plain');
+            expect(textOf(host)).toContain('Hello');
+        });
+
+        it('should remove a node and its links', () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const removed = app.removeNode('$.app.children.stat');
+            app.store?.set('$.data.total' as never, 'changed' as never);
+
+            // Assert
+            expect(removed).toBe(true);
+            expect(app.store?.get('$.app.children.stat' as never)).toBeUndefined();
+            expect(textOf(host)).not.toContain('changed');
+        });
+
+        it('should refuse a node outside the app tree or under a missing parent', () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const outside = app.writeNode('$.data.x', { component: 'label' } as never);
+            const orphan = app.writeNode('$.app.children.none.children.x', { component: 'label' } as never);
+
+            // Assert
+            expect(outside.map((error) => error.code)).toEqual(['SUI-RUN-WRITE']);
+            expect(orphan.map((error) => error.code)).toEqual(['SUI-RUN-WRITE']);
+        });
+    });
 });

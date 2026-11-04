@@ -49,6 +49,12 @@ export interface ReferenceOptions {
 export interface ExtractOptions extends ReferenceOptions {
     /** The state path of the tree's root node; `$.app` when absent */
     path?: string;
+    /**
+     * The resolved nodes from `$.app` down to the nearest node above the tree, outermost first, when the tree is one
+     * node of a larger app (a node written after mount). Node references then reach outside the tree as they would
+     * in the whole app; the first ancestor's node should hold the tree at `path`, so a `^name` search finds it there
+     */
+    ancestors?: readonly { node: Node; path: string }[];
 }
 
 export interface RowLinkOptions extends ReferenceOptions {

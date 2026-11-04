@@ -5,6 +5,7 @@ import type { Capture, Change } from '@punyts/state-sync';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
+import { isNodeValue } from '../core/resolve/merge.js';
 import type { ComponentOverlays } from '../core/locale/index.js';
 import { buildOverlayCatalog } from '../core/theme/index.js';
 import type { ThemeOverlays } from '../core/theme/index.js';
@@ -106,6 +107,8 @@ function truncate(text: string): string {
 
 /** Writes from the host are sync writes: the store tags their events, so capture does not post them back */
 const SYNC_WRITE = { origin: SYNC_ORIGIN };
+/** Paths below the app tree, where a written node is mounted rather than stored */
+const APP_NODE_PREFIX = '$.app.';
 
 function protocolError(error: BuildError): ProtocolError {
     const result: ProtocolError = { code: error.code, message: truncate(error.message) };
@@ -357,43 +360,37 @@ export function startRuntime(
         post({ type: 'ready' });
     }
 
-    function applyWrite(store: NonNullable<MountedApp['store']>, write: PathWrite): BuildError | undefined {
-        // A runtime property the host still has from an older view is the component's own, so it is not written over
-        if (isRuntimeProperty(store, library, write.path)) return undefined;
-        const done = write.remove === true ? store.delete(write.path, SYNC_WRITE) : store.set(write.path, write.value as never, SYNC_WRITE);
-        return done ? undefined : buildError('SUI-RUN-WRITE', { path: write.path, statePath: write.path });
-    }
-
     /**
-     * The writes with each node's `component` write moved after the writes below that node. A component change
-     * applied first remounts the node as the new component with none of the new properties (a `panel` with no
-     * `children`, whose repeat then fails) while the old ones are still there; applied last, the node is complete when
-     * it remounts. The order of the other writes is kept
+     * Applies one host write. A whole node below `$.app` (a value with a `component`) is mounted as a load would
+     * mount it, and removing a node removes its links; every other write is a plain store write
      */
-    function componentLast(list: readonly PathWrite[]): PathWrite[] {
-        const hasBelow = (owner: string): boolean => list.some((write) => write.path !== owner && write.path.startsWith(owner.slice(0, -'component'.length)));
-        const late = list.filter((write) => write.path.endsWith('.component') && write.remove !== true && hasBelow(write.path));
-        const rest = list.filter((write) => !late.includes(write));
-        return [...rest, ...late];
+    function applyWrite(app: MountedApp, store: NonNullable<MountedApp['store']>, write: PathWrite): BuildError[] {
+        // A runtime property the host still has from an older view is the component's own, so it is not written over
+        if (isRuntimeProperty(store, library, write.path)) return [];
+        const inApp = write.path.startsWith(APP_NODE_PREFIX);
+        if (inApp && write.remove !== true && isNodeValue(write.value)) return app.writeNode(write.path, write.value as never, SYNC_WRITE);
+        let done: boolean;
+        if (write.remove === true) done = inApp && isNodeValue(store.get(write.path as never)) ? app.removeNode(write.path, SYNC_WRITE) : store.delete(write.path, SYNC_WRITE);
+        else done = store.set(write.path, write.value as never, SYNC_WRITE);
+        return done ? [] : [buildError('SUI-RUN-WRITE', { path: write.path, statePath: write.path })];
     }
 
     function writes(message: WriteMessage): void {
-        const store = mounted?.store;
-        if (!store) {
+        const app = mounted;
+        const store = app?.store;
+        if (!app || !store) {
             dropped.unhandled += 1;
             return;
         }
         if (message.icons) writeIcons(store, message.icons);
         const refused: BuildError[] = [];
-        for (const write of componentLast(message.writes)) {
-            let error: BuildError | undefined;
+        for (const write of message.writes) {
             try {
-                error = applyWrite(store, write);
+                refused.push(...applyWrite(app, store, write));
             } catch (thrown) {
                 report.error('runtime write failed', { path: write.path, reason: String(thrown) });
-                error = buildError('SUI-RUN-WRITE', { path: write.path, statePath: write.path });
+                refused.push(buildError('SUI-RUN-WRITE', { path: write.path, statePath: write.path }));
             }
-            if (error) refused.push(error);
         }
         if (refused.length > 0) postErrors(refused);
     }
