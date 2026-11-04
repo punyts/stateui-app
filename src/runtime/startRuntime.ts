@@ -319,7 +319,9 @@ export function startRuntime(
                 const store = context.store;
                 if (message.icons) writeIcons(store, message.icons);
                 if (message.state) {
-                    store.apply(DATA_ROOT, message.state.data);
+                    // The state's data is the whole of $.data (snapshotState copies it), so it replaces the document's:
+                    // a merge would keep the tail of a longer seeded list and the keys the state no longer has
+                    if (isRecord(message.state.data)) store.set(DATA_ROOT, message.state.data as never);
                     applyArticulation(store, '$.app', message.state.app);
                 }
             }

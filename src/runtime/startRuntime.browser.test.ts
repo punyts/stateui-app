@@ -147,6 +147,31 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('change')).toHaveLength(0);
     });
 
+    it('should replace the document data with the state data, so a shorter list and a removed key stay gone', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { rows: ['a', 'b', 'c', 'd'], map: { k1: 'one', k2: 'two' }, name: 'Ada' },
+            app: panel({
+                hello: { component: 'label', '<-text': '$.data.name' },
+                second: { component: 'badge', '<-text': '$.data.rows.1' },
+                third: { component: 'badge', '<-text': '$.data.rows.2' },
+                gone: { component: 'badge', '<-text': '$.data.map.k2' }
+            })
+        };
+
+        // Act
+        send(message('load', { document, state: { data: { rows: ['x', 'y'], map: { k1: 'uno' }, name: 'Grace' }, app: {} } }));
+        await tick();
+
+        // Assert
+        const text = textOf(host);
+        expect(text).toContain('label:Grace');
+        expect(text).toContain('badge:y');
+        expect(text).not.toContain('badge:c');
+        expect(text).not.toContain('badge:two');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
     it('should post one change for a user edit, with an id and no base', async () => {
         // Arrange
         const document: AppDocument = {
