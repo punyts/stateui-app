@@ -62,6 +62,8 @@ export interface DispatcherOptions {
     /** The state path of the root node; `$.app` when absent */
     rootPath?: string;
     hooks?: DispatchHooks;
+    /** Runs the `navigate` command: moves `$.route` to a screen, or returns why it cannot. Absent in an app without screens */
+    navigate?(screen: string, params: JsonValue | undefined): string | undefined;
 }
 
 export interface Dispatcher {

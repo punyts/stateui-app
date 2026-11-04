@@ -8,11 +8,12 @@ import type { Link } from '../../core/links/index.js';
 import { extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
+import { ROUTE_PATH, isRouteRefusal, routeTo } from '../../core/route/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
 import { PREFIXES } from '../../core/types.js';
-import type { AppDocument, AppEventName, JsonObject, Node } from '../../core/types.js';
+import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
 import type { AppMode } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
@@ -233,7 +234,16 @@ export function mountApp(
     setNodeOptions(context.options);
     const rootTag = ensureAppRoot(collected.tokens);
     mount(host, store);
-    const dispatcher = createDispatcher({ host, store, library, instances: resolved.instances, rootPath: APP_PATH, hooks });
+    const screens = document.screens;
+    const navigate =
+        screens === undefined
+            ? undefined
+            : (screen: string, params: JsonValue | undefined): string | undefined => {
+                  const route = routeTo(screens, screen, params);
+                  if (isRouteRefusal(route)) return route.reason;
+                  return store.set(ROUTE_PATH as never, route as never) ? undefined : `the store refused the write to ${ROUTE_PATH}`;
+              };
+    const dispatcher = createDispatcher({ host, store, library, instances: resolved.instances, rootPath: APP_PATH, hooks, ...(navigate === undefined ? {} : { navigate }) });
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));
 
     let disposed = false;

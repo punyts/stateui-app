@@ -8,7 +8,7 @@ import type { LogicCommand, LogicDocument, LogicMachine, LogicRow, LogicRule, Lo
 import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions, withCaptures } from './values.js';
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
-const LOGIC_ROOTS = ['app', 'data', 'server'];
+const LOGIC_ROOTS = ['app', 'data', 'server', 'screens', 'route'];
 
 const MACHINE_KEYS = ['state', 'initial', 'transitions'];
 const TRANSITION_KEYS = ['from', 'when', 'do', 'to'];
@@ -43,7 +43,8 @@ const REQUIRED: Record<LogicCommand['command'], readonly ('target' | 'from' | 'i
     notify: ['target'],
     emit: ['target'],
     call: ['target'],
-    reject: []
+    reject: [],
+    navigate: ['target']
 };
 
 /** The keys whose text is a path */
@@ -235,7 +236,7 @@ class Reader {
             const text = value[key];
             if (typeof text !== 'string' || text === '') {
                 this.shape(`${path}.${key}`, `"${key}" must be a path`);
-            } else if (!((command === 'notify' || command === 'emit' || command === 'call') && key === 'target')) {
+            } else if (!((command === 'notify' || command === 'emit' || command === 'call' || command === 'navigate') && key === 'target')) {
                 this.statePath(text, `${path}.${key}`, captures);
             }
         }

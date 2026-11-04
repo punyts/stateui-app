@@ -1,3 +1,4 @@
+import type { RouteScreens } from '../route/index.js';
 import type { JsonValue } from '../types.js';
 
 /** The origin a browser store write of the logic carries, so the logic capture skips it and sync sends it */
@@ -30,7 +31,8 @@ export const LOGIC_COMMANDS = [
     'notify',
     'emit',
     'call',
-    'reject'
+    'reject',
+    'navigate'
 ] as const;
 
 export type LogicCommandName = (typeof LOGIC_COMMANDS)[number];
@@ -199,6 +201,8 @@ export interface LogicHost {
     newKey?(): string;
     /** Runs `run` after `ms` milliseconds; returns the function that cancels it. Without it timers never fire */
     schedule?(ms: number, run: () => void): () => void;
+    /** The document's screens, which `navigate` moves `$.route` between; without it every `navigate` fails */
+    screens?(): RouteScreens | undefined;
     /** Runs a named server procedure (Full mode); without it every `call` is rejected */
     call?(name: string, payload: JsonValue): Promise<LogicAnswer>;
 }

@@ -121,7 +121,7 @@ class OnValidator {
 
     private checkCommand(command: OnCommand, event: string, scope: Scope, statePath: string): void {
         if (command.from !== undefined) this.checkFrom(command.from, event, scope, statePath);
-        if (command.command === 'emit') {
+        if (command.command === 'emit' || command.command === 'navigate') {
             if (command.target === undefined) this.malformed(statePath);
             return;
         }

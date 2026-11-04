@@ -26,6 +26,14 @@ export interface LogicIndex {
     records(path: string): string | undefined;
 }
 
+/** The screens a logic index covers beside the shell, and the screen `$.route` shows now */
+export interface LogicIndexScreens {
+    /** Each screen's resolved root, by screen name; its nodes have the paths `$.screens.{screen}...` */
+    trees: Readonly<Record<string, ResolvedTree>>;
+    /** The current screen (`$.route.screen`); undefined when unknown, as while validating */
+    current?(): string | undefined;
+}
+
 /** The properties a record view takes its records in, in the order they are tried */
 const RECORD_PROPERTIES = ['records', 'items'];
 
@@ -43,23 +51,36 @@ function walkValue(value: JsonValue | undefined, steps: readonly string[]): Json
     return current;
 }
 
+/** The screen a state path belongs to, or undefined for the shell */
+function screenOf(path: string): string | undefined {
+    return path.startsWith('$.screens.') ? path.split('.')[2] : undefined;
+}
+
 /**
- * Indexes the resolved `app` tree (`resolveNode`) once. A reference whose name matches no node or more than one does
- * not resolve: logic has no position in the tree, so a name must be unique
+ * Indexes the resolved `app` tree (`resolveNode`) once, and each screen's tree when `screens` is given. Logic has no
+ * position in the tree, so a name must be unique where it is looked up: in the current screen first, then in the
+ * shell. Without a current screen (while validating) a name unique in the shell wins, then a name unique among all
+ * screens. A reference whose name matches no node, or several in the same place, does not resolve
  */
-export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, data?: JsonValue): LogicIndex {
+export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, data?: JsonValue, screens?: LogicIndexScreens): LogicIndex {
     const frames = new Map<string, Frame>();
-    const stack: { node: TreeNode; path: string }[] = [{ node: tree.node, path: '$.app' }];
-    while (stack.length > 0) {
-        const { node, path } = stack.pop() as { node: TreeNode; path: string };
-        frames.set(path, {
-            path,
-            key: path.slice(path.lastIndexOf('.') + 1),
-            node,
-            instances: Object.hasOwn(tree.instances, path) ? (tree.instances[path] as string[]) : []
-        });
-        for (const child of nodeChildren(node, path, shapeOf(library, node.component))) {
-            if (!child.row) stack.push({ node: child.node as TreeNode, path: child.path });
+    const roots: { tree: ResolvedTree; path: string }[] = [
+        { tree, path: '$.app' },
+        ...Object.entries(screens?.trees ?? {}).map(([name, screen]) => ({ tree: screen, path: `$.screens.${name}` }))
+    ];
+    for (const root of roots) {
+        const stack: { node: TreeNode; path: string }[] = [{ node: root.tree.node, path: root.path }];
+        while (stack.length > 0) {
+            const { node, path } = stack.pop() as { node: TreeNode; path: string };
+            frames.set(path, {
+                path,
+                key: path.slice(path.lastIndexOf('.') + 1),
+                node,
+                instances: Object.hasOwn(root.tree.instances, path) ? (root.tree.instances[path] as string[]) : []
+            });
+            for (const child of nodeChildren(node, path, shapeOf(library, node.component))) {
+                if (!child.row) stack.push({ node: child.node as TreeNode, path: child.path });
+            }
         }
     }
 
@@ -86,8 +107,18 @@ export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, 
         return value;
     };
 
-    const namedFrames = (name: string): Frame[] =>
-        [...frames.values()].filter((frame) => frame.key === name || frame.instances.includes(name));
+    const allNamed = (name: string): Frame[] => [...frames.values()].filter((frame) => frame.key === name || frame.instances.includes(name));
+
+    /** The frames a name means: those of the first place (current screen, shell, all screens) that has any */
+    const namedFrames = (name: string): Frame[] => {
+        const named = allNamed(name);
+        const current = screens?.current?.();
+        const places =
+            current === undefined
+                ? [named.filter((frame) => screenOf(frame.path) === undefined), named.filter((frame) => screenOf(frame.path) !== undefined)]
+                : [named.filter((frame) => screenOf(frame.path) === current), named.filter((frame) => screenOf(frame.path) === undefined)];
+        return places.find((place) => place.length > 0) ?? [];
+    };
 
     return {
         explain(reference) {

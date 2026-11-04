@@ -7,6 +7,7 @@ import { LogicError, condition, resolveValue } from './values.js';
 import type { Scope } from './values.js';
 import { WorkingCopy, covers, placed, within } from './working.js';
 import { MAX_CHAIN_DEPTH } from './types.js';
+import { ROUTE_PATH } from '../route/index.js';
 import type {
     LogicChange,
     LogicCommand,
@@ -99,9 +100,9 @@ function removedWithParent(path: string, change: LogicChange, read: (path: strin
     return change.path !== path && covers(change.path, path) && read(path) === undefined && read(parentOf(path)) === undefined;
 }
 
-/** The keys of a command whose path it writes; `notify`, `emit` and `call` name no state path in `target` */
+/** The keys of a command whose path it writes; `notify`, `emit`, `call` and `navigate` name no state path in `target` */
 const WRITE_KEYS = ['target', 'into'] as const;
-const NOT_WRITES = new Set(['notify', 'emit', 'call', 'reject']);
+const NOT_WRITES = new Set(['notify', 'emit', 'call', 'reject', 'navigate']);
 
 /**
  * The steps of the paths a unit's commands can write, with `null` for a step that is only known when it runs (a
@@ -109,9 +110,10 @@ const NOT_WRITES = new Set(['notify', 'emit', 'call', 'reject']);
  */
 function writeSteps(unit: { machine?: LogicMachine; transitions: readonly LogicTransition[]; table?: LogicTable }): (string | null)[][] {
     const commands = [...unit.transitions.flatMap((transition) => transition.do ?? []), ...(unit.table?.rows.flatMap((row) => row.do) ?? [])];
-    const paths = commands.flatMap((command) =>
-        NOT_WRITES.has(command.command) ? [] : WRITE_KEYS.flatMap((key) => (typeof command[key] === 'string' ? [command[key] as string] : []))
-    );
+    const paths = commands.flatMap((command) => {
+        if (command.command === 'navigate') return [ROUTE_PATH];
+        return NOT_WRITES.has(command.command) ? [] : WRITE_KEYS.flatMap((key) => (typeof command[key] === 'string' ? [command[key] as string] : []));
+    });
     if (unit.machine) paths.push(unit.machine.state);
     return paths
         .filter((path) => path.startsWith('$.'))

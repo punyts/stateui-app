@@ -1,4 +1,5 @@
 import { isObject } from '../resolve/merge.js';
+import { ROUTE_PATH, isRouteRefusal, routeTo } from '../route/index.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { LogicError, condition, resolvePath, resolveValue } from './values.js';
 import type { Scope } from './values.js';
@@ -238,6 +239,14 @@ const RUNNERS: Record<LogicCommand['command'], Runner> = {
     },
     reject: () => {
         throw new LogicError('"reject" runs only in a guard rule');
+    },
+    navigate: (command, context) => {
+        const screen = resolveValue(required(command, 'target'), context.scope, context.host);
+        if (typeof screen !== 'string') throw new LogicError('"navigate" needs a screen name as its target');
+        const params = command.value === undefined ? undefined : value(command, context);
+        const route = routeTo(context.host.screens?.(), screen, params);
+        if (isRouteRefusal(route)) throw new LogicError(route.reason);
+        context.copy.set(ROUTE_PATH, route as unknown as JsonValue);
     }
 };
 

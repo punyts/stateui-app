@@ -35,6 +35,8 @@ export interface CommandContext {
     store: { get(path: string): unknown; set(path: string, value: never): boolean };
     payload: unknown;
     emit(name: string, payload: unknown): void;
+    /** Moves `$.route` to a screen; returns why it cannot. Absent in an app without screens */
+    navigate?(screen: string, params: JsonValue | undefined): string | undefined;
 }
 
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
@@ -69,6 +71,23 @@ function valueOf(command: OnCommand, context: CommandContext): JsonValue | undef
     if (context.rowPath === undefined) throw new CommandFailure(`${value} is used outside a row template`);
     const read: unknown = context.store.get(`${context.rowPath}${value.slice('$row'.length)}`);
     return read as JsonValue | undefined;
+}
+
+/** `navigate` params: `$row` and `$row.path` values read from the record the slot shows, at any depth */
+function withRows(value: JsonValue | undefined, context: CommandContext): JsonValue | undefined {
+    if (isRowValue(value)) {
+        if (context.rowPath === undefined) throw new CommandFailure(`${value} is used outside a row template`);
+        const read: unknown = context.store.get(`${context.rowPath}${value.slice('$row'.length)}`);
+        return read === undefined ? undefined : cloneJson(read as JsonValue);
+    }
+    if (Array.isArray(value)) return value.map((item) => withRows(item, context) ?? null);
+    if (value === null || typeof value !== 'object') return value;
+    const result: Record<string, JsonValue> = {};
+    for (const [key, item] of Object.entries(value)) {
+        const read = withRows(item, context);
+        if (read !== undefined) result[key] = read;
+    }
+    return result;
 }
 
 /** The state path a `set` or `toggle` target writes to; throws when the target names no writable property */
@@ -167,6 +186,12 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
     } else if (command.command === 'emit') {
         if (command.target === undefined) throw new CommandFailure('emit needs an event name');
         context.emit(command.target, 'value' in command || command.from !== undefined ? valueOf(command, context) : context.payload);
+    } else if (command.command === 'navigate') {
+        if (command.target === undefined) throw new CommandFailure('navigate needs a screen name');
+        if (context.navigate === undefined) throw new CommandFailure(`the app has no screens, so it cannot navigate to "${command.target}"`);
+        const params = command.from !== undefined ? valueOf(command, context) : withRows(command.value, context);
+        const reason = context.navigate(command.target, params);
+        if (reason !== undefined) throw new CommandFailure(reason);
     } else {
         runComponentCommand(command, context);
     }

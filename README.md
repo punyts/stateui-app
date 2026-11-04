@@ -215,6 +215,7 @@ A command object is `{ command, target?, value? }`. `value` is the command's arg
 | `set` | a property to write (`$.data.name`, `.pressed`) | required |
 | `toggle` | a boolean property | none |
 | `emit` | the event name, such as `chat.send` (not resolved) | the payload |
+| `navigate` | a screen name, such as `product` (not resolved) | the params, where `$row` and `$row.path` values are read at any depth |
 | a component command | a node; absent means the node itself | the argument |
 
 Targets: `^name.path` (nearest node, starting with the node itself, whose key is `name` or that is an instance of
@@ -268,7 +269,8 @@ Order of checks:
 
 `registerDocumentValidator(name, (context) => BuildError[])` returns a function that removes it. `context` holds the
 `document`, the `library` and the resolved `tree` (`node`, `instances`). Validators run in registration order; the `on`
-validator (`validateOn`) is registered by default, and the layout, placement, theme and locale validators of epic 3
+validator (`validateOn`) is registered by default, then `layout`, `placement`, `step`, `logic` and `route`; the theme and
+locale validators of epic 3
 register the same way. A validator that throws is reported as `SUI-DOC-VALIDATOR`. The `step` validator warns
 (`SUI-STATE-STEP`) when a node whose component has the number properties `min` and `step` (the number field) writes both
 as numbers with `step` above 0 and `min` not a multiple of `step`: the field counts its values from `min`, so `min: 0.01,
@@ -285,6 +287,17 @@ value is `SUI-STATE-RUNTIME`.
 Layouts, node overrides, ordered keys, `on` entries and the node limit cover the screens as they cover `app`.
 `core/route/` holds the route: `ROUTE_PATH` (`$.route`), `RouteState` (`{ screen, params }`), `paramDefaults(declarations)`
 and `initialRoute(document)`, the `start` screen with copies of its params' defaults (undefined without screens).
+
+**Navigating.** `{ "command": "navigate", "target": "product", "value": { "id": "$row.id" } }` moves `$.route` to a
+screen, in an `on` entry and in logic (browser and server alike). `routeTo(screens, screen, params)` gives the route it
+writes in one commit (the defaults of the screen's params with the given ones over them) or the reason it refuses: no
+such screen (with the nearest names), params that are not an object, a param the screen does not declare, a value
+that does not fit its type or validators, or a required param left out. In logic a refusal fails the transition
+(`logic.failed`); in `on` it is `SUI-RUN-ON-COMMAND`. The browser runs it through the dispatcher's `navigate` option,
+which `mountApp` sets for a document with screens; logic hosts give `screens()`. The `route` document validator checks
+every `navigate` of the shell, the screens and the logic with `checkNavigate`: `SUI-ROUTE-SCREEN` for a target that
+names no screen, `SUI-ROUTE-PARAMS` for literal params that do not fit (a `$`, `^` or `{{ }}` value is checked by name
+only; a command with `from` by screen only). A component command named `navigate` is shadowed by the system command.
 
 ## Dispatching `on` in the browser
 
@@ -380,9 +393,11 @@ Save button saves and a count follows its records without an agent in the loop.
   starting at 20 has the keys `20`, `21`, ...; the record's own key goes in its key field), and its `total`), `notify` (app
   event `notify.<name>`), `emit` (to the server), `call` (a server procedure `target` with `value`; machines only and
   Full mode only, `SUI-DOC-SERVER` elsewhere; the answer comes back as the result `as`, with `$result.value` or
-  `$result.reason`) and `reject`. A rule whose only command is `reject` is a **guard**:
-  it refuses the change.
-- **Values.** `{{ expression }}` templates; `$.path`, `^node.path` (a unique node key or composed name), `$trigger`,
+  `$result.reason`), `navigate` (moves `$.route` to the screen `target`, with `value` as the params; see the route
+  below) and `reject`. A rule whose only command is `reject` is a **guard**:
+  it refuses the change. Trigger and command paths may be under `$.app`, `$.data`, `$.server`, `$.screens` and `$.route`.
+- **Values.** `{{ expression }}` templates; `$.path`, `^node.path` (a node key or composed name, unique in the current
+  screen, else in the shell; while validating, in the shell, else among the screens), `$trigger`,
   `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
   `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
   `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,

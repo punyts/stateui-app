@@ -1,6 +1,7 @@
 import { validateLayouts, validatePlacements } from '../layout/index.js';
 import { createLogicIndex, readLogic } from '../logic/index.js';
 import { validateOn } from '../on/index.js';
+import { validateRoutes } from './route.js';
 import { validateSteps } from './steps.js';
 import type { DocumentValidator } from './types.js';
 
@@ -33,6 +34,7 @@ registerDocumentValidator('placement', validatePlacements);
 registerDocumentValidator('step', validateSteps);
 registerDocumentValidator('logic', (context) => {
     if (context.document.logic === undefined) return [];
-    const index = createLogicIndex(context.tree, context.library);
+    const index = createLogicIndex(context.tree, context.library, undefined, { trees: context.screens ?? {} });
     return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain }).errors;
 });
+registerDocumentValidator('route', validateRoutes);

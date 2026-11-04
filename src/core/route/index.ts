@@ -1,2 +1,2 @@
-export { ROUTE_PATH, initialRoute, paramDefaults } from './route.js';
-export type { RouteState } from './route.js';
+export { NAVIGATE_COMMAND, ROUTE_PATH, checkNavigate, initialRoute, isRouteRefusal, paramDefaults, routeTo } from './route.js';
+export type { NavigateProblem, RouteScreens, RouteState } from './route.js';

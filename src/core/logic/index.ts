@@ -1,7 +1,7 @@
 export { runCommand } from './commands.js';
 export type { CommandContext } from './commands.js';
 export { createLogicIndex } from './documentIndex.js';
-export type { LogicIndex } from './documentIndex.js';
+export type { LogicIndex, LogicIndexScreens } from './documentIndex.js';
 export { createLogicEngine } from './engine.js';
 export type { LogicEngine } from './engine.js';
 export { captureNames, compilePattern, fillCaptures, isStatePath, matchPattern, pathSteps } from './pattern.js';

@@ -3,8 +3,10 @@ import type { Store } from '@punyts/state';
 import { LOGIC_FAILED_EVENT, LOGIC_ORIGIN, NOTIFY_PREFIX, createLogicEngine, createLogicIndex, readLogic } from '../../core/logic/index.js';
 import type { LogicChange, LogicHost, LogicWrite } from '../../core/logic/index.js';
 import type { ResolvedTree } from '../../core/on/index.js';
+import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
-import type { AppDocument, JsonValue } from '../../core/types.js';
+import { ROUTE_PATH } from '../../core/route/index.js';
+import type { AppDocument, JsonValue, Node } from '../../core/types.js';
 
 const WATCHED = ['$.app.$all', '$.data.$all'];
 const WRITE = { origin: LOGIC_ORIGIN };
@@ -42,7 +44,18 @@ function plain(value: unknown): JsonValue | undefined {
 export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | undefined {
     const { store, document } = options;
     if (document.logic === undefined) return undefined;
-    const index = createLogicIndex(options.tree, options.library, document.data);
+    const trees: Record<string, ResolvedTree> = {};
+    for (const [name, screen] of Object.entries(document.screens ?? {})) {
+        const result = resolveNode(cloneJson(screen.root as unknown as JsonValue) as unknown as Node, options.library, document.composed, { path: `$.screens.${name}` });
+        trees[name] = { node: result.node, instances: result.instances };
+    }
+    const index = createLogicIndex(options.tree, options.library, document.data, {
+        trees,
+        current: () => {
+            const screen = store.get(`${ROUTE_PATH}.screen`);
+            return typeof screen === 'string' ? screen : undefined;
+        }
+    });
     const { logic } = readLogic(document.logic, { resolve: index.resolve });
 
     /**
@@ -73,6 +86,7 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
             }
         },
         resolve: index.resolve,
+        screens: () => document.screens,
         fields: index.fields,
         initial: index.initial,
         records: index.records,

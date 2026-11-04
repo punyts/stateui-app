@@ -225,6 +225,7 @@ export type {
     LogicFailure,
     LogicHost,
     LogicIndex,
+    LogicIndexScreens,
     LogicMachine,
     LogicResult,
     LogicRow,
@@ -278,5 +279,5 @@ export type {
 } from './blueprint/index.js';
 export { assembleApp, nearestNames, validateApp } from './assemble/index.js';
 export type { AppValidation, AppValidationError, AssembleOptions, AssembleResult, PartSource, ValidateAppOptions } from './assemble/index.js';
-export { ROUTE_PATH, initialRoute, paramDefaults } from './route/index.js';
-export type { RouteState } from './route/index.js';
+export { NAVIGATE_COMMAND, ROUTE_PATH, checkNavigate, initialRoute, isRouteRefusal, paramDefaults, routeTo } from './route/index.js';
+export type { NavigateProblem, RouteScreens, RouteState } from './route/index.js';

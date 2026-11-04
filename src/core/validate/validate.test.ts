@@ -528,7 +528,7 @@ describe('validateDocument', () => {
 
         const errors = validateDocument(doc({ component: 'panel' }), LIBRARY).errors;
 
-        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'step', 'logic', 'first', 'second']);
+        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'step', 'logic', 'route', 'first', 'second']);
         expect(calls).toEqual(['first', 'second']);
         expect(errors.map((error) => error.statePath)).toEqual(['$.app.a', '$.app.b']);
     });

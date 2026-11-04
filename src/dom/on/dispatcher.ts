@@ -181,7 +181,8 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             host,
             store,
             payload,
-            emit: (name, payload) => hooks?.onEmit?.(name, payload)
+            emit: (name, payload) => hooks?.onEmit?.(name, payload),
+            ...(options.navigate === undefined ? {} : { navigate: options.navigate })
         };
         for (const command of commands) {
             try {
