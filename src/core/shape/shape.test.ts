@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, buildDefaults, isSafeUrl, parseShape, validateNode } from './index.js';
+import { COMPONENT_CATEGORIES, MAX_PATTERN_LENGTH, MAX_PURPOSE_LENGTH, MAX_SUMMARY_LENGTH, buildDefaults, checkPurposes, normalizePurpose, isSafeUrl, parseShape, validateNode } from './index.js';
 import type { Shape } from './index.js';
 import type { Node } from '../types.js';
 
@@ -604,5 +604,64 @@ describe('childComponents', () => {
 
     it('should reject an invalid list on a node property', () => {
         expect(parseCodes({ summary: 'x', properties: { footer: { type: 'node', childComponents: [] } } })).toEqual(['SUI-BUILD-SHAPE']);
+    });
+});
+
+describe('category and purposes', () => {
+    const PURPOSES: readonly string[] = Object.freeze(['show a list of records', 'sort rows by a column', 'pick rows to act on']);
+
+    it('should list the nine categories in index order', () => {
+        expect(COMPONENT_CATEGORIES).toEqual(['layout', 'navigation', 'forms', 'data', 'feedback', 'overlays', 'content', 'conversation', 'graphics']);
+    });
+
+    it('should keep a known category and the purpose phrases on the shape', () => {
+        const shape = shapeOf({ category: 'data', purposes: PURPOSES });
+
+        expect(shape.category).toBe('data');
+        expect(shape.purposes).toEqual(PURPOSES);
+    });
+
+    it('should leave both out when the file has neither', () => {
+        const shape = shapeOf();
+
+        expect(shape).not.toHaveProperty('category');
+        expect(shape).not.toHaveProperty('purposes');
+    });
+
+    it.each([['an unknown name', 'tables'], ['a different case', 'Data'], ['not a string', 3]])('should report a category that is %s', (_label, category) => {
+        const result = parseShape({ summary: 'x', category }, FILE);
+
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-BUILD-CATEGORY']);
+        expect(result.errors[0]?.message).toContain(COMPONENT_CATEGORIES.join(', '));
+        expect(result.errors[0]?.file).toBe(FILE);
+    });
+
+    it.each([
+        ['two phrases', PURPOSES.slice(0, 2)],
+        ['nine phrases', Array.from({ length: 9 }, (_, index) => `purpose number ${index}`)],
+        ['a phrase on two lines', [...PURPOSES.slice(0, 2), 'one\ntwo']],
+        ['a phrase over the limit', [...PURPOSES.slice(0, 2), 'x'.repeat(MAX_PURPOSE_LENGTH + 1)]],
+        ['an empty phrase', [...PURPOSES.slice(0, 2), '   ']],
+        ['a phrase that is not a string', [...PURPOSES.slice(0, 2), 7]],
+        ['not an array', 'show a list']
+    ])('should report purposes with %s', (_label, purposes) => {
+        expect(parseCodes({ summary: 'x', purposes })).toEqual(['SUI-BUILD-PURPOSES']);
+    });
+
+    it('should accept three and eight phrases and a phrase of exactly the limit', () => {
+        const eight = Array.from({ length: 8 }, (_, index) => `purpose number ${index}`);
+
+        expect(checkPurposes(PURPOSES)).toBeUndefined();
+        expect(checkPurposes(eight)).toBeUndefined();
+        expect(checkPurposes([...PURPOSES.slice(0, 2), 'x'.repeat(MAX_PURPOSE_LENGTH)])).toBeUndefined();
+    });
+
+    it('should say what is wrong', () => {
+        expect(checkPurposes(PURPOSES.slice(0, 2))).toBe('must list 3 to 8 phrases, not 2');
+        expect(checkPurposes([...PURPOSES.slice(0, 2), ''])).toBe('phrase 3 is empty');
+    });
+
+    it('should compare phrases lowercased, trimmed and with inner spaces collapsed', () => {
+        expect(normalizePurpose('  Sort   Rows\tby a Column ')).toBe('sort rows by a column');
     });
 });

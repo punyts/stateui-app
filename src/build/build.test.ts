@@ -551,3 +551,62 @@ describe('build lint SUI-BUILD-TOKEN', () => {
         expect(result.errors).toEqual([]);
     });
 });
+
+describe('search keys', () => {
+    const PURPOSES = '["show a line of text", "label a field", "caption an image"]';
+    const keyed = (name: string, purposes = PURPOSES) => ({
+        [`atoms/${name}/${name}.view.html`]: '<p>{{ $.text }}</p>',
+        [`atoms/${name}/${name}.state.json`]: `{ "summary": "A test component", "category": "content", "purposes": ${purposes} }`
+    });
+    const composed = (body: string) => ({ 'composites/card-row/card-row.composed.json': body });
+
+    it('should accept components without search keys by default and leave them out of the catalog', async () => {
+        const source = await library({ ...simple('plain'), ...composed('{ "component": "plain" }') });
+
+        const result = await buildLibrary(source, await scratch());
+
+        expect(result.errors).toEqual([]);
+        for (const entry of result.catalog.components) {
+            expect(entry).not.toHaveProperty('category');
+            expect(entry).not.toHaveProperty('purposes');
+        }
+    });
+
+    it('should report missing keys under requireSearchKeys, with summary also required of composed files', async () => {
+        const source = await library({ ...simple('plain'), ...composed('{ "component": "plain" }') });
+
+        const result = await buildLibrary(source, await scratch(), { requireSearchKeys: true });
+
+        expect(result.errors.map((error) => `${error.file} ${error.code}`).sort()).toEqual([
+            'atoms/plain/plain.state.json SUI-BUILD-CATEGORY',
+            'atoms/plain/plain.state.json SUI-BUILD-PURPOSES',
+            'composites/card-row/card-row.composed.json SUI-BUILD-CATEGORY',
+            'composites/card-row/card-row.composed.json SUI-BUILD-PURPOSES',
+            'composites/card-row/card-row.composed.json SUI-BUILD-SUMMARY'
+        ]);
+        expect(result.catalog.components.map((entry) => entry.name)).not.toContain('cardRow');
+    });
+
+    it('should build a fully keyed library under requireSearchKeys and write the keys to the catalog', async () => {
+        const source = await library({
+            ...keyed('caption'),
+            ...composed('{ "component": "caption", "summary": "A captioned row", "category": "layout", "purposes": ["lay out a caption row", "pair a caption with text", "head a card"] }')
+        });
+
+        const result = await buildLibrary(source, await scratch(), { requireSearchKeys: true });
+
+        expect(result.errors).toEqual([]);
+        expect(result.catalog.components.find((entry) => entry.name === 'cardRow')).toMatchObject({ summary: 'A captioned row', category: 'layout' });
+        expect(result.catalog.components.find((entry) => entry.name === 'caption')).toMatchObject({ category: 'content', purposes: JSON.parse(PURPOSES) });
+    });
+
+    it('should report a purpose that repeats another component, ignoring case and spacing, in either mode', async () => {
+        const source = await library({ ...keyed('alpha'), ...keyed('beta', '["  Label   a FIELD ", "name a thing", "tag a row"]') });
+
+        const result = await buildLibrary(source, await scratch());
+
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toMatchObject({ code: 'SUI-BUILD-PURPOSE-DUPLICATE', file: 'atoms/beta/beta.state.json' });
+        expect(result.errors[0]?.message).toContain('alpha');
+    });
+});

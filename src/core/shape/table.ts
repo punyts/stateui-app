@@ -11,6 +11,17 @@ import { MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.
 import type { PropertyShape, PropertyType, Shape } from './types.js';
 import type { ComponentToken } from '../theme/types.js';
 import { VALIDATORS, isValidatorName } from './validators.js';
+import { COMPONENT_CATEGORIES, MAX_PURPOSE_LENGTH, checkPurposes, isComponentCategory } from './categories.js';
+
+/** `SUI-BUILD-CATEGORY` for a file: a missing category, or one not in the list */
+export function categoryError(file: string): BuildError {
+    return buildError('SUI-BUILD-CATEGORY', { file, name: COMPONENT_CATEGORIES.join(', ') });
+}
+
+/** `SUI-BUILD-PURPOSES` for a file, with what is wrong */
+export function purposesError(file: string, reason: string): BuildError {
+    return buildError('SUI-BUILD-PURPOSES', { file, name: reason, limit: MAX_PURPOSE_LENGTH });
+}
 
 /** What the parser hands every rule: the file being read, the error list and where in the file the rule runs */
 export interface RuleContext {
@@ -623,6 +634,32 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
         required: false,
         rule(value, shape) {
             shape.tokenGroup = value as string;
+        }
+    },
+    {
+        // Optional here: `BuildOptions.requireSearchKeys` makes a missing one an error
+        name: 'category',
+        type: 'any',
+        required: false,
+        rule(value, shape, context) {
+            if (!isComponentCategory(value)) {
+                context.errors.push(categoryError(context.file));
+                return;
+            }
+            shape.category = value;
+        }
+    },
+    {
+        name: 'purposes',
+        type: 'any',
+        required: false,
+        rule(value, shape, context) {
+            const reason = checkPurposes(value);
+            if (reason !== undefined) {
+                context.errors.push(purposesError(context.file, reason));
+                return;
+            }
+            shape.purposes = [...(value as string[])];
         }
     }
 ];

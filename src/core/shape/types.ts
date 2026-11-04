@@ -1,3 +1,4 @@
+import type { ComponentCategory } from './categories.js';
 import type { ComponentToken } from '../theme/types.js';
 import type { JsonValue } from '../types.js';
 
@@ -98,6 +99,10 @@ export interface Shape {
     tokens?: ComponentToken[];
     /** The `tokenGroup` the shape sets; absent when the group is the component name */
     tokenGroup?: string;
+    /** The component's category, for search and the category index; absent until the library curates it */
+    category?: ComponentCategory;
+    /** Three to eight one-line phrases of what the component is for, searched first; absent until curated */
+    purposes?: string[];
 }
 
 /** Longest allowed summary, in characters */

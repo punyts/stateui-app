@@ -6,6 +6,12 @@
             "tag": "ui-field-row",
             "size": "composite",
             "summary": "A labelled row",
+            "category": "forms",
+            "purposes": [
+                "lay out a labelled field",
+                "pair a label with an input",
+                "line up form rows"
+            ],
             "shape": {
                 "summary": "A labelled row",
                 "properties": {
@@ -59,6 +65,13 @@
             "tier": "composed",
             "tag": "ui-login-form",
             "size": "composite",
+            "summary": "A sign-in row with a name label",
+            "category": "forms",
+            "purposes": [
+                "ask for a user name",
+                "start a sign-in form",
+                "show a login field"
+            ],
             "tree": {
                 "component": "fieldRow",
                 "label": {
@@ -77,6 +90,12 @@
             "tag": "ui-text-label",
             "size": "atom",
             "summary": "A line of text",
+            "category": "content",
+            "purposes": [
+                "show a line of text",
+                "label a field",
+                "caption an image"
+            ],
             "shape": {
                 "summary": "A line of text",
                 "properties": {

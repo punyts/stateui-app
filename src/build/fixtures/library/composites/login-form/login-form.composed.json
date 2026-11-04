@@ -1,1 +1,7 @@
-{ "component": "fieldRow", "label": { "component": "textLabel", "_text": "Name" } }
+{
+    "component": "fieldRow",
+    "summary": "A sign-in row with a name label",
+    "category": "forms",
+    "purposes": ["ask for a user name", "start a sign-in form", "show a login field"],
+    "label": { "component": "textLabel", "_text": "Name" }
+}

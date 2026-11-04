@@ -35,6 +35,13 @@ export interface BuildOptions {
     cssTransforms?: readonly CssTransform[];
     /** Run on the CSS before any transform, so the lines they report match the file; none by default */
     cssChecks?: readonly CssCheck[];
+    /**
+     * When true, a root component without `category` or `purposes` and a composed file without `summary`, `category`
+     * or `purposes` is an error (`SUI-BUILD-CATEGORY`, `SUI-BUILD-PURPOSES`, `SUI-BUILD-SUMMARY`). When false (the
+     * default) they are accepted and the catalog entry leaves the keys out. A present value that breaks its rule and a
+     * purpose phrase that repeats another component's are errors either way
+     */
+    requireSearchKeys?: boolean;
 }
 
 /** A root component that built: its scan record and the files written for it, relative to the out folder */

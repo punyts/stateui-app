@@ -2,7 +2,8 @@ import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary, DocumentComposed } from '../resolve/index.js';
-import type { Shape } from '../shape/index.js';
+import { MAX_SUMMARY_LENGTH, categoryError, checkPurposes, isComponentCategory, purposesError } from '../shape/index.js';
+import type { ComponentCategory, Shape } from '../shape/index.js';
 import { RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
 
@@ -24,11 +25,37 @@ export interface ExposesIssue {
 }
 
 export interface ParsedComposed {
-    /** The default tree without its `exposes` key; absent when the file is not a composed tree */
+    /** The default tree without its `exposes`, `summary`, `category` and `purposes` keys; absent when the file is not a composed tree */
     tree?: Node;
     /** The exposed paths in file order, with their descriptions */
     exposes: ExposedPath[];
+    /** One line, at most `MAX_SUMMARY_LENGTH` characters; absent when the file has none */
+    summary?: string;
+    category?: ComponentCategory;
+    /** Three to eight one-line phrases; absent when the file has none */
+    purposes?: string[];
     errors: BuildError[];
+}
+
+/** Reads and checks the search keys of a composed file with the shape rules; a bad value is an error and left out */
+function readSearchKeys(json: JsonObject, file: string): Pick<ParsedComposed, 'summary' | 'category' | 'purposes'> & { errors: BuildError[] } {
+    const errors: BuildError[] = [];
+    const out: Pick<ParsedComposed, 'summary' | 'category' | 'purposes'> = {};
+    const { summary, category, purposes } = json;
+    if (summary !== undefined) {
+        if (typeof summary === 'string' && summary.trim() !== '' && summary.length <= MAX_SUMMARY_LENGTH && !/[\r\n]/.test(summary)) out.summary = summary;
+        else errors.push(buildError('SUI-BUILD-SUMMARY', { file, limit: MAX_SUMMARY_LENGTH }));
+    }
+    if (category !== undefined) {
+        if (isComponentCategory(category)) out.category = category;
+        else errors.push(categoryError(file));
+    }
+    if (purposes !== undefined) {
+        const reason = checkPurposes(purposes);
+        if (reason === undefined) out.purposes = [...(purposes as string[])];
+        else errors.push(purposesError(file, reason));
+    }
+    return { ...out, errors };
 }
 
 function isObject(value: unknown): value is JsonObject {
@@ -104,8 +131,9 @@ export function withoutExposes(tree: Node): Node {
 }
 
 /**
- * Reads the JSON of a `*.composed.json`: a default tree (an object with a `component` name) and its `exposes` map.
- * The tree comes back without `exposes`. A file that is not a tree is `SUI-BUILD-SHAPE`; an `exposes` that is not an
+ * Reads the JSON of a `*.composed.json`: a default tree (an object with a `component` name), its `exposes` map and
+ * the search keys `summary`, `category` and `purposes` (checked with the shape rules). The tree comes back without
+ * those four keys. A file that is not a tree is `SUI-BUILD-SHAPE`; an `exposes` that is not an
  * object of non-empty descriptions is `SUI-BUILD-EXPOSES`. Whether each path resolves needs the library, so
  * `checkComposedExposes` does that once every component is known
  */
@@ -113,14 +141,16 @@ export function parseComposed(json: unknown, file: string): ParsedComposed {
     if (!isObject(json) || typeof json[RESERVED_KEYS.component] !== 'string') {
         return { exposes: [], errors: [buildError('SUI-BUILD-SHAPE', { file, name: '$' })] };
     }
-    const tree = withoutExposes(json as Node);
+    const { summary: _summary, category: _category, purposes: _purposes, ...treeKeys } = withoutExposes(json as Node);
+    const tree = treeKeys as Node;
+    const { errors: searchErrors, ...search } = readSearchKeys(json, file);
     const raw = json[EXPOSES_KEY];
-    if (raw === undefined) return { tree, exposes: [], errors: [] };
+    if (raw === undefined) return { tree, exposes: [], ...search, errors: searchErrors };
     if (!isObject(raw)) {
-        return { tree, exposes: [], errors: [buildError('SUI-BUILD-EXPOSES', { file, key: EXPOSES_KEY, name: 'must be an object of override path to description' })] };
+        return { tree, exposes: [], ...search, errors: [...searchErrors, buildError('SUI-BUILD-EXPOSES', { file, key: EXPOSES_KEY, name: 'must be an object of override path to description' })] };
     }
     const exposes: ExposedPath[] = [];
-    const errors: BuildError[] = [];
+    const errors: BuildError[] = [...searchErrors];
     for (const [path, description] of Object.entries(raw)) {
         if (path === '' || path.split('.').some((segment) => segment === '')) {
             errors.push(buildError('SUI-BUILD-EXPOSES', { file, key: path, name: 'is not a path' }));
@@ -130,7 +160,7 @@ export function parseComposed(json: unknown, file: string): ParsedComposed {
             exposes.push({ path, description });
         }
     }
-    return { tree, exposes, errors };
+    return { tree, exposes, ...search, errors };
 }
 
 /** `SUI-BUILD-EXPOSES` for each exposed path of a parsed composed file that resolves nowhere in its default tree */

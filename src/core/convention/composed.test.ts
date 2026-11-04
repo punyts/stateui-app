@@ -195,3 +195,34 @@ describe('overriding a path that is not exposed', () => {
         expect(result.node).not.toHaveProperty('exposes');
     });
 });
+
+describe('composed search keys', () => {
+    const PURPOSES: readonly string[] = Object.freeze(['ask before a destructive action', 'confirm or cancel a choice', 'warn about data loss']);
+
+    it('should read summary, category and purposes and strip them from the tree', () => {
+        const parsed = parseComposed({ ...confirmDialog(), summary: 'A dialog that asks to confirm', category: 'overlays', purposes: PURPOSES }, FILE);
+
+        expect(parsed.errors).toEqual([]);
+        expect(parsed).toMatchObject({ summary: 'A dialog that asks to confirm', category: 'overlays', purposes: PURPOSES });
+        expect(parsed.tree).not.toHaveProperty('summary');
+        expect(parsed.tree).not.toHaveProperty('category');
+        expect(parsed.tree).not.toHaveProperty('purposes');
+        expect(parsed.tree).toMatchObject({ component: 'modal' });
+    });
+
+    it('should leave them out when the file has none', () => {
+        const parsed = parseComposed(confirmDialog(), FILE);
+
+        expect(parsed).not.toHaveProperty('summary');
+        expect(parsed).not.toHaveProperty('category');
+        expect(parsed).not.toHaveProperty('purposes');
+    });
+
+    it('should report bad values with the shape rules and keep the tree', () => {
+        const parsed = parseComposed({ component: 'modal', summary: 'one\ntwo', category: 'popups', purposes: ['only one'] }, FILE);
+
+        expect(parsed.errors.map((error) => error.code)).toEqual(['SUI-BUILD-SUMMARY', 'SUI-BUILD-CATEGORY', 'SUI-BUILD-PURPOSES']);
+        expect(parsed.tree).toEqual({ component: 'modal' });
+        expect(parsed).not.toHaveProperty('category');
+    });
+});

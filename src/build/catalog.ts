@@ -3,7 +3,7 @@ import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import type { ComponentToken } from '../core/theme/index.js';
 import { typesOf } from '../core/shape/index.js';
-import type { PropertyShape, Shape } from '../core/shape/index.js';
+import type { ComponentCategory, PropertyShape, Shape } from '../core/shape/index.js';
 import type { ExposedPath, ScannedComponent } from '../core/convention/index.js';
 import type { JsonObject, JsonValue, Node } from '../core/types.js';
 import type { ThemeSection } from './theme.js';
@@ -48,8 +48,14 @@ interface EntryBase {
     example: Node;
 }
 
+/** The keys search reads: the category and the purpose phrases. An entry carries each when its file declares it */
+export interface SearchKeys {
+    category?: ComponentCategory;
+    purposes?: string[];
+}
+
 /** The catalog entry of a root component */
-export interface RootCatalogEntry extends EntryBase, ShapeExtras {
+export interface RootCatalogEntry extends EntryBase, ShapeExtras, SearchKeys {
     tier: 'root';
     summary: string;
     /** What `validateNode` needs; the server validates a node against it without a DOM */
@@ -68,8 +74,10 @@ export interface RootCatalogEntry extends EntryBase, ShapeExtras {
 }
 
 /** The catalog entry of a composed component: its default tree, without the `exposes` key, and the exposed paths */
-export interface ComposedCatalogEntry extends EntryBase {
+export interface ComposedCatalogEntry extends EntryBase, SearchKeys {
     tier: 'composed';
+    /** One line from the composed file; absent when the file has none */
+    summary?: string;
     tree: Node;
     /** The override paths that are the component's intended interface, in file order; absent when the file lists none */
     exposes?: ExposedPath[];
@@ -192,6 +200,13 @@ export function exampleNode(name: string, shape: Shape): Node {
     return node;
 }
 
+function searchKeysOf(source: SearchKeys): SearchKeys {
+    return {
+        ...(source.category === undefined ? {} : { category: source.category }),
+        ...(source.purposes === undefined ? {} : { purposes: source.purposes })
+    };
+}
+
 function extrasOf(source: ShapeExtras): ShapeExtras {
     return {
         ...(source.tokens === undefined ? {} : { tokens: source.tokens }),
@@ -209,6 +224,7 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
         tag: component.tag,
         size,
         summary: shape.summary,
+        ...searchKeysOf(shape),
         shape: {
             summary: shape.summary,
             properties: shape.properties,
@@ -233,18 +249,21 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
     };
 }
 
-/** The entry of a composed component: the default tree (no `exposes` key) and the exposed paths from `parseComposed` */
+/** The entry of a composed component: the default tree (no `exposes` or search keys), the exposed paths and the search keys from `parseComposed` */
 export function composedEntry(
     component: ScannedComponent,
     tree: Node,
     size: CatalogSize,
-    exposes: readonly ExposedPath[] = []
+    exposes: readonly ExposedPath[] = [],
+    search: SearchKeys & { summary?: string } = {}
 ): ComposedCatalogEntry {
     return {
         name: component.name,
         tier: 'composed',
         tag: component.tag,
         size,
+        ...(search.summary === undefined ? {} : { summary: search.summary }),
+        ...searchKeysOf(search),
         tree,
         locales: Object.keys(component.locales),
         example: { component: component.name },

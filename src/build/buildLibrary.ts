@@ -7,7 +7,8 @@ import type { BuildError } from '../core/errors/index.js';
 import { validateComponentOverlay, validateLocaleOverlay } from '../core/locale/index.js';
 import { resolveNode } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
-import { buildDefaults, collectComponentTokens, parseShape } from '../core/shape/index.js';
+import { MAX_SUMMARY_LENGTH, buildDefaults, categoryError, collectComponentTokens, normalizePurpose, parseShape, purposesError } from '../core/shape/index.js';
+import type { ComponentCategory } from '../core/shape/index.js';
 import type { Shape } from '../core/shape/index.js';
 import type { ComponentToken } from '../core/theme/index.js';
 import { generateSharedSheet } from '../dom/articulation/index.js';
@@ -95,6 +96,7 @@ async function compileComponent(
         if (result.shape) {
             shape = result.shape;
             defaultState = buildDefaults(result.shape);
+            if (options.requireSearchKeys === true) errors.push(...missingSearchKeys(shape, stateFile, false));
         }
     }
     if (sizeOf(component.group) === undefined) errors.push(sizeError(component.name, viewFile));
@@ -157,11 +159,39 @@ async function compileComponent(
     return { files, errors, ...(shape === undefined ? {} : { shape }) };
 }
 
+/** The errors for search keys a file leaves out, under `requireSearchKeys`; a composed file also needs `summary` */
+function missingSearchKeys(keys: { summary?: string; category?: string; purposes?: string[] }, file: string, composed: boolean): BuildError[] {
+    return [
+        ...(composed && keys.summary === undefined ? [buildError('SUI-BUILD-SUMMARY', { file, limit: MAX_SUMMARY_LENGTH })] : []),
+        ...(keys.category === undefined ? [categoryError(file)] : []),
+        ...(keys.purposes === undefined ? [purposesError(file, 'is missing')] : [])
+    ];
+}
+
+/**
+ * `SUI-BUILD-PURPOSE-DUPLICATE` for each purpose phrase that repeats one of an earlier component (in name order),
+ * compared lowercased, trimmed and with inner spaces collapsed, across root and composed components
+ */
+function duplicatePurposes(entries: readonly ComponentCatalogEntry[], files: ReadonlyMap<string, string>): BuildError[] {
+    const owners = new Map<string, string>();
+    const errors: BuildError[] = [];
+    for (const entry of [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+        for (const phrase of entry.purposes ?? []) {
+            const key = normalizePurpose(phrase);
+            const owner = owners.get(key);
+            if (owner === undefined) owners.set(key, entry.name);
+            else if (owner !== entry.name) errors.push(buildError('SUI-BUILD-PURPOSE-DUPLICATE', { key: phrase, component: entry.name, file: files.get(entry.name) ?? entry.name, other: owner }));
+        }
+    }
+    return errors;
+}
+
 /** A composed component read from disk, waiting for the whole library to check its overlays */
 interface PendingComposed {
     component: ScannedComponent;
     tree: Node;
     exposes: ExposedPath[];
+    search: { summary?: string; category?: ComponentCategory; purposes?: string[] };
     size: CatalogSize;
     overlays: ReadOverlay[];
 }
@@ -263,12 +293,22 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
             }
             const parsed = await readComposed(sourceDir, file, errors);
             if (parsed?.tree === undefined) continue;
+            if (options.requireSearchKeys === true) {
+                const missing = missingSearchKeys(parsed, file, true);
+                errors.push(...missing);
+                if (missing.length > 0) continue;
+            }
             const overlays: ReadOverlay[] = [];
             for (const [code, localeFile] of Object.entries(component.locales)) {
                 const read = await readOverlay(sourceDir, code, localeFile, errors);
                 if (read !== undefined) overlays.push(read);
             }
-            pending.push({ component, tree: parsed.tree, exposes: parsed.exposes, size, overlays });
+            const search = {
+                ...(parsed.summary === undefined ? {} : { summary: parsed.summary }),
+                ...(parsed.category === undefined ? {} : { category: parsed.category }),
+                ...(parsed.purposes === undefined ? {} : { purposes: parsed.purposes })
+            };
+            pending.push({ component, tree: parsed.tree, exposes: parsed.exposes, search, size, overlays });
             continue;
         }
         const compiled = await compileComponent(stateui, sourceDir, component, options, library);
@@ -289,9 +329,12 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
         ];
         errors.push(...problems);
         if (problems.length > 0 || item.overlays.length !== Object.keys(item.component.locales).length) continue;
-        entries.push(composedEntry(item.component, item.tree, item.size, item.exposes));
+        entries.push(composedEntry(item.component, item.tree, item.size, item.exposes, item.search));
         for (const read of item.overlays) output.set(overlayFileName(item.component.name, read.code), emitOverlay(read.overlay));
     }
+
+    const sourceFiles = new Map(scan.components.map((component) => [component.name, component.files.state ?? component.files.composed ?? component.files.view ?? component.name]));
+    errors.push(...duplicatePurposes(entries, sourceFiles));
 
     output.set('index.js', emitIndex(
             built.map((entry) => entry.component.name),

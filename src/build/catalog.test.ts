@@ -268,3 +268,29 @@ describe('catalog.json from buildLibrary', () => {
         expect(result.built).toEqual([]);
     });
 });
+
+describe('search keys in catalog entries', () => {
+    const PURPOSES: readonly string[] = Object.freeze(['show a list of records', 'sort rows by a column', 'pick rows to act on']);
+
+    it('should put category and purposes at the top of a root entry, not in its shape', () => {
+        const entry = rootEntry(scanned('table'), parsed({ summary: 'x', category: 'data', purposes: PURPOSES }), 'atom');
+
+        expect(entry).toMatchObject({ category: 'data', purposes: PURPOSES });
+        expect(entry.shape).not.toHaveProperty('category');
+        expect(entry.shape).not.toHaveProperty('purposes');
+    });
+
+    it('should leave the keys out of a root entry whose shape has none', () => {
+        const entry = rootEntry(scanned('table'), parsed({ summary: 'x' }), 'atom');
+
+        expect(entry).not.toHaveProperty('category');
+        expect(entry).not.toHaveProperty('purposes');
+    });
+
+    it('should give a composed entry its summary, category and purposes', () => {
+        const entry = composedEntry(scanned('confirm'), { component: 'modal' } as Node, 'composite', [], { summary: 'Asks first', category: 'overlays', purposes: PURPOSES });
+
+        expect(entry).toMatchObject({ tier: 'composed', summary: 'Asks first', category: 'overlays', purposes: PURPOSES });
+        expect(composedEntry(scanned('confirm'), { component: 'modal' } as Node, 'composite')).not.toHaveProperty('summary');
+    });
+});

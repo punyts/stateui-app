@@ -1,7 +1,9 @@
 export { buildDefaults } from './defaults.js';
 export { parseShape } from './parse.js';
 export type { ShapeResult } from './parse.js';
-export { PROPERTY_KEYS, SHAPE_KEYS } from './table.js';
+export { PROPERTY_KEYS, SHAPE_KEYS, categoryError, purposesError } from './table.js';
+export { COMPONENT_CATEGORIES, MAX_PURPOSES, MAX_PURPOSE_LENGTH, MIN_PURPOSES, checkPurposes, isComponentCategory, normalizePurpose } from './categories.js';
+export type { ComponentCategory } from './categories.js';
 export type { KeyRule, RuleContext } from './table.js';
 export { MAX_PATTERN_INPUT, MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.js';
 export type { Bounds, PropertyShape, PropertyType, RequiredWhen, Shape, ValidatorOptions } from './types.js';

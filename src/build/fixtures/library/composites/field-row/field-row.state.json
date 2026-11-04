@@ -1,5 +1,7 @@
 {
     "summary": "A labelled row",
+    "category": "forms",
+    "purposes": ["lay out a labelled field", "pair a label with an input", "line up form rows"],
     "properties": {
         "label": { "type": "node" }
     }

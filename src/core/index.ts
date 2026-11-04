@@ -5,9 +5,16 @@ export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits }
 export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, isAppEvent } from './types.js';
 export type { AppDocument, AppEventName, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {
+    COMPONENT_CATEGORIES,
     MAX_PATTERN_INPUT,
     MAX_PATTERN_LENGTH,
+    MAX_PURPOSES,
+    MAX_PURPOSE_LENGTH,
     MAX_SUMMARY_LENGTH,
+    MIN_PURPOSES,
+    checkPurposes,
+    isComponentCategory,
+    normalizePurpose,
     PROPERTY_KEYS,
     PROPERTY_TYPES,
     SHAPE_KEYS,
@@ -24,6 +31,7 @@ export {
 export type {
     Bounds,
     CollectedTokens,
+    ComponentCategory,
     KeyRule,
     NodeChild,
     PropertyShape,

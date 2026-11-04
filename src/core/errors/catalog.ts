@@ -129,6 +129,9 @@ export const ERROR_CATALOG = {
         template: 'Pattern of property "{name}" in {file} is not a valid expression or is over {limit} characters'
     },
     'SUI-BUILD-SUMMARY': { template: 'Shape {file} needs a one-line "summary" of at most {limit} characters' },
+    'SUI-BUILD-CATEGORY': { template: 'Component file {file} needs a "category" from this list: {name}' },
+    'SUI-BUILD-PURPOSES': { template: '"purposes" in {file} {name}: three to eight one-line phrases of at most {limit} characters' },
+    'SUI-BUILD-PURPOSE-DUPLICATE': { template: 'Purpose "{key}" of {component} in {file} repeats a purpose of {other}' },
     'SUI-BUILD-FILE': { template: 'File {file} is not inside a component folder' },
     'SUI-BUILD-ROLE': { template: 'File {file} must be named "{name}.<role>" with a known role' },
     'SUI-BUILD-DUPLICATE': { template: 'Component "{component}" is defined by both {file} and {other}' },
