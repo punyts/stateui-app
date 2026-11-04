@@ -44,6 +44,8 @@ const ICONS_PATH = '$.runtime.icons';
 const DATA_ROOT = '$.data';
 /** The runtime posts at most this many errors in its life, so a failing app cannot flood the host */
 const MAX_POSTED_ERRORS = 200;
+/** Window errors that report no failure: a ResizeObserver whose callback changed layout leaves notifications for the next frame */
+const BENIGN_ERROR = /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/;
 
 /** Where the runtime posts: `window.parent` in the iframe, a fake in tests */
 export interface MessageTarget {
@@ -463,7 +465,9 @@ export function startRuntime(
         }
     }
 
-    function onFailure(): void {
+    function onFailure(event: Event): void {
+        // The browser raises this when a resize handler changes layout again; nothing failed
+        if (event instanceof ErrorEvent && event.error == null && BENIGN_ERROR.test(event.message)) return;
         postErrors([buildError('SUI-RUN-BINDING', { component: 'runtime', path: '$', statePath: '$' })]);
     }
 

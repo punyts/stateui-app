@@ -538,6 +538,30 @@ describe('startRuntime in Chromium', () => {
         expect(errors[0]?.statePath).toBe('$.app.children.go');
     });
 
+    it('should post a runtime error for an uncaught window error', () => {
+        // Arrange
+        send(message('load', { document: { app: panel({}) } }));
+
+        // Act
+        window.dispatchEvent(new ErrorEvent('error', { message: 'boom', error: new Error('boom') }));
+
+        // Assert
+        const errors = ofType('error')[0]?.['errors'] as { code: string }[];
+        expect(errors[0]?.code).toBe('SUI-RUN-BINDING');
+    });
+
+    it('should post no error for a ResizeObserver loop notice', () => {
+        // Arrange
+        send(message('load', { document: { app: panel({}) } }));
+
+        // Act
+        window.dispatchEvent(new ErrorEvent('error', { message: 'ResizeObserver loop completed with undelivered notifications.' }));
+        window.dispatchEvent(new ErrorEvent('error', { message: 'ResizeObserver loop limit exceeded' }));
+
+        // Assert
+        expect(ofType('error')).toHaveLength(0);
+    });
+
     it('should post emit from the dispatcher hook', () => {
         // Arrange
         const document: AppDocument = {
