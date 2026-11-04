@@ -9,6 +9,9 @@ const FUNCTION_COLOR = new RegExp(
     'i'
 );
 const DIMENSION = new RegExp(`^${NUMBER}(?:px|rem|%)$`);
+/** A viewport length, allowed only inside `calc()`, `clamp()`, `min()` and `max()`, so a size can follow the screen */
+const VIEWPORT = new RegExp(`^${NUMBER}(?:vw|vh|vmin|vmax)$`);
+const MATH_FUNCTION = /^(?:clamp|min|max)\(/;
 const PLAIN_NUMBER = new RegExp(`^${NUMBER}$`);
 const DURATION = new RegExp(String.raw`^[+]?(?:\d+\.?\d*|\.\d+)(?:ms|s)$`);
 const EASING_KEYWORDS = ['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end'];
@@ -75,7 +78,7 @@ function isCalc(text: string): boolean {
             index += 1;
             return true;
         }
-        const match = new RegExp(`^${NUMBER}(?:px|rem|%)?`).exec(source.slice(index));
+        const match = new RegExp(`^${NUMBER}(?:px|rem|%|vw|vh|vmin|vmax)?`).exec(source.slice(index));
         if (match === null) return false;
         index += match[0].length;
         return true;
@@ -115,8 +118,36 @@ function isCalc(text: string): boolean {
     return index === source.length;
 }
 
+/** An argument of `clamp()`, `min()` or `max()`: a length, a viewport length, a reference mark or a nested function */
+function isMathArgument(text: string): boolean {
+    // A math function argument is a calculation of its own, so `4vw + 12px` needs no calc()
+    return text === REFERENCE_MARK || VIEWPORT.test(text) || isDimension(text) || isCalc(`calc(${text})`);
+}
+
+/** `clamp(a, b, c)`, `min(a, ...)` or `max(a, ...)` of lengths, viewport lengths and `calc()`: a fluid size */
+function isMathFunction(text: string): boolean {
+    if (!MATH_FUNCTION.test(text) || !text.endsWith(')')) return false;
+    // The first parenthesis must close at the very end, so `min(1px) max(2px)` is not one function
+    const open = text.indexOf('(');
+    let depth = 0;
+    for (let index = open; index < text.length; index += 1) {
+        if (text[index] === '(') depth += 1;
+        else if (text[index] === ')') depth -= 1;
+        if (depth === 0 && index !== text.length - 1) return false;
+    }
+    const args = splitTopLevel(text.slice(open + 1, -1), (char) => char === ',').map((arg) => arg.trim());
+    const count = text.startsWith('clamp(') ? args.length === 3 : args.length >= 1;
+    return count && args.every(isMathArgument);
+}
+
 function isDimension(text: string): boolean {
-    return text === '0' || DIMENSION.test(text) || isCalc(text);
+    return text === '0' || DIMENSION.test(text) || isCalc(text) || isMathFunction(text);
+}
+
+/** One to four dimensions separated by spaces: the CSS box shorthand (all sides; block and inline; or each side) */
+function isInset(text: string): boolean {
+    const parts = splitTopLevel(text, (char) => /\s/.test(char));
+    return parts.length >= 1 && parts.length <= 4 && parts.every((part) => part === REFERENCE_MARK || isDimension(part));
 }
 
 function isShadow(text: string): boolean {
@@ -125,14 +156,19 @@ function isShadow(text: string): boolean {
     return (
         groups.length > 0 &&
         groups.every((group) => {
+            // As in CSS: an optional `inset`, two to four lengths and one color, which comes first or last
             const parts = splitTopLevel(group.trim(), (char) => /\s/.test(char));
-            const lengths = parts.slice(0, 4);
-            const color = parts[4];
+            const rest = parts.filter((part) => part !== 'inset');
+            if (parts.length - rest.length > 1) return false;
+            const colors = rest.filter(isColor);
+            const lengths = rest.filter((part) => !isColor(part));
+            const color = colors[0];
             return (
-                parts.length === 5 &&
-                lengths.every((part) => part === '0' || DIMENSION.test(part)) &&
-                color !== undefined &&
-                isColor(color)
+                colors.length === 1 &&
+                (rest[0] === color || rest[rest.length - 1] === color) &&
+                lengths.length >= 2 &&
+                lengths.length <= 4 &&
+                lengths.every((part) => part === '0' || DIMENSION.test(part))
             );
         })
     );
@@ -159,6 +195,8 @@ function matchesType(type: TokenType, text: string): boolean {
             return isColor(text);
         case 'dimension':
             return isDimension(text);
+        case 'inset':
+            return isInset(text);
         case 'number':
             return PLAIN_NUMBER.test(text);
         case 'duration':
@@ -187,8 +225,10 @@ export function hasInjection(text: string): boolean {
 
 /**
  * True when the value fits the type. A value that is one reference passes when the referenced token has the same
- * type (looked up with `typeOf`, which defaults to the default tree). A reference inside a larger value is allowed
- * only in a `dimension` `calc()`. A value with `url(`, `@`, `;`, `expression` or a brace that is not a reference never passes
+ * type (looked up with `typeOf`, which defaults to the default tree); a dimension reference also fits an `inset`. A
+ * reference inside a larger value is allowed only in a `dimension` `calc()`, `clamp()`, `min()` or `max()`, and as a
+ * dimension part of an `inset`. A value with `url(`, `@`, `;`, `expression` or a brace that is not a reference never
+ * passes
  */
 export function validateTokenValue(type: TokenType, text: string, typeOf: TypeLookup = defaultLookup): boolean {
     if (hasInjection(text)) return false;
@@ -196,11 +236,17 @@ export function validateTokenValue(type: TokenType, text: string, typeOf: TypeLo
     if (trimmed === '') return false;
     const parts = parseValue(trimmed);
     const only = parts[0];
-    if (parts.length === 1 && only !== undefined && only.kind === 'ref') return typeOf(only.path) === type;
+    if (parts.length === 1 && only !== undefined && only.kind === 'ref') {
+        const target = typeOf(only.path);
+        return target === type || (type === 'inset' && target === 'dimension');
+    }
     if (parts.some((part) => part.kind === 'ref')) {
-        if (type !== 'dimension' || !trimmed.startsWith('calc(')) return false;
         const marked = parts.map((part) => (part.kind === 'ref' ? REFERENCE_MARK : part.text)).join('');
-        return isCalc(marked);
+        if (type === 'inset') {
+            return parts.every((part) => part.kind !== 'ref' || typeOf(part.path) === 'dimension') && isInset(marked);
+        }
+        if (type !== 'dimension' || !(trimmed.startsWith('calc(') || MATH_FUNCTION.test(trimmed))) return false;
+        return isCalc(marked) || isMathFunction(marked);
     }
     return matchesType(type, trimmed);
 }

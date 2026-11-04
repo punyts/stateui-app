@@ -168,7 +168,11 @@ export const ERROR_CATALOG = {
     'SUI-RUN-ON-TARGET': { template: 'Target "{target}" of event "{event}" does not resolve at {path}' },
     'SUI-RUN-ICON': { template: 'Icon "{name}" at {path} is in neither the core set nor the icons of the app' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' },
-    'SUI-RUN-WRITE': { template: 'The runtime did not apply the write to {path}' }
+    'SUI-RUN-WRITE': { template: 'The runtime did not apply the write to {path}' },
+    'SUI-RUN-CLIPPED': {
+        template: 'Rows of "{component}" at {path} are {limit}px tall but a row needs {actual}px, so its content is cut off; set rowHeight, or the recordlist.row token in the node theme',
+        severity: 'warning'
+    }
 } as const satisfies Record<string, CatalogEntry>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

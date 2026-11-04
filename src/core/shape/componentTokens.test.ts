@@ -45,6 +45,22 @@ describe('tokens in a shape', () => {
         ]);
     });
 
+    it('should infer an inset from two dimension references separated by a space', () => {
+        // Arrange / Act
+        const shape = parsed({ summary: 'x', tokens: { padding: '{space.inset.md} {space.inset.md}' } }, 'panel/panel.state.json');
+
+        // Assert
+        expect(shape.tokens).toEqual([{ path: 'panel.padding', group: 'panel', type: 'inset', default: '{space.inset.md} {space.inset.md}' }]);
+    });
+
+    it('should reject a space-separated default that mixes in a colour', () => {
+        // Arrange / Act
+        const result = parseShape({ summary: 'x', tokens: { padding: '{space.inset.md} {color.text.muted}' } }, 'panel.state.json');
+
+        // Assert
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-BUILD-TOKENDEF']);
+    });
+
     it('should take the type of a colour reference', () => {
         // Arrange / Act
         const shape = parsed({ summary: 'x', tokens: { color: '{color.text.muted}' } }, 'term/term.state.json');

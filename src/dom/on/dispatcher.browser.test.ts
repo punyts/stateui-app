@@ -128,6 +128,50 @@ describe('on dispatch in Chromium', () => {
         expect(store.get('$.app.children.b.enabled')).toBe(false);
     });
 
+    it('should copy the value at from with set, a copy that later writes do not change', () => {
+        // Arrange
+        const { store, element } = mountApp(
+            panel({
+                b: { component: 'button', on: { press: [{ command: 'set', target: '$.data.chosen', from: '$.data.colors.blue' }, { command: 'set', target: '.enabled', from: '$.data.flag' }] } }
+            }),
+            { colors: { blue: { hex: '#00f' } }, flag: false }
+        );
+
+        // Act
+        raise(element('$.app.children.b'), 'press');
+        store.set('$.data.colors.blue.hex', '#11f' as never);
+
+        // Assert
+        expect(store.get('$.data.chosen')).toEqual({ hex: '#00f' });
+        expect(store.get('$.app.children.b.enabled')).toBe(false);
+    });
+
+    it('should fail a set whose from has no value and write nothing', () => {
+        // Arrange
+        const { store, hooks, element } = mountApp(
+            panel({ b: { component: 'button', on: { press: { command: 'set', target: '$.data.chosen', from: '$.data.missing' } } } }),
+            { chosen: 'old' }
+        );
+
+        // Act
+        raise(element('$.app.children.b'), 'press');
+
+        // Assert
+        expect(store.get('$.data.chosen')).toBe('old');
+        expect(hooks.onError).toHaveBeenCalled();
+    });
+
+    it('should emit the value at from as the payload', () => {
+        // Arrange
+        const { hooks, element } = mountApp(panel({ b: { component: 'button', on: { press: { command: 'emit', target: 'picked', from: '$.data.pick' } } } }), { pick: 'k2' });
+
+        // Act
+        raise(element('$.app.children.b'), 'press');
+
+        // Assert
+        expect(hooks.onEmit).toHaveBeenCalledWith('picked', 'k2');
+    });
+
     it('should run a list in order', () => {
         // Arrange
         const { store, element } = mountApp(

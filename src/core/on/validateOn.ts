@@ -120,7 +120,7 @@ class OnValidator {
     }
 
     private checkCommand(command: OnCommand, event: string, scope: Scope, statePath: string): void {
-        const { chain } = scope;
+        if (command.from !== undefined) this.checkFrom(command.from, event, scope, statePath);
         if (command.command === 'emit') {
             if (command.target === undefined) this.malformed(statePath);
             return;
@@ -135,7 +135,7 @@ class OnValidator {
     /** `set` and `toggle` write to a property: they need a target that names one, and `set` needs a value */
     private checkWrite(command: OnCommand, event: string, scope: Scope, statePath: string): void {
         const { chain } = scope;
-        if (command.command === 'set' && !('value' in command)) this.malformed(statePath);
+        if (command.command === 'set' && !('value' in command) && command.from === undefined) this.malformed(statePath);
         if (command.target === undefined) {
             this.malformed(statePath);
             return;
@@ -148,6 +148,17 @@ class OnValidator {
                 located.kind === 'outside' ||
                 (located.kind === 'property' && this.declares(located.node.component, located.property)));
         if (!ok) this.badTarget(command.target, event, chain, statePath);
+    }
+
+    /** `from` reads a value: a property a component declares, a path outside `$.app` or `$row.path`, never a node */
+    private checkFrom(from: string, event: string, scope: Scope, statePath: string): void {
+        const located = this.locate(from, scope);
+        const ok =
+            located !== undefined &&
+            (located.kind === 'state' ||
+                located.kind === 'outside' ||
+                (located.kind === 'property' && this.declares(located.node.component, located.property)));
+        if (!ok) this.badTarget(from, event, scope.chain, statePath);
     }
 
     private checkComponentCommand(command: OnCommand, event: string, scope: Scope, statePath: string): void {
@@ -225,7 +236,8 @@ class OnValidator {
  * Checks every `on` entry in a resolved tree and returns the errors, in tree order:
  * - a malformed `on` (reported as `SUI-DOC-SHAPE` with the state path until the catalog has a `SUI-ON` code for it):
  *   not a map of event to entry, an entry that is not one command object or a non-empty list of them, a command
- *   object with other keys, an `emit` without a target (its event name), a `set` without a value, or a `set` or
+ *   object with other keys or with both `value` and `from`, an `emit` without a target (its event name), a `set`
+ *   without a value or `from`, or a `set` or
  *   `toggle` without a target
  * - `SUI-ON-EVENT`: the node's component does not declare the event; the root node (`$.app`) may also use the app
  *   events (`APP_EVENTS`: `sync.rejected`, `logic.failed`, and `notify.<name>`) the host raises
@@ -233,7 +245,8 @@ class OnValidator {
  * - `SUI-ON-VALUE`: a literal `value` of a command the target's shape lists in `commandValues` is not a key of that map
  * - `SUI-ON-TARGET`: the target text is not a valid form (including dot climbing), the ancestor or a step does not
  *   exist, no ancestor provides the command for `$parent`, a component command targets a property or a path outside
- *   `$.app`, or `set` and `toggle` do not target a property the component declares
+ *   `$.app`, `set` and `toggle` do not target a property the component declares, or `from` names no such property,
+ *   path or `$row.path`
  *
  * Target rules: a component command without a target acts on the node itself; `set` and `toggle` target a property
  * (`$.data.name`, `.value`, `^form.children.name.value`); `emit` uses `target` as the event name and is not resolved.

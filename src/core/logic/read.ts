@@ -18,9 +18,13 @@ const ROW_KEYS = ['match', 'if', 'do'];
 const TRIGGER_KEYS = ['path', 'result', 'is', 'was', 'if', 'after', 'debounce'];
 const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-/** Where a trigger is: a machine transition (with its result names and whether it has `from`), a rule or a table */
+/**
+ * Where a trigger is: a machine transition (with the result names of its machine and whether it has `from`), or a rule
+ * or a table (with the result names of the rules and tables)
+ */
 interface TriggerPlace {
-    results?: readonly string[];
+    results: readonly string[];
+    machine?: boolean;
     from?: boolean;
 }
 
@@ -64,6 +68,8 @@ class Reader {
     readonly warnings: BuildError[] = [];
     /** The captures of the trigger whose expressions are being read */
     private captures: readonly string[] = [];
+    /** The `as` names of the commands of rules and tables, which a rule or table can wait for */
+    sharedResults: readonly string[] = [];
 
     constructor(private readonly options: ReadLogicOptions) {}
 
@@ -157,7 +163,7 @@ class Reader {
         const hasAfter = Object.hasOwn(value, 'after');
         if (Number(hasPath) + Number(hasResult) + Number(hasAfter) !== 1) this.shape(path, '"when" needs exactly one of "path", "result" and "after"');
         if (hasAfter) {
-            if (results === undefined) this.shape(`${path}.after`, 'only a machine transition can wait for a time');
+            if (!place.machine) this.shape(`${path}.after`, 'only a machine transition can wait for a time');
             else if (!place.from) this.shape(`${path}.after`, '"after" needs "from" on its transition');
             const ms = this.delay(value['after'], `${path}.after`);
             if (ms !== undefined) trigger.after = ms;
@@ -181,9 +187,10 @@ class Reader {
         }
         if (hasResult) {
             const name = value['result'];
-            if (results === undefined) this.shape(`${path}.result`, 'only a machine transition can wait for a result');
-            else if (typeof name !== 'string' || !results.includes(name)) this.shape(`${path}.result`, `no command of the machine is named "${String(name)}"`);
-            else trigger.result = name;
+            if (typeof name !== 'string' || !results.includes(name)) {
+                const owner = place.machine ? 'of the machine' : 'of a rule or table';
+                this.shape(`${path}.result`, `no command ${owner} is named "${String(name)}" with "as"`);
+            } else trigger.result = name;
         }
         if (Object.hasOwn(value, 'is')) trigger.is = value['is'] as JsonValue;
         if (Object.hasOwn(value, 'was')) {
@@ -287,7 +294,7 @@ class Reader {
                 return;
             }
             this.unknownKeys(item, TRANSITION_KEYS, at);
-            const { trigger, captures } = this.trigger(item['when'], `${at}.when`, { results, from: Object.hasOwn(item, 'from') });
+            const { trigger, captures } = this.trigger(item['when'], `${at}.when`, { results, machine: true, from: Object.hasOwn(item, 'from') });
             const commands = this.commands(item['do'], `${at}.do`, captures, { required: false, guard: false, machine: true });
             const transition: LogicTransition = { when: trigger ?? {}, do: commands ?? [] };
             for (const key of ['from', 'to'] as const) {
@@ -309,10 +316,11 @@ class Reader {
         }
         const before = this.errors.length;
         this.unknownKeys(value, RULE_KEYS, path);
-        const { trigger, captures } = this.trigger(value['when'], `${path}.when`, {});
+        const { trigger, captures } = this.trigger(value['when'], `${path}.when`, { results: this.sharedResults });
         const list = value['do'];
         const guard = Array.isArray(list) && list.length === 1 && isObject(list[0]) && list[0]['command'] === 'reject';
         const commands = this.commands(list, `${path}.do`, captures, { required: true, guard });
+        if (guard && trigger !== undefined && trigger.path === undefined) this.shape(`${path}.when`, 'a guard answers a proposed change and needs "path"');
         if (guard && trigger?.debounce !== undefined) this.shape(`${path}.when.debounce`, 'a guard answers at once and cannot debounce');
         return this.errors.length === before && trigger && commands ? { when: trigger, do: commands } : undefined;
     }
@@ -324,7 +332,7 @@ class Reader {
         }
         const before = this.errors.length;
         this.unknownKeys(value, TABLE_KEYS, path);
-        const { trigger, captures } = this.trigger(value['when'], `${path}.when`, {});
+        const { trigger, captures } = this.trigger(value['when'], `${path}.when`, { results: this.sharedResults });
         const names: string[] = [];
         const inputs = value['inputs'];
         if (inputs !== undefined) {
@@ -388,6 +396,21 @@ class Reader {
     }
 }
 
+/** The `as` names of the commands of the rules and of the rows of the tables */
+function sharedResultNames(root: JsonObject): string[] {
+    const names: string[] = [];
+    const collect = (list: JsonValue | undefined): void => {
+        if (!Array.isArray(list)) return;
+        for (const command of list) if (isObject(command) && typeof command['as'] === 'string') names.push(command['as']);
+    };
+    for (const rule of Object.values(isObject(root['rules']) ? root['rules'] : {})) if (isObject(rule)) collect(rule['do']);
+    for (const table of Object.values(isObject(root['tables']) ? root['tables'] : {})) {
+        if (!isObject(table) || !Array.isArray(table['rows'])) continue;
+        for (const row of table['rows']) if (isObject(row)) collect(row['do']);
+    }
+    return names;
+}
+
 /**
  * Reads the `logic` root of a document: the keyed maps `machines`, `rules` and `tables`. Reports `SUI-LOGIC-SHAPE` (an unknown
  * key, a wrong type, a missing field), `SUI-LOGIC-COMMAND` (an unknown command), `SUI-LOGIC-PATH` (a path that is not
@@ -406,6 +429,7 @@ export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadL
     }
     const root = value as JsonObject;
     reader.unknownKeys(root, ['machines', 'rules', 'tables'], '$.logic');
+    reader.sharedResults = sharedResultNames(root);
     for (const key of ['machines', 'rules', 'tables'] as const) {
         if (!Object.hasOwn(root, key)) continue;
         const map = root[key];

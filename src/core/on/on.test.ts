@@ -222,6 +222,27 @@ describe('validateOn', () => {
         expect(errors.map((error) => error.code)).toEqual(['SUI-ON-TARGET']);
     });
 
+    it('should accept set and emit with from, and report a from that names no value or sits beside value', () => {
+        // Arrange / Act
+        const good = check(
+            button({
+                press: [
+                    { command: 'set', target: '$.data.name', from: '.pressed' },
+                    { command: 'emit', target: 'picked', from: '$.data.pick' }
+                ]
+            })
+        );
+        const unknown = check(button({ press: { command: 'set', target: '$.data.name', from: '.nothing' } }));
+        const node = check(button({ press: { command: 'set', target: '$.data.name', from: '$parent' } }));
+        const both = check(button({ press: { command: 'set', target: '$.data.name', from: '$.data.a', value: 1 } }));
+
+        // Assert
+        expect(good).toEqual([]);
+        expect(unknown.map((error) => error.code)).toEqual(['SUI-ON-TARGET']);
+        expect(node.map((error) => error.code)).toEqual(['SUI-ON-TARGET']);
+        expect(both[0]?.statePath).toBe('$.app.children.b.on.press');
+    });
+
     it('should report a malformed on entry with its state path', () => {
         const notMap = check(button('press'));
         const bad = check(button({ press: 'close' }));

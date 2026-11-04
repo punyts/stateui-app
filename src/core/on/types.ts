@@ -6,17 +6,19 @@ export const SYSTEM_COMMANDS = ['set', 'toggle', 'emit'] as const;
 export type SystemCommand = (typeof SYSTEM_COMMANDS)[number];
 
 /** The keys a command object may hold */
-export const COMMAND_KEYS = ['command', 'target', 'value'] as const;
+export const COMMAND_KEYS = ['command', 'target', 'value', 'from'] as const;
 
 /**
  * One command object of an `on` entry. `target` names where the command acts (for `emit` it is the event name);
  * `value` is the command's argument: what `set` writes, the key `select` takes, the payload `emit` sends.
- * When `value` is absent, `emit` sends the event's own payload
+ * When `value` is absent, `emit` sends the event's own payload. `from` takes the place of `value`: a path in any target
+ * form (`$.data.x`, `^name.path`, `.path`, `$row.path`) whose current value is the argument, so `set` copies a value
  */
 export interface OnCommand {
     command: string;
     target?: string;
     value?: JsonValue;
+    from?: string;
 }
 
 /** An event's entry: one command object or an ordered list of them */

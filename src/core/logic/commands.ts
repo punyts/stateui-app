@@ -15,7 +15,7 @@ export interface CommandContext {
     host: LogicHost;
     /** The reason a guard refuses a write, or undefined */
     guard(write: LogicWrite): string | undefined;
-    /** Named results, given to the machine after the transition commits */
+    /** Named results, given after the transition commits to its machine, or to the rules and tables that wait for them */
     results: { name: string; result: LogicResult }[];
     /** Events to raise after the transition commits */
     after: (() => void)[];

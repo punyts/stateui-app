@@ -12,18 +12,21 @@ export function isSystemCommand(command: string): command is SystemCommand {
 }
 
 /**
- * Reads one command object: `{ command, target?, value? }`. Returns undefined when `command` is not a
- * non-empty string, when `target` is present and not a non-empty string, or when another key is present
+ * Reads one command object: `{ command, target?, value? }` or `{ command, target?, from }`. Returns undefined when
+ * `command` is not a non-empty string, when `target` or `from` is present and not a non-empty string, when both
+ * `value` and `from` are present, or when another key is present
  */
 export function readCommand(value: unknown): OnCommand | undefined {
     if (!isObject(value)) return undefined;
     if (Object.keys(value).some((key) => !(COMMAND_KEYS as readonly string[]).includes(key))) return undefined;
-    const { command, target } = value;
+    const { command, target, from } = value;
     if (typeof command !== 'string' || command === '') return undefined;
     if (target !== undefined && (typeof target !== 'string' || target === '')) return undefined;
+    if (from !== undefined && (typeof from !== 'string' || from === '' || Object.hasOwn(value, 'value'))) return undefined;
 
     const result: OnCommand = { command };
     if (target !== undefined) result.target = target;
+    if (typeof from === 'string') result.from = from;
     if (Object.hasOwn(value, 'value')) result.value = value['value'] as JsonValue;
     return result;
 }

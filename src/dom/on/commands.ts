@@ -52,8 +52,18 @@ function isRowValue(value: JsonValue | undefined): value is string {
     return typeof value === 'string' && (value === '$row' || value.startsWith('$row.'));
 }
 
-/** A command's `value`: `$row` and `$row.path` are read from the record the slot shows, anything else is as written */
+/**
+ * A command's argument: the value at `from` when it is set, else `value`, where `$row` and `$row.path` are read from
+ * the record the slot shows and anything else is as written
+ */
 function valueOf(command: OnCommand, context: CommandContext): JsonValue | undefined {
+    if (command.from !== undefined) {
+        const located = locate(command.from, context);
+        if (!located || located.kind === 'node') throw new CommandFailure(`from ${command.from} is not a value`, command.from);
+        const path = located.kind === 'property' ? [located.path, located.property, ...located.rest].join('.') : located.path;
+        const read: unknown = context.store.get(path);
+        return read === undefined ? undefined : cloneJson(read as JsonValue);
+    }
     const value = command.value;
     if (!isRowValue(value)) return value;
     if (context.rowPath === undefined) throw new CommandFailure(`${value} is used outside a row template`);
@@ -143,8 +153,10 @@ function runComponentCommand(command: OnCommand, context: CommandContext): void 
 /** Runs one command; throws when it fails */
 export function runCommand(command: OnCommand, context: CommandContext): void {
     if (command.command === 'set') {
-        if (!('value' in command)) throw new CommandFailure('set needs a value');
-        write(writePath(command, context), valueOf(command, context) as JsonValue, context);
+        if (!('value' in command) && command.from === undefined) throw new CommandFailure('set needs a value or from');
+        const value = valueOf(command, context);
+        if (value === undefined && command.from !== undefined) throw new CommandFailure(`from ${command.from} has no value`, command.from);
+        write(writePath(command, context), value as JsonValue, context);
     } else if (command.command === 'toggle') {
         const path = writePath(command, context);
         const current = context.store.get(path);
@@ -154,7 +166,7 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
         write(path, current !== true, context);
     } else if (command.command === 'emit') {
         if (command.target === undefined) throw new CommandFailure('emit needs an event name');
-        context.emit(command.target, 'value' in command ? valueOf(command, context) : context.payload);
+        context.emit(command.target, 'value' in command || command.from !== undefined ? valueOf(command, context) : context.payload);
     } else {
         runComponentCommand(command, context);
     }

@@ -99,6 +99,71 @@ function removedWithParent(path: string, change: LogicChange, read: (path: strin
     return change.path !== path && covers(change.path, path) && read(path) === undefined && read(parentOf(path)) === undefined;
 }
 
+/** The keys of a command whose path it writes; `notify`, `emit` and `call` name no state path in `target` */
+const WRITE_KEYS = ['target', 'into'] as const;
+const NOT_WRITES = new Set(['notify', 'emit', 'call', 'reject']);
+
+/**
+ * The steps of the paths a unit's commands can write, with `null` for a step that is only known when it runs (a
+ * capture, `*` or a `{{ }}` template). Node references (`^name`) resolve at run time and are left out
+ */
+function writeSteps(unit: { machine?: LogicMachine; transitions: readonly LogicTransition[]; table?: LogicTable }): (string | null)[][] {
+    const commands = [...unit.transitions.flatMap((transition) => transition.do ?? []), ...(unit.table?.rows.flatMap((row) => row.do) ?? [])];
+    const paths = commands.flatMap((command) =>
+        NOT_WRITES.has(command.command) ? [] : WRITE_KEYS.flatMap((key) => (typeof command[key] === 'string' ? [command[key] as string] : []))
+    );
+    if (unit.machine) paths.push(unit.machine.state);
+    return paths
+        .filter((path) => path.startsWith('$.'))
+        .map((path) => path.replace(/\{\{[\s\S]*?\}\}/g, '{}').slice(2).split('.').map((step) => (step === '*' || step.includes('{') ? null : step)));
+}
+
+/** True when a write at `steps` can change a value at, below or above the pattern's path */
+function mayTouch(pattern: PathPattern, steps: readonly (string | null)[]): boolean {
+    const shared = Math.min(pattern.steps.length, steps.length);
+    for (let index = 0; index < shared; index += 1) {
+        const step = pattern.steps[index] as PathPattern['steps'][number];
+        const key = steps[index];
+        if (step.kind === 'literal' && key !== null && key !== step.text) return false;
+    }
+    return true;
+}
+
+/**
+ * The units in the order a chain looks them up: document order (machines, rules, tables), except that a unit comes
+ * after the other units whose commands can write under its trigger paths, so a rule over `$.data.bag` that sums line
+ * totals sees the totals a table writes in the same step. Units that depend on each other in a cycle keep document order
+ */
+function chainOrder<T extends { id: string; machine?: LogicMachine; table?: LogicTable; transitions: readonly LogicTransition[]; patterns: readonly (PathPattern | undefined)[] }>(units: readonly T[]): T[] {
+    const writes = new Map(units.map((unit) => [unit.id, writeSteps(unit)]));
+    const before = new Map(
+        units.map((unit) => [
+            unit.id,
+            units.filter(
+                (other) =>
+                    other.id !== unit.id &&
+                    unit.patterns.some((pattern) => pattern !== undefined && (writes.get(other.id) ?? []).some((steps) => mayTouch(pattern, steps)))
+            )
+        ])
+    );
+    const placed = new Set<string>();
+    const order: T[] = [];
+    while (order.length < units.length) {
+        const remaining = units.filter((unit) => !placed.has(unit.id));
+        const ready = remaining.find((unit) => (before.get(unit.id) ?? []).every((other) => placed.has(other.id)));
+        // A cycle: the remaining unit that the fewest remaining units must precede goes next, in document order
+        const next =
+            ready ??
+            remaining.reduce((best, unit) => {
+                const waits = (candidate: T): number => (before.get(candidate.id) ?? []).filter((other) => !placed.has(other.id)).length;
+                return waits(unit) < waits(best) ? unit : best;
+            });
+        placed.add(next.id);
+        order.push(next);
+    }
+    return order;
+}
+
 function isGuard(commands: readonly LogicCommand[]): boolean {
     return commands.length === 1 && commands[0]?.command === 'reject';
 }
@@ -113,13 +178,14 @@ function previousAt(at: string, change: LogicChange, current: JsonValue | undefi
 /**
  * The logic runner over a host: a browser store or an app server's authority.
  *
- * A change is looked up against every machine, rule and table, in that order and each in document order. A machine
+ * A change is looked up against every machine, rule and table, in that order and each in document order, except that a
+ * unit comes after the units whose commands can write under its trigger paths (see `chainOrder`). A machine
  * considers only the transitions of its current state (or with no `from`) and fires the first that matches; a rule
  * is one transition; a table fires the first of its rows that matches its inputs. The commands of a transition run
  * against a working copy and commit together; a failing command commits nothing and reports a failure. The writes of
  * a commit are looked up again as a chain: a machine, rule or table fires at most once per chain, and a chain stops
- * past `MAX_CHAIN_DEPTH`. Named results (`as`) are given to their machine after the chain, each starting a chain of its
- * own; a `call`'s result comes when the host answers it. A rule whose commands are one `reject` is a guard and never
+ * past `MAX_CHAIN_DEPTH`. Named results (`as`) are given after the chain, each starting a chain of its own: a machine's
+ * to that machine, a rule's or table's to every rule and table whose `when.result` names it; a `call`'s result comes when the host answers it. A rule whose commands are one `reject` is a guard and never
  * fires; the host asks `guard` before it applies a change.
  *
  * Time comes from the host (`schedule`). A `debounce` trigger restarts its timer on each matching change and fires
@@ -182,6 +248,8 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     for (const [name, table] of Object.entries(logic.tables ?? {})) {
         units.push({ id: `table:${name}`, kind: 'table', name, table, transitions: [{ when: table.when }], patterns: [pattern(table.when)] });
     }
+
+    const ordered = chainOrder(units);
 
     /** Debounce timers by unit and transition index; `after` timers by machine, with the state they were armed for */
     const debounced = new Map<string, () => void>();
@@ -364,10 +432,8 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             writes: copy.writes.slice(0, MAX_TRACE_WRITES).map((write) => write.path)
         });
         for (const notice of context.after) notice();
-        if (unit.machine) {
-            for (const { name, result } of context.results) results.push({ unit, name, result });
-            for (const call of context.calls) ask(unit, call.name, call.payload, call.as);
-        }
+        for (const { name, result } of context.results) results.push({ unit, name, result });
+        if (unit.machine) for (const call of context.calls) ask(unit, call.name, call.payload, call.as);
         return copy.writes.map((write, index) => (before[index] === undefined ? write : { ...write, previous: before[index] }));
     };
 
@@ -408,7 +474,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 return;
             }
             const next: LogicChange[] = [];
-            for (const unit of units) {
+            for (const unit of ordered) {
                 if (fired.has(unit.id)) {
                     const path = current ? touches(unit, pending) : undefined;
                     if (path !== undefined) note({ kind: unit.kind, name: unit.name, outcome: 'already-fired', path });
@@ -432,9 +498,11 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             if (transition.when.result !== name || (transition.from !== undefined && transition.from !== state)) continue;
             const scope: Scope = { read: (path) => host.get(path), result, captures: {} };
             try {
-                if (passes(transition.when, scope, result.status)) {
-                    return { transition, index, ...(state === undefined ? {} : { state }), captures: {}, result };
-                }
+                if (!passes(transition.when, scope, result.status)) continue;
+                const hit: Hit = { transition, index, ...(state === undefined ? {} : { state }), captures: {}, result };
+                if (!unit.table) return hit;
+                const found = tableRow(unit.table, scope);
+                if (found) return { ...hit, ...found };
             } catch (error) {
                 unitFailed(unit, { ...fromOf(state), reason: (error as Error).message });
             }
@@ -442,13 +510,21 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         return undefined;
     };
 
-    /** Gives the named results to their machines, each as a chain of its own */
+    /** The rules and tables that wait for a named result, in chain order */
+    const listeners = (name: string): Unit[] => ordered.filter((unit) => !unit.machine && unit.transitions.some((transition) => transition.when.result === name));
+
+    /**
+     * Gives the named results to the units that wait for them, each as a chain of its own: the result of a machine's
+     * command to that machine, the result of a rule's or table's command to every rule and table that waits for its name
+     */
     const drain = (results: Results): void => {
         for (let index = 0; index < results.length && index < MAX_RESULTS; index += 1) {
             const { unit, name, result } = results[index] as Results[number];
-            const hit = resultHit(unit, name, result);
-            if (!hit) continue;
-            chain(fire(unit, hit, results), new Set([unit.id]), results);
+            for (const waiting of unit.machine ? [unit] : listeners(name)) {
+                const hit = resultHit(waiting, name, result);
+                if (!hit) continue;
+                chain(fire(waiting, hit, results), new Set([waiting.id]), results);
+            }
         }
     };
 

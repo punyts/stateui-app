@@ -50,11 +50,11 @@ export const LOGIC_COMMAND_KEYS = [
     'reason'
 ] as const;
 
-/** What starts a transition: a change at a path, or a named result of an earlier command of the same machine */
+/** What starts a transition: a change at a path, or a named result of an earlier command (of the same machine, or of a rule or table) */
 export interface LogicTrigger {
     /** A state path with `*` (one segment) and `{name}` (one segment, captured) steps */
     path?: string;
-    /** The `as` name of a `save-data` or `delete-data` command of the same machine */
+    /** The `as` name of a `save-data` or `delete-data` command: of the same machine for a transition, of a rule or table for a rule or table */
     result?: string;
     /** The value at the path, or the result status (`accepted`, `rejected`), must equal this */
     is?: JsonValue;

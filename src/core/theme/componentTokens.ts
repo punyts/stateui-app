@@ -12,8 +12,9 @@ export type ComponentDefaultResult = { type: TokenType } | { reason: string };
 /**
  * Checks the default a shape gives a component token and infers the token type from what it references.
  * A default must reference at least one semantic token (a literal is rejected, and so is a primitive, a component
- * token or an unknown path). One reference gives that token's type; a `calc()` of dimensions and numbers (with at
- * least one dimension) is a dimension. The value must also pass the value check of E3.3
+ * token or an unknown path). One reference gives that token's type; two to four dimension references separated by
+ * spaces (`{space.inset.sm} {space.inset.md}`) are an `inset`, which an override may then give as one to four
+ * lengths; a `calc()` of dimensions and numbers (with at least one dimension) is a dimension. The value must also pass the value check of E3.3
  */
 export function inferComponentDefault(value: string): ComponentDefaultResult {
     if (hasInjection(value)) return { reason: 'the default holds characters a token value may not hold' };
@@ -27,8 +28,17 @@ export function inferComponentDefault(value: string): ComponentDefaultResult {
     const trimmed = value.trim();
     const types = references.map((path) => lookup(path) as TokenType);
     let type: TokenType;
+    const parts = trimmed.split(/\s+/);
     if (references.length === 1 && trimmed === `{${references[0] as string}}`) {
         type = types[0] as TokenType;
+    } else if (
+        parts.length >= 2 &&
+        parts.length <= 4 &&
+        parts.every((part, index) => part === `{${references[index] as string}}`) &&
+        types.every((entry) => entry === 'dimension')
+    ) {
+        // A box shorthand of dimension references, such as a block and an inline padding: an inset
+        type = 'inset';
     } else if (
         trimmed.startsWith('calc(') &&
         types.every((entry) => entry === 'dimension' || entry === 'number') &&

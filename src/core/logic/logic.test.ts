@@ -398,6 +398,63 @@ describe('createLogicEngine', () => {
         expect(memory.failures).toEqual([]);
     });
 
+    it('should give the result of a rule command to the rules that wait for its name', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            rules: {
+                save: {
+                    when: { path: '$.data.saveRequested', is: true },
+                    do: [
+                        { command: 'set', target: '$.data.saveRequested', value: false },
+                        { command: 'save-data', into: '$.data.contacts', value: { name: 'Ana' }, as: 'saved' }
+                    ]
+                },
+                thanks: { when: { result: 'saved', is: 'accepted' }, do: [{ command: 'set', target: '$.data.lastSaved', value: '$result.key' }] },
+                sorry: { when: { result: 'saved', is: 'rejected' }, do: [{ command: 'set', target: '$.data.error', value: '$result.reason' }] }
+            },
+            tables: {
+                status: {
+                    when: { result: 'saved' },
+                    rows: [{ if: "$result.status == 'accepted'", do: [{ command: 'set', target: '$.data.status', value: 'ok' }] }, { do: [{ command: 'set', target: '$.data.status', value: 'failed' }] }]
+                }
+            }
+        };
+        const memory = memoryHost({ ...BASE, data: { contacts: {} } });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.saveRequested', true);
+
+        // Assert
+        expect(readLogic(logic).errors).toEqual([]);
+        expect(memory.get('$.data.lastSaved')).toBe('c1');
+        expect(memory.get('$.data.status')).toBe('ok');
+        expect(memory.get('$.data.error')).toBeUndefined();
+        expect(memory.failures).toEqual([]);
+    });
+
+    it('should refuse a rule result name that no rule or table command has, and a guard that waits for a result', () => {
+        // Arrange
+        const logic = {
+            machines: {
+                m: { state: '$.app.m', initial: 'a', transitions: [{ when: { path: '$.data.go' }, do: [{ command: 'delete-data', target: '$.data.x', as: 'gone' }] }] }
+            },
+            rules: {
+                waits: { when: { result: 'gone' }, do: [{ command: 'set', target: '$.data.y', value: 1 }] },
+                guard: { when: { result: 'gone' }, do: [{ command: 'reject', reason: 'no' }] }
+            }
+        };
+
+        // Act
+        const result = readLogic(logic);
+
+        // Assert
+        expect(result.errors.map((error) => error.statePath)).toEqual(
+            expect.arrayContaining(['$.logic.rules.waits.when.result', '$.logic.rules.guard.when.result'])
+        );
+        expect(Object.keys(result.logic.rules ?? {})).toEqual([]);
+    });
+
     it('should commit one transition as one set of writes', () => {
         const memory = memoryHost(BASE);
         const engine = createLogicEngine(ADD_CONTACT, memory.host);
@@ -485,6 +542,32 @@ describe('createLogicEngine', () => {
         userChange(memory, engine, '$.data.n', 1);
 
         expect(memory.get('$.data.n')).toBe(2);
+        expect(memory.failures).toEqual([]);
+    });
+
+    it('should run a table that writes under the trigger of a rule before the rule in the same step', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            rules: {
+                totals: { when: { path: '$.data.bag' }, do: [{ command: 'set', target: '$.data.total', value: "{{ sum($.data.bag, 'line') }}" }] }
+            },
+            tables: {
+                line: {
+                    when: { path: '$.data.bag.{id}.qty' },
+                    inputs: { qty: '$.data.bag.{id}.qty', price: '$.data.bag.{id}.price' },
+                    rows: [{ do: [{ command: 'set', target: '$.data.bag.{id}.line', value: '{{ qty * price }}' }] }]
+                }
+            }
+        };
+        const memory = memoryHost({ ...BASE, data: { bag: { a: { qty: 1, price: 5, line: 5 }, b: { qty: 1, price: 2, line: 2 } }, total: 7 } });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.bag.a.qty', 3);
+
+        // Assert
+        expect(memory.get('$.data.bag.a.line')).toBe(15);
+        expect(memory.get('$.data.total')).toBe(17);
         expect(memory.failures).toEqual([]);
     });
 

@@ -2,6 +2,7 @@
 export const TOKEN_TYPES = [
     'color',
     'dimension',
+    'inset',
     'number',
     'duration',
     'easing',

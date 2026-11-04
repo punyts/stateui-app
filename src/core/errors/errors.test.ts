@@ -52,6 +52,7 @@ describe('error catalog', () => {
             'SUI-STATE-STEP',
             'SUI-RUN-ICON',
             'SUI-RUN-WRITE',
+            'SUI-RUN-CLIPPED',
             'SUI-LINK-ROW',
             'SUI-LINK-TARGET',
             'SUI-LINK-SERVER',
