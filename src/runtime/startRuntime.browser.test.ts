@@ -336,6 +336,30 @@ describe('startRuntime in Chromium', () => {
         expect(find(host, 'x-rt-label')).toBe(before);
     });
 
+    it('should remount a node whose component changes to one with children', async () => {
+        // Arrange
+        const document: AppDocument = {
+            app: panel({ kpis: panel({ cash: { component: 'label', text: 'cash' }, other: { component: 'label', text: 'o' } }) })
+        };
+        send(message('load', { document }));
+        const writes = [
+            { path: '$.app.children.kpis.children.cash.component', value: 'panel' },
+            { path: '$.app.children.kpis.children.cash.children', value: { inner: { component: 'badge', text: 'deep' } } },
+            { path: '$.app.children.kpis.children.cash.text', remove: true }
+        ];
+
+        // Act
+        send(message('write', { writes }));
+        await tick();
+
+        // Assert
+        expect(ofType('error')).toEqual([]);
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(textOf(host)).toContain('badge:deep');
+        expect(textOf(host)).not.toContain('label:cash');
+        expect(textOf(host)).toContain('label:o');
+    });
+
     it('should accept the icons of a write', () => {
         // Arrange
         send(message('load', { document: { app: panel({}) }, icons: { star: { outline: ['M0 0h24'] } } }));

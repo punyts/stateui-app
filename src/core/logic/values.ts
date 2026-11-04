@@ -41,7 +41,7 @@ function numbers(value: unknown, field?: unknown): number[] {
 }
 
 /**
- * The fixed function library of logic expressions. Every function is pure except `now`; a map is read in key order,
+ * The fixed function library of logic expressions. Every function is pure except `now` and `today`; a map is read in key order,
  * like an array
  */
 export const LOGIC_FUNCTIONS: Readonly<Record<string, (...args: unknown[]) => unknown>> = {
@@ -73,7 +73,17 @@ export const LOGIC_FUNCTIONS: Readonly<Record<string, (...args: unknown[]) => un
     abs: (value) => Math.abs(Number(value)),
     number: (value) => (Number.isFinite(Number(value)) ? Number(value) : null),
     string: (value) => (value === undefined || value === null ? '' : String(value)),
-    now: () => new Date().toISOString()
+    slice: (value, start, end) => {
+        const from = Number.isFinite(Number(start)) ? Number(start) : 0;
+        const to = end === undefined || end === null || !Number.isFinite(Number(end)) ? undefined : Number(end);
+        return typeof value === 'string' ? value.slice(from, to) : entries(value).slice(from, to);
+    },
+    now: () => new Date().toISOString(),
+    today: () => {
+        const date = new Date();
+        const pad = (number: number): string => String(number).padStart(2, '0');
+        return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    }
 };
 
 const compiled = new Map<string, CompiledExpression>();

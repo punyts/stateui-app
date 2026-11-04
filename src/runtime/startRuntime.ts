@@ -364,6 +364,19 @@ export function startRuntime(
         return done ? undefined : buildError('SUI-RUN-WRITE', { path: write.path, statePath: write.path });
     }
 
+    /**
+     * The writes with each node's `component` write moved after the writes below that node. A component change
+     * applied first remounts the node as the new component with none of the new properties (a `panel` with no
+     * `children`, whose repeat then fails) while the old ones are still there; applied last, the node is complete when
+     * it remounts. The order of the other writes is kept
+     */
+    function componentLast(list: readonly PathWrite[]): PathWrite[] {
+        const hasBelow = (owner: string): boolean => list.some((write) => write.path !== owner && write.path.startsWith(owner.slice(0, -'component'.length)));
+        const late = list.filter((write) => write.path.endsWith('.component') && write.remove !== true && hasBelow(write.path));
+        const rest = list.filter((write) => !late.includes(write));
+        return [...rest, ...late];
+    }
+
     function writes(message: WriteMessage): void {
         const store = mounted?.store;
         if (!store) {
@@ -372,7 +385,7 @@ export function startRuntime(
         }
         if (message.icons) writeIcons(store, message.icons);
         const refused: BuildError[] = [];
-        for (const write of message.writes) {
+        for (const write of componentLast(message.writes)) {
             let error: BuildError | undefined;
             try {
                 error = applyWrite(store, write);

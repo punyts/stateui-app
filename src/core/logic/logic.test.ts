@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { cloneJson, isObject } from '../resolve/merge.js';
@@ -270,6 +270,62 @@ describe('values', () => {
         expect(resolveValue({ record: '$.data.{id}' }, scope, host)).toEqual({ name: 'Ana' });
         expect(resolveValue({ pick: { who: '$.data.c1.name', n: 1 } }, scope, host)).toEqual({ who: 'Ana', n: 1 });
         expect(resolveValue('$5 off', scope, host)).toBe('$5 off');
+    });
+});
+
+describe('values: slice and today', () => {
+    const scope = Object.freeze({ read: () => undefined, trigger: 0, captures: Object.freeze({}) });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('should cut a string with slice', () => {
+        // Arrange
+        const text = "slice('2026-11-03', 0, 7)";
+
+        // Act
+        const result = evaluate(text, scope);
+
+        // Assert
+        expect(result).toBe('2026-11');
+        expect(evaluate("slice('abcdef', 2)", scope)).toBe('cdef');
+        expect(evaluate("slice('abcdef', -2)", scope)).toBe('ef');
+        expect(evaluate("slice('abcdef', 1, null)", scope)).toBe('bcdef');
+        expect(evaluate('slice(null, 1)', scope)).toEqual([]);
+    });
+
+    it('should cut an array or the entries of a map with slice', () => {
+        // Arrange
+        const state = Object.freeze({ data: Object.freeze({ list: [1, 2, 3, 4], map: { a: 'x', b: 'y', c: 'z' } }) }) as unknown as JsonObject;
+        const withState = { ...scope, read: (path: string) => walk(state, path) };
+
+        // Act
+        const list = evaluate('slice($.data.list, 1, 3)', withState);
+        const map = evaluate('slice($.data.map, 1)', withState);
+
+        // Assert
+        expect(list).toEqual([2, 3]);
+        expect(map).toEqual(['y', 'z']);
+    });
+
+    it('should give the local date with today, not the UTC one', () => {
+        // Arrange: local 23:30 on 3 November is already 4 November in UTC for zones west of UTC; build the date from local parts
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 10, 3, 23, 30));
+
+        // Act
+        const result = evaluate('today()', scope);
+
+        // Assert
+        expect(result).toBe('2026-11-03');
+    });
+
+    it('should pad the month and day of today', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 0, 5, 0, 5));
+
+        expect(evaluate('today()', scope)).toBe('2026-01-05');
     });
 });
 

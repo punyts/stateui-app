@@ -14,6 +14,15 @@ function isIntegerKey(key: string): boolean {
     return INTEGER_KEY.test(key) && Number(key) <= MAX_INDEX;
 }
 
+/** The properties a record view reads by position when its node has a `total` (what the logic `query` command writes) */
+const POSITIONED_KEYS: readonly string[] = ['records', 'items'];
+
+/** True when the object is a node of a paged record view: a non-negative integer `total` says its records are read by position */
+function isPaged(value: Record<string, JsonValue>): boolean {
+    const total = value['total'];
+    return typeof total === 'number' && Number.isInteger(total) && total >= 0;
+}
+
 function wrongType(key: string, statePath: string): BuildError {
     return buildError('SUI-DOC-TYPE', { key, path: statePath, statePath });
 }
@@ -72,7 +81,10 @@ interface Frame {
 
 /**
  * Finds integer-like keys in every ordered map of the nodes (`children`, `options`, `columns`, `items`, `steps`,
- * `messages`) and in every object under `data`. The same list as E6.2. Iterative, so a deep value cannot overflow
+ * `messages`) and in every object under `data`. The same list as E6.2. Iterative, so a deep value cannot overflow.
+ *
+ * The `records` or `items` of a node that also has an integer `total` are exempt: a paged record view reads them by
+ * position, so the key is the position and the order of the keys carries nothing (the `query` command writes them so)
  */
 export function checkOrderedKeys(document: Record<string, JsonValue>): BuildError[] {
     const errors: BuildError[] = [];
@@ -99,7 +111,8 @@ export function checkOrderedKeys(document: Record<string, JsonValue>): BuildErro
                 if ((frame.ordered || frame.underData) && isIntegerKey(key)) {
                     errors.push(buildError('SUI-DOC-ORDER', { key, path, statePath: path }));
                 }
-                stack.push({ value: item, path, ordered: ORDERED_KEYS.includes(key), underData: frame.underData });
+                const positioned = POSITIONED_KEYS.includes(key) && !frame.underData && isPaged(frame.value);
+                stack.push({ value: item, path, ordered: ORDERED_KEYS.includes(key) && !positioned, underData: frame.underData });
             }
         }
     }

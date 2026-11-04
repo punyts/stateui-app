@@ -28,7 +28,7 @@ interface Parent {
     shape: Shape | undefined;
 }
 
-type Check = (node: Node, path: string, shape: Shape | undefined, parent: Parent | undefined) => void;
+export type Check = (node: Node, path: string, shape: Shape | undefined, parent: Parent | undefined) => void;
 
 /** Walks one resolved tree and calls `check` for every node with its parent */
 function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Check): void {
@@ -43,7 +43,7 @@ function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Ch
 }
 
 /** The trees to check: the resolved `app` tree and every composed tree on its own */
-function forEachTree(context: DocumentValidationContext, check: Check): void {
+export function forEachTree(context: DocumentValidationContext, check: Check): void {
     walk(context.tree.node, APP_PATH, context.library, check);
     const composed = context.document.composed;
     if (composed === undefined || !isObject(composed as JsonValue)) return;

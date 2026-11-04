@@ -49,6 +49,7 @@ describe('error catalog', () => {
             'SUI-STATE-CONDITION',
             'SUI-STATE-RUNTIME',
             'SUI-STATE-FILLED',
+            'SUI-STATE-STEP',
             'SUI-RUN-ICON',
             'SUI-RUN-WRITE',
             'SUI-LINK-ROW',

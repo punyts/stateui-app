@@ -253,7 +253,8 @@ Order of checks:
 3. Root keys and their types (`SUI-DOC-TYPE`; `runtime` and unknown keys are `SUI-DOC-KEY`), and a missing `app`
    (`SUI-NODE-MISSING`).
 4. Integer-like keys in `children`, `options`, `columns`, `items`, `steps`, `messages` and every object under `data`
-   (`SUI-DOC-ORDER`).
+   (`SUI-DOC-ORDER`). The `records` or `items` of a node that has an integer `total` are exempt: a paged record view
+   reads them by position, so the key is the position and key order carries nothing (`query` writes them this way).
 5. The `app` tree and each document `composed` tree: every component resolves, composed cycles, reserved names, each
    merged node against its shape (`validateNode`), and `<-` links. A `$.data` target must exist, a node reference must
    reach a property its component declares, and a node reference must reach an exposed runtime property (`SUI-LINK-MISSING`). Exposed properties are runtime
@@ -263,7 +264,11 @@ Order of checks:
 `registerDocumentValidator(name, (context) => BuildError[])` returns a function that removes it. `context` holds the
 `document`, the `library` and the resolved `tree` (`node`, `instances`). Validators run in registration order; the `on`
 validator (`validateOn`) is registered by default, and the layout, placement, theme and locale validators of epic 3
-register the same way. A validator that throws is reported as `SUI-DOC-VALIDATOR`.
+register the same way. A validator that throws is reported as `SUI-DOC-VALIDATOR`. The `step` validator warns
+(`SUI-STATE-STEP`) when a node whose component has the number properties `min` and `step` (the number field) writes both
+as numbers with `step` above 0 and `min` not a multiple of `step`: the field counts its values from `min`, so `min: 0.01,
+step: 1` refuses 1250. Use `min: 0` or a step that divides `min`. It is a document validator because `validateNode`
+sees one property at a time and the rule relates two.
 
 Node fields inside map items (a table column's `cell`, a `descriptionList` item `node`) are resolved, validated against
 their component's shape and checked for `on` and links like any other node; those of a `row: true` field are row
@@ -362,7 +367,8 @@ Save button saves and a count follows its records without an agent in the loop.
   ```
 - **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
   `save-data` (a record into a data map, with a new key or `key`), `delete-data`, `pull-data` (a record into a form),
-  `query` (sort, filter and window a data map into a list's records, by position, and its `total`), `notify` (app
+  `query` (sort, filter and window a data map into a list's records, keyed by position (the key is the position in the sorted, filtered result, so a window
+  starting at 20 has the keys `20`, `21`, ...; the record's own key goes in its key field), and its `total`), `notify` (app
   event `notify.<name>`), `emit` (to the server), `call` (a server procedure `target` with `value`; machines only and
   Full mode only, `SUI-DOC-SERVER` elsewhere; the answer comes back as the result `as`, with `$result.value` or
   `$result.reason`) and `reject`. A rule whose only command is `reject` is a **guard**:
@@ -371,7 +377,9 @@ Save button saves and a count follows its records without an agent in the loop.
   `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
   `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
   `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,
-  `string`, `now`.
+  `string`, `slice`, `now`, `today`. `slice(value, start, end?)` cuts a string, or the items of an array or
+  map, like JavaScript's `slice` (negative positions count from the end); `now()` is the UTC time as an ISO string and
+  `today()` the local date as `YYYY-MM-DD`, for a "due today" comparison.
 - **All or nothing.** A transition's commands run on a working copy and commit together. A failing command commits
   nothing and raises `logic.failed` (`{ machine, from?, command?, reason }`) on the root node. A machine or rule fires
   at most once per chain, a chain stops at depth 8, and command results start new chains after the current one.

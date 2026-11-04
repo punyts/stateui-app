@@ -59,6 +59,10 @@ export const ERROR_CATALOG = {
         template: 'Property "{name}" at {path} asks for a filled icon, but "{other}" has no filled variant; the outline is drawn',
         severity: 'warning'
     },
+    'SUI-STATE-STEP': {
+        template: 'Number field "{component}" at {path} has min {name} and step {other}: values count from min in steps, so whole numbers are not allowed; use min: 0 or a step that divides min',
+        severity: 'warning'
+    },
     'SUI-LINK-ROW': { template: 'Reference {target} at {path} uses $row outside a row template' },
     'SUI-LINK-MISSING': {
         template: 'Link target {target} at {path} does not exist or is not an exposed runtime property'

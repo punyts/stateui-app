@@ -528,7 +528,7 @@ describe('validateDocument', () => {
 
         const errors = validateDocument(doc({ component: 'panel' }), LIBRARY).errors;
 
-        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'logic', 'first', 'second']);
+        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'step', 'logic', 'first', 'second']);
         expect(calls).toEqual(['first', 'second']);
         expect(errors.map((error) => error.statePath)).toEqual(['$.app.a', '$.app.b']);
     });
@@ -807,5 +807,94 @@ describe('validateDocument $.server', () => {
         const document = doc({ component: 'text', '<-_value': '$.data.serverName' }, { data: { serverName: '$.serverless' } });
 
         expect(validateDocument(document, LIBRARY, { mode: 'standalone' })).toEqual({ valid: true, errors: [] });
+    });
+});
+
+const FIELD_LIBRARY: ComponentLibrary = Object.freeze({
+    ...LIBRARY,
+    numberField: {
+        tier: 'root',
+        tag: 'ui-number-field',
+        shape: shapeOf({ value: { type: ['number', 'string'], default: '' }, min: { type: 'number' }, step: { type: 'number', default: 0 } })
+    },
+    pagedList: {
+        tier: 'root',
+        tag: 'ui-paged-list',
+        shape: shapeOf({ items: { type: 'map', items: 'string', default: {} }, total: { type: 'number', default: 0 } })
+    }
+});
+
+describe('validateDocument: paged record keys', () => {
+    it('should accept position keys in the items of a node with an integer total', () => {
+        // Arrange
+        const items = Object.freeze({ '20': { id: 'a' }, '21': { id: 'b' } });
+        const document = doc({ component: 'pagedList', items: { ...items }, total: 42 });
+
+        // Act
+        const errors = validateDocument(document, FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-DOC-ORDER');
+
+        // Assert
+        expect(errors).toEqual([]);
+    });
+
+    it('should still report integer-like keys in the items of a node with no total', () => {
+        const document = doc({ component: 'pagedList', items: { '20': { id: 'a' } } });
+
+        const errors = validateDocument(document, FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-DOC-ORDER');
+
+        expect(errors.map((error) => error.statePath)).toEqual(['$.app.items.20']);
+    });
+});
+
+describe('validateDocument: number field min and step', () => {
+    const codes = (app: Node): { code: string; severity?: string; statePath?: string }[] =>
+        validateDocument(doc(app), FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-STATE-STEP');
+
+    it('should warn when min is not a multiple of step', () => {
+        // Arrange
+        const app = { component: 'numberField', min: 0.01, step: 1 } as Node;
+
+        // Act
+        const found = codes(app);
+
+        // Assert
+        expect(found).toHaveLength(1);
+        expect(found[0]?.severity).toBe('warning');
+        expect(found[0]?.statePath).toBe('$.app');
+        expect(validateDocument(doc(app), FIELD_LIBRARY).valid).toBe(true);
+    });
+
+    it('should name the fix in the message', () => {
+        const message = validateDocument(doc({ component: 'numberField', min: 0.5, step: 1 } as Node), FIELD_LIBRARY).errors[0]?.message;
+
+        expect(message).toContain('min: 0');
+        expect(message).toContain('divides min');
+    });
+
+    it('should accept a min that is a multiple of step, including decimals', () => {
+        expect(codes({ component: 'numberField', min: 0, step: 1 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', min: 0.3, step: 0.1 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', min: -10, step: 5 } as Node)).toEqual([]);
+    });
+
+    it('should not warn with no step, a zero step or no min', () => {
+        expect(codes({ component: 'numberField', min: 0.01 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', min: 0.01, step: 0 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', step: 1 } as Node)).toEqual([]);
+    });
+
+    it('should warn for a fractional step that min does not divide', () => {
+        expect(codes({ component: 'numberField', min: 0.25, step: 0.1 } as Node)).toHaveLength(1);
+    });
+
+    it('should find the field inside a composed tree and a child', () => {
+        const document = doc(
+            { component: 'panel', children: { amount: { component: 'numberField', min: 1.5, step: 1 } } },
+            { composed: { money: { component: 'numberField', min: 0.01, step: 1 } } }
+        );
+
+        const paths = validateDocument(document, FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-STATE-STEP').map((error) => error.statePath);
+
+        expect(paths).toEqual(['$.app.children.amount', '$.composed.money']);
     });
 });

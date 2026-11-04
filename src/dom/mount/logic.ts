@@ -45,8 +45,14 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
     const index = createLogicIndex(options.tree, options.library, document.data);
     const { logic } = readLogic(document.logic, { resolve: index.resolve });
 
+    /**
+     * While a guard looks at a change the store already holds, the value the change replaced: a guard judges what
+     * would change, and with the new value read as current every change would look like none
+     */
+    let beforeChange: Map<string, JsonValue | undefined> | undefined;
+
     const host: LogicHost = {
-        get: (path) => plain(store.get(path)),
+        get: (path) => (beforeChange?.has(path) ? beforeChange.get(path) : plain(store.get(path))),
         commit(writes: readonly LogicWrite[]) {
             const before = writes.map((write) => plain(store.get(write.path)));
             const done: number[] = [];
@@ -94,7 +100,13 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
         const kept: LogicChange[] = [];
         const undone = new Set<string>();
         for (const { change, old } of batch) {
-            const refused = engine.refusal(change);
+            beforeChange = new Map([[change.path, old]]);
+            let refused: { name: string; reason: string } | undefined;
+            try {
+                refused = engine.refusal(change);
+            } finally {
+                beforeChange = undefined;
+            }
             if (refused === undefined) {
                 kept.push(change);
                 continue;
