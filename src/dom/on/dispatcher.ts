@@ -192,7 +192,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
                 const built =
                     failure?.target !== undefined
                         ? buildError('SUI-RUN-ON-TARGET', { ...details, target: failure.target })
-                        : buildError('SUI-RUN-ON-COMMAND', { ...details, command: command.command });
+                        : buildError('SUI-RUN-ON-COMMAND', { ...details, command: command.command, reason: failure ? failure.message : String(error) });
                 fail(self.path, built, failure ? failure.message : String(error));
                 return;
             }

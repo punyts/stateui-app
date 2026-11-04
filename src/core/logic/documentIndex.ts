@@ -16,6 +16,8 @@ const FIELD = /Field$/;
 export interface LogicIndex {
     /** `^name.path` as a state path: the one node whose key or composed name is `name`, then the steps below it */
     resolve(reference: string): string | undefined;
+    /** Why a reference does not resolve: no node has the name, or several do (with their paths) */
+    explain(reference: string): string | undefined;
     /** The fields of the `form` node at a path: child key to the state path of the field's value */
     fields(path: string): Record<string, string> | undefined;
     /** The document's value at a `$.app` or `$.data` path, with the shape defaults of every node (runtime properties left out) */
@@ -84,13 +86,25 @@ export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, 
         return value;
     };
 
+    const namedFrames = (name: string): Frame[] =>
+        [...frames.values()].filter((frame) => frame.key === name || frame.instances.includes(name));
+
     return {
+        explain(reference) {
+            const parsed = parseTarget(reference);
+            if (parsed?.form !== 'named') return 'it is not a node reference (^name or ^name.path)';
+            const named = namedFrames(parsed.name);
+            if (named.length === 0) return `no node is named "${parsed.name}"`;
+            if (named.length > 1) {
+                const paths = named.map((frame) => frame.path).sort();
+                return `${named.length} nodes are named "${parsed.name}": ${paths.join(', ')}; rename one or use a state path`;
+            }
+            return `"${reference.slice(parsed.name.length + 1)}" is not a path below node ${(named[0] as Frame).path}`;
+        },
         resolve(reference) {
             const parsed = parseTarget(reference);
             if (parsed?.form !== 'named') return undefined;
-            const named = [...frames.values()].filter(
-                (frame) => frame.key === parsed.name || frame.instances.includes(parsed.name)
-            );
+            const named = namedFrames(parsed.name);
             if (named.length !== 1) return undefined;
             const located = resolveTarget(parsed, named, (named[0] as Frame).path);
             if (located?.kind === 'node') return located.path;

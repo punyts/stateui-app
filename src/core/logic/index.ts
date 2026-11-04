@@ -30,8 +30,12 @@ export type {
     LogicRow,
     LogicRule,
     LogicTable,
+    LogicTraceEvent,
+    LogicTraceOutcome,
+    LogicTraceRun,
     LogicTransition,
     LogicTrigger,
+    LogicUnitKind,
     LogicWrite
 } from './types.js';
 export { LOGIC_FUNCTIONS, LogicError, SCOPE_NAMES, condition, evaluate, resolvePath, resolveValue, templateExpressions } from './values.js';

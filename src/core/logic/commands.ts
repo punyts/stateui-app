@@ -37,6 +37,21 @@ function path(command: LogicCommand, key: 'target' | 'from' | 'into', context: C
     return resolvePath(required(command, key), context.scope, context.host);
 }
 
+/**
+ * A write target below `$.data.<root>` needs its parent: a set through a missing parent would make a stub record (for
+ * example below a record another command just removed). `merge` and `save-data` create what is missing
+ */
+function writable(target: string, context: CommandContext): string {
+    if (!target.startsWith('$.data.')) return target;
+    const steps = target.slice(2).split('.');
+    if (steps.length <= 2) return target;
+    const parent = `$.${steps.slice(0, -1).join('.')}`;
+    if (context.copy.get(parent) === undefined) {
+        throw new LogicError(`${parent} does not exist, so ${target} cannot be written; write the parent first, or use merge or save-data, which create it`);
+    }
+    return target;
+}
+
 function deepEqual(a: JsonValue | undefined, b: JsonValue | undefined): boolean {
     return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -98,7 +113,7 @@ type Runner = (command: LogicCommand, context: CommandContext) => void;
 
 const RUNNERS: Record<LogicCommand['command'], Runner> = {
     set: (command, context) => {
-        context.copy.set(path(command, 'target', context), value(command, context));
+        context.copy.set(writable(path(command, 'target', context), context), value(command, context));
     },
     merge: (command, context) => {
         const target = path(command, 'target', context);
@@ -110,14 +125,14 @@ const RUNNERS: Record<LogicCommand['command'], Runner> = {
     copy: (command, context) => {
         const source = context.copy.get(path(command, 'from', context));
         if (source === undefined) throw new LogicError(`${command.from} has no value`);
-        context.copy.set(path(command, 'target', context), source);
+        context.copy.set(writable(path(command, 'target', context), context), source);
     },
     toggle: (command, context) => {
-        const target = path(command, 'target', context);
+        const target = writable(path(command, 'target', context), context);
         context.copy.set(target, context.copy.get(target) !== true);
     },
     increment: (command, context) => {
-        const target = path(command, 'target', context);
+        const target = writable(path(command, 'target', context), context);
         const step = command.value === undefined ? 1 : value(command, context);
         const current = context.copy.get(target) ?? 0;
         if (typeof step !== 'number' || typeof current !== 'number') throw new LogicError('"increment" needs numbers');

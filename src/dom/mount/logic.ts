@@ -77,7 +77,7 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
             return () => clearTimeout(timer);
         },
         failed(failure) {
-            report.error('Logic failed', { machine: failure.machine, from: failure.from, command: failure.command, reason: failure.reason });
+            report.error('Logic failed', { kind: failure.kind, name: failure.name, from: failure.from, command: failure.command, reason: failure.reason });
             options.raise(LOGIC_FAILED_EVENT, { ...failure } as unknown as JsonValue);
         }
     };
@@ -94,8 +94,8 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
         const kept: LogicChange[] = [];
         const undone = new Set<string>();
         for (const { change, old } of batch) {
-            const reason = engine.guard(change);
-            if (reason === undefined) {
+            const refused = engine.refusal(change);
+            if (refused === undefined) {
                 kept.push(change);
                 continue;
             }
@@ -103,7 +103,7 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
             undone.add(change.path);
             if (old === undefined) store.delete(change.path, WRITE);
             else store.set(change.path, old as never, WRITE);
-            host.failed?.({ machine: 'guard', reason });
+            host.failed?.({ kind: 'guard', name: refused.name, reason: refused.reason });
         }
         if (kept.length > 0) engine.changes(kept);
     };

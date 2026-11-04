@@ -245,6 +245,19 @@ export function startRuntime(
         return !types.includes('node');
     }
 
+    /**
+     * True when `key` of the node `parent` is the record collection of a record view (`records`, `items`): a query
+     * writes it whole, so a stored value replaces the document's value instead of merging into it (which would keep
+     * seeded records the query left out)
+     */
+    function isRecordCollection(parent: Record<string, unknown>, key: string): boolean {
+        if (key !== 'records' && key !== 'items') return false;
+        const component = parent['component'];
+        if (typeof component !== 'string') return false;
+        const entry = library[component];
+        return entry?.tier === 'root' && Object.hasOwn(entry.shape.properties, key);
+    }
+
     /** Writes the articulation values of a snapshot over the mounted app; a value for a vanished node or a runtime property is skipped */
     function applyArticulation(store: NonNullable<MountedApp['store']>, path: string, value: unknown, inChildren = false): void {
         const current = store.get(path);
@@ -256,6 +269,10 @@ export function startRuntime(
             const child = `${path}.${key}`;
             if (isRuntimeProperty(store, library, child)) continue;
             if (store.get(child) === undefined && !mayCreate(current, key, inChildren)) continue;
+            if (!inChildren && isRecordCollection(current, key)) {
+                store.set(child, item as never);
+                continue;
+            }
             applyArticulation(store, child, item, key === 'children' && typeof current['component'] === 'string');
         }
     }

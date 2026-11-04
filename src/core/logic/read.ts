@@ -5,7 +5,7 @@ import type { JsonObject, JsonValue } from '../types.js';
 import { captureNames, compilePattern, fillCaptures, isStatePath } from './pattern.js';
 import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS, MAX_DELAY } from './types.js';
 import type { LogicCommand, LogicDocument, LogicMachine, LogicRow, LogicRule, LogicTable, LogicTransition, LogicTrigger } from './types.js';
-import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions } from './values.js';
+import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions, withCaptures } from './values.js';
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
 const LOGIC_ROOTS = ['app', 'data', 'server'];
@@ -48,6 +48,8 @@ const PATH_KEYS = ['target', 'from', 'into'] as const;
 export interface ReadLogicOptions {
     /** Resolves a node reference (`^name.path`) to a state path; without it references are not checked */
     resolve?(reference: string): string | undefined;
+    /** Why a reference does not resolve (no node or several have its name), for the error */
+    explain?(reference: string): string | undefined;
 }
 
 export interface ReadLogicResult {
@@ -58,6 +60,10 @@ export interface ReadLogicResult {
 
 class Reader {
     readonly errors: BuildError[] = [];
+    /** Warnings: they never drop a machine, rule or table */
+    readonly warnings: BuildError[] = [];
+    /** The captures of the trigger whose expressions are being read */
+    private captures: readonly string[] = [];
 
     constructor(private readonly options: ReadLogicOptions) {}
 
@@ -70,10 +76,28 @@ class Reader {
     }
 
     expression(text: string, path: string): void {
+        const filled = withCaptures(text, Object.fromEntries(this.captures.map((name) => [name, name])));
+        const unknown = /\$\.[^\s'"()\[\],]*?\{([A-Za-z_][A-Za-z0-9_]*)\}/.exec(filled);
+        if (unknown) {
+            const known = this.captures.length === 0 ? 'the trigger captures nothing' : `its captures are ${this.captures.map((name) => `{${name}}`).join(', ')}`;
+            this.errors.push(buildError('SUI-LOGIC-EXPRESSION', { path, name: `{${unknown[1] as string}} in a path is not a capture of this trigger (${known})`, statePath: path }));
+            return;
+        }
         try {
-            compileExpression(text);
+            compileExpression(filled);
         } catch (error) {
             this.errors.push(buildError('SUI-LOGIC-EXPRESSION', { path, name: (error as LogicError).message, statePath: path }));
+        }
+    }
+
+    /** A value string that looks like a path with a template in it reads nothing: it is text */
+    textPath(value: JsonValue | undefined, path: string): void {
+        if (typeof value === 'string' && (value.startsWith('$.') || value.startsWith('^')) && value.includes('{{')) {
+            this.warnings.push(buildError('SUI-LOGIC-TEXT-PATH', { target: value, path, statePath: path }));
+        } else if (Array.isArray(value)) {
+            value.forEach((item, index) => this.textPath(item, `${path}.${index}`));
+        } else if (isObject(value) && !(Object.keys(value).length === 1 && ['record', 'form'].includes(Object.keys(value)[0] as string))) {
+            for (const [key, item] of Object.entries(value)) this.textPath(item, `${path}.${key}`);
         }
     }
 
@@ -94,7 +118,10 @@ class Reader {
             this.errors.push(buildError('SUI-LOGIC-PATH', { target: text, path, statePath: path }));
         };
         if (text.startsWith('^')) {
-            if (this.options.resolve && !text.includes('{') && this.options.resolve(text) === undefined) bad();
+            if (this.options.resolve && !text.includes('{') && this.options.resolve(text) === undefined) {
+                const why = this.options.explain?.(text);
+                this.errors.push(buildError('SUI-LOGIC-PATH', { target: why === undefined ? text : `${text} (${why})`, path, statePath: path }));
+            }
             return;
         }
         const filled = fillCaptures(text, Object.fromEntries(captures.map((name) => [name, name])));
@@ -124,6 +151,7 @@ class Reader {
         const before = this.errors.length;
         const trigger: LogicTrigger = {};
         let captures: string[] = [];
+        this.captures = captures;
         const hasPath = Object.hasOwn(value, 'path');
         const hasResult = Object.hasOwn(value, 'result');
         const hasAfter = Object.hasOwn(value, 'after');
@@ -148,6 +176,7 @@ class Reader {
             } else {
                 trigger.path = pattern.source;
                 captures = captureNames(pattern);
+                this.captures = captures;
             }
         }
         if (hasResult) {
@@ -180,6 +209,7 @@ class Reader {
             return undefined;
         }
         const before = this.errors.length;
+        this.captures = captures;
         this.unknownKeys(value, LOGIC_COMMAND_KEYS, path);
         const name = value['command'];
         if (typeof name !== 'string' || !(LOGIC_COMMANDS as readonly string[]).includes(name)) {
@@ -209,6 +239,7 @@ class Reader {
         for (const key of ['value', 'key', 'reason', 'sort', 'window'] as const) {
             if (Object.hasOwn(value, key)) this.templates(value[key], `${path}.${key}`);
         }
+        if (Object.hasOwn(value, 'value')) this.textPath(value['value'], `${path}.value`);
         return this.errors.length === before ? (value as unknown as LogicCommand) : undefined;
     }
 
@@ -309,6 +340,7 @@ class Reader {
                     names.push(name);
                     if (typeof input === 'string' && (input.startsWith('$.') || input.startsWith('^'))) this.statePath(input, at, captures);
                     else this.templates(input, at);
+                    this.textPath(input, at);
                 }
             }
         }
@@ -395,5 +427,5 @@ export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadL
             }
         }
     }
-    return { logic, errors: reader.errors };
+    return { logic, errors: [...reader.errors, ...reader.warnings] };
 }

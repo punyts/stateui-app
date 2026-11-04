@@ -2,7 +2,7 @@ import type { JsonValue } from '../types.js';
 import { runCommand } from './commands.js';
 import type { CommandContext } from './commands.js';
 import { compilePattern, matchPattern, pathSteps } from './pattern.js';
-import type { PathPattern } from './pattern.js';
+import type { PathPattern, PatternMatch } from './pattern.js';
 import { LogicError, condition, resolveValue } from './values.js';
 import type { Scope } from './values.js';
 import { WorkingCopy, covers, placed, within } from './working.js';
@@ -17,15 +17,24 @@ import type {
     LogicResult,
     LogicRow,
     LogicTable,
-    LogicTransition
+    LogicTraceEvent,
+    LogicTraceRun,
+    LogicTransition,
+    LogicUnitKind
 } from './types.js';
 
 /** The most results one call follows, so results that keep producing results end */
 const MAX_RESULTS = 64;
 
+/** The runs the trace keeps, the events it keeps of one run, and the write paths it keeps of one event */
+const MAX_TRACE_RUNS = 25;
+const MAX_TRACE_EVENTS = 200;
+const MAX_TRACE_WRITES = 20;
+
 /** A machine, a rule as a machine with one state and one transition, or a table as a rule with rows */
 interface Unit {
     id: string;
+    kind: Exclude<LogicUnitKind, 'guard' | 'chain'>;
     name: string;
     machine?: LogicMachine;
     table?: LogicTable;
@@ -42,6 +51,8 @@ interface Hit {
     previous?: JsonValue;
     captures: Record<string, string>;
     result?: LogicResult;
+    /** The concrete path that matched */
+    path?: string;
     /** The commands of the table row that matched, instead of the transition's */
     row?: LogicRow;
     inputs?: Record<string, JsonValue>;
@@ -65,12 +76,27 @@ export interface LogicEngine {
     changes(changes: readonly LogicChange[]): void;
     /** The reason a guard rule refuses a proposed change, or undefined when none does */
     guard(change: LogicChange): string | undefined;
+    /** The guard rule that refuses a proposed change and its reason, or undefined when none does */
+    refusal(change: LogicChange): { name: string; reason: string } | undefined;
+    /** The last runs of the engine, oldest first: what started each and what every unit whose path matched did */
+    trace(): LogicTraceRun[];
+    /** Forgets the trace */
+    clearTrace(): void;
     /** Cancels every timer and ignores call answers that arrive later */
     stop(): void;
 }
 
 function deepEqual(a: JsonValue | undefined, b: JsonValue | undefined): boolean {
     return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+function parentOf(path: string): string {
+    return path.slice(0, path.lastIndexOf('.'));
+}
+
+/** True when the change removed `path` together with its parent: a record went away, not the value at the path */
+function removedWithParent(path: string, change: LogicChange, read: (path: string) => JsonValue | undefined): boolean {
+    return change.path !== path && covers(change.path, path) && read(path) === undefined && read(parentOf(path)) === undefined;
 }
 
 function isGuard(commands: readonly LogicCommand[]): boolean {
@@ -107,9 +133,43 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     const failed = (failure: LogicFailure): void => host.failed?.(failure);
     let stopped = false;
 
+    const runs: LogicTraceRun[] = [];
+    let current: LogicTraceRun | undefined;
+    let depthNow = 0;
+    const note = (event: Omit<LogicTraceEvent, 'depth'>): void => {
+        if (current && current.events.length < MAX_TRACE_EVENTS) current.events.push({ depth: depthNow, ...event });
+    };
+    /**
+     * Runs `work` as a run of the trace of its own, unless it runs inside one. A run in which no unit's trigger
+     * matched is not kept, so changes the logic does not look at (a selected tab) do not push the others out
+     */
+    const traced = (cause: LogicTraceRun['cause'], changes: readonly string[], work: () => void): void => {
+        if (current) {
+            work();
+            return;
+        }
+        const run: LogicTraceRun = { at: new Date().toISOString(), cause, changes: changes.slice(0, 50), events: [] };
+        current = run;
+        depthNow = 0;
+        try {
+            work();
+        } finally {
+            current = undefined;
+            depthNow = 0;
+            if (run.events.length > 0) {
+                runs.push(run);
+                if (runs.length > MAX_TRACE_RUNS) runs.shift();
+            }
+        }
+    };
+    const unitFailed = (unit: Unit, details: { from?: string; command?: number; reason: string }): void => {
+        note({ kind: unit.kind, name: unit.name, outcome: 'failed', ...details });
+        failed({ kind: unit.kind, name: unit.name, ...details });
+    };
+
     const pattern = (when: LogicTransition['when']): PathPattern | undefined => (when.path === undefined ? undefined : compilePattern(when.path));
     for (const [name, machine] of Object.entries(logic.machines ?? {})) {
-        units.push({ id: `machine:${name}`, name, machine, transitions: machine.transitions, patterns: machine.transitions.map((transition) => pattern(transition.when)) });
+        units.push({ id: `machine:${name}`, kind: 'machine', name, machine, transitions: machine.transitions, patterns: machine.transitions.map((transition) => pattern(transition.when)) });
     }
     for (const [name, rule] of Object.entries(logic.rules ?? {})) {
         const compiled = pattern(rule.when);
@@ -117,10 +177,10 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             if (compiled) guards.push({ name, pattern: compiled, trigger: rule.when, reason: rule.do[0]?.reason ?? `refused by ${name}` });
             continue;
         }
-        units.push({ id: `rule:${name}`, name, transitions: [{ when: rule.when, do: rule.do }], patterns: [compiled] });
+        units.push({ id: `rule:${name}`, kind: 'rule', name, transitions: [{ when: rule.when, do: rule.do }], patterns: [compiled] });
     }
     for (const [name, table] of Object.entries(logic.tables ?? {})) {
-        units.push({ id: `table:${name}`, name, table, transitions: [{ when: table.when }], patterns: [pattern(table.when)] });
+        units.push({ id: `table:${name}`, kind: 'table', name, table, transitions: [{ when: table.when }], patterns: [pattern(table.when)] });
     }
 
     /** Debounce timers by unit and transition index; `after` timers by machine, with the state they were armed for */
@@ -153,16 +213,37 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         return undefined;
     };
 
-    /** The first transition of the unit's current state that one of the changes triggers */
+    /**
+     * The first transition of the unit's current state that one of the changes triggers. A trigger fires only when the
+     * value at its path changed, and not when the path went away with its parent; the trace notes why nothing fired
+     */
     const findHit = (unit: Unit, changes: readonly LogicChange[]): Hit | undefined => {
         const state = stateOf(unit);
+        let miss: Omit<LogicTraceEvent, 'depth' | 'kind' | 'name'> | undefined;
+        const missed = (outcome: LogicTraceEvent['outcome'], path: string, reason?: string): void => {
+            miss ??= { outcome, path, ...(reason === undefined ? {} : { reason }) };
+        };
         for (const [index, transition] of unit.transitions.entries()) {
             const compiled = unit.patterns[index];
-            if (!compiled || (transition.from !== undefined && transition.from !== state)) continue;
+            if (!compiled) continue;
             for (const change of changes) {
-                for (const match of matchPattern(compiled, change.path, host.get(change.path))) {
+                const matches = matchPattern(compiled, change.path, host.get(change.path));
+                if (matches.length === 0) continue;
+                if (transition.from !== undefined && transition.from !== state) {
+                    missed('other-state', (matches[0] as PatternMatch).path, `needs state ${transition.from}`);
+                    continue;
+                }
+                for (const match of matches) {
                     const trigger = host.get(match.path);
                     const previous = previousAt(match.path, change, trigger);
+                    if (deepEqual(trigger, previous)) {
+                        missed('unchanged', match.path);
+                        continue;
+                    }
+                    if (trigger === undefined && removedWithParent(match.path, change, (path) => host.get(path))) {
+                        missed('parent-removed', match.path);
+                        continue;
+                    }
                     const scope: Scope = {
                         read: (path) => host.get(path),
                         trigger: trigger ?? null,
@@ -170,37 +251,73 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                         captures: match.captures
                     };
                     try {
-                        if (!passes(transition.when, scope, trigger)) continue;
-                        const hit: Hit = { transition, index, ...(state === undefined ? {} : { state }), trigger: trigger ?? null, previous: previous ?? null, captures: match.captures };
+                        if (!passes(transition.when, scope, trigger)) {
+                            missed('condition', match.path);
+                            continue;
+                        }
+                        const hit: Hit = {
+                            transition,
+                            index,
+                            ...(state === undefined ? {} : { state }),
+                            trigger: trigger ?? null,
+                            previous: previous ?? null,
+                            captures: match.captures,
+                            path: match.path
+                        };
                         if (!unit.table) return hit;
                         const found = tableRow(unit.table, scope);
                         if (found) return { ...hit, ...found };
+                        missed('condition', match.path, 'no row matched');
                     } catch (error) {
-                        failed({ machine: unit.name, ...fromOf(state), reason: (error as Error).message });
+                        unitFailed(unit, { ...fromOf(state), reason: (error as Error).message });
                     }
                 }
+            }
+        }
+        if (miss) note({ kind: unit.kind, name: unit.name, ...fromOf(state), ...miss });
+        return undefined;
+    };
+
+    /** The first concrete path of the unit's triggers that one of the changes matches, whatever its conditions */
+    const touches = (unit: Unit, changes: readonly LogicChange[]): string | undefined => {
+        for (const compiled of unit.patterns) {
+            if (!compiled) continue;
+            for (const change of changes) {
+                const [match] = matchPattern(compiled, change.path, host.get(change.path));
+                if (match) return match.path;
             }
         }
         return undefined;
     };
 
-    const guard = (change: LogicChange): string | undefined => {
+    /** The guard that refuses a change; a guard sees only changes of the value at its path, not removed parents */
+    const refusal = (change: LogicChange): { name: string; reason: string } | undefined => {
         for (const rule of guards) {
             const proposed = new WorkingCopy((path) => host.get(path));
             if (change.value === undefined) proposed.delete(change.path);
             else proposed.set(change.path, change.value);
             for (const match of matchPattern(rule.pattern, change.path, change.value)) {
-                const trigger = proposed.get(match.path) ?? null;
-                const scope: Scope = { read: (path) => proposed.get(path), trigger, previous: host.get(match.path) ?? null, captures: match.captures };
+                const value = proposed.get(match.path);
+                const before = host.get(match.path);
+                if (deepEqual(value, before)) continue;
+                if (value === undefined && removedWithParent(match.path, change, (path) => proposed.get(path))) continue;
+                const trigger = value ?? null;
+                const scope: Scope = { read: (path) => proposed.get(path), trigger, previous: before ?? null, captures: match.captures };
+                let reason: string | undefined;
                 try {
-                    if (passes(rule.trigger, scope, trigger)) return String(resolveValue(rule.reason, scope, host));
+                    if (passes(rule.trigger, scope, trigger)) reason = String(resolveValue(rule.reason, scope, host));
                 } catch (error) {
-                    return `guard ${rule.name} failed: ${(error as Error).message}`;
+                    reason = `guard ${rule.name} failed: ${(error as Error).message}`;
                 }
+                if (reason === undefined) continue;
+                const refused = reason;
+                traced('guard', [change.path], () => note({ kind: 'guard', name: rule.name, outcome: 'refused', path: match.path, reason: refused }));
+                return { name: rule.name, reason };
             }
         }
         return undefined;
     };
+    const guard = (change: LogicChange): string | undefined => refusal(change)?.reason;
 
     /** Runs a transition and commits its writes; returns them as changes, or nothing when it failed */
     const fire = (unit: Unit, hit: Hit, results: Results): LogicChange[] => {
@@ -219,7 +336,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             try {
                 runCommand(command, context);
             } catch (error) {
-                failed({ machine: unit.name, ...from, command: index, reason: error instanceof LogicError ? error.message : String(error) });
+                unitFailed(unit, { ...from, command: index, reason: error instanceof LogicError ? error.message : String(error) });
                 return [];
             }
         }
@@ -231,10 +348,21 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             try {
                 host.commit(copy.writes);
             } catch (error) {
-                failed({ machine: unit.name, ...from, reason: (error as Error).message });
+                unitFailed(unit, { ...from, reason: (error as Error).message });
                 return [];
             }
         }
+        const row = hit.row && unit.table ? unit.table.rows.indexOf(hit.row) : -1;
+        note({
+            kind: unit.kind,
+            name: unit.name,
+            outcome: 'fired',
+            ...(hit.path === undefined ? {} : { path: hit.path }),
+            ...from,
+            ...(unit.machine && hit.transition.to !== undefined && hit.transition.to !== hit.state ? { to: hit.transition.to } : {}),
+            ...(row < 0 ? {} : { row }),
+            writes: copy.writes.slice(0, MAX_TRACE_WRITES).map((write) => write.path)
+        });
         for (const notice of context.after) notice();
         if (unit.machine) {
             for (const { name, result } of context.results) results.push({ unit, name, result });
@@ -257,15 +385,15 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             const scope: Scope = { read: (at) => host.get(at), trigger: trigger ?? null, previous: hit.previous ?? null, captures: hit.captures };
             try {
                 if (!passes(hit.transition.when, scope, trigger)) return;
-                let current: Hit = { ...hit, ...(state === undefined ? {} : { state }), trigger: trigger ?? null };
+                let fresh: Hit = { ...hit, ...(state === undefined ? {} : { state }), trigger: trigger ?? null };
                 if (unit.table) {
                     const found = tableRow(unit.table, scope);
                     if (!found) return;
-                    current = { ...current, ...found };
+                    fresh = { ...fresh, ...found };
                 }
-                run(unit, current);
+                run(unit, fresh, 'timer', [path]);
             } catch (error) {
-                failed({ machine: unit.name, ...fromOf(state), reason: (error as Error).message });
+                unitFailed(unit, { ...fromOf(state), reason: (error as Error).message });
             }
         });
         if (cancel) debounced.set(key, cancel);
@@ -274,18 +402,25 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     const chain = (start: readonly LogicChange[], fired: Set<string>, results: Results): void => {
         let pending = start;
         for (let depth = 0; pending.length > 0; depth += 1) {
+            depthNow = depth;
             if (depth === MAX_CHAIN_DEPTH) {
-                failed({ machine: [...fired].map((id) => id.slice(id.indexOf(':') + 1)).join(', '), reason: `the chain is deeper than ${MAX_CHAIN_DEPTH}` });
+                failed({ kind: 'chain', name: [...fired].map((id) => id.slice(id.indexOf(':') + 1)).join(', '), reason: `the chain is deeper than ${MAX_CHAIN_DEPTH}` });
                 return;
             }
             const next: LogicChange[] = [];
             for (const unit of units) {
-                if (fired.has(unit.id)) continue;
+                if (fired.has(unit.id)) {
+                    const path = current ? touches(unit, pending) : undefined;
+                    if (path !== undefined) note({ kind: unit.kind, name: unit.name, outcome: 'already-fired', path });
+                    continue;
+                }
                 const hit = findHit(unit, pending);
                 if (!hit) continue;
                 fired.add(unit.id);
-                if (hit.transition.when.debounce !== undefined) debounce(unit, hit, hit.transition.when.debounce);
-                else next.push(...fire(unit, hit, results));
+                if (hit.transition.when.debounce !== undefined) {
+                    note({ kind: unit.kind, name: unit.name, outcome: 'debounced', ...(hit.path === undefined ? {} : { path: hit.path }) });
+                    debounce(unit, hit, hit.transition.when.debounce);
+                } else next.push(...fire(unit, hit, results));
             }
             pending = next;
         }
@@ -301,7 +436,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                     return { transition, index, ...(state === undefined ? {} : { state }), captures: {}, result };
                 }
             } catch (error) {
-                failed({ machine: unit.name, ...fromOf(state), reason: (error as Error).message });
+                unitFailed(unit, { ...fromOf(state), reason: (error as Error).message });
             }
         }
         return undefined;
@@ -340,10 +475,10 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                             return;
                         }
                     } catch (error) {
-                        failed({ machine: unit.name, ...fromOf(state), reason: (error as Error).message });
+                        unitFailed(unit, { ...fromOf(state), reason: (error as Error).message });
                         return;
                     }
-                    run(unit, { transition, index, ...(state === undefined ? {} : { state }), captures: {} });
+                    run(unit, { transition, index, ...(state === undefined ? {} : { state }), captures: {} }, 'timer', [`after ${ms}ms in ${state ?? '?'}`]);
                 });
                 if (cancel) cancels.push(cancel);
             });
@@ -352,10 +487,12 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     };
 
     /** Fires one hit as a chain of its own with its results, then re-arms timers */
-    const run = (unit: Unit, hit: Hit): void => {
-        const results: Results = [];
-        chain(fire(unit, hit, results), new Set([unit.id]), results);
-        drain(results);
+    const run = (unit: Unit, hit: Hit, cause: LogicTraceRun['cause'], changes: readonly string[]): void => {
+        traced(cause, changes, () => {
+            const results: Results = [];
+            chain(fire(unit, hit, results), new Set([unit.id]), results);
+            drain(results);
+        });
         arm();
     };
 
@@ -365,7 +502,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             if (stopped) return;
             const hit = resultHit(unit, as, result);
             if (!hit) return;
-            run(unit, hit);
+            run(unit, hit, 'answer', [`${name} → ${as}`]);
         };
         if (!host.call) {
             queueMicrotask(() => answer({ status: 'rejected', reason: `no server answers "${name}"` }));
@@ -393,18 +530,29 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 try {
                     host.commit(writes);
                 } catch (error) {
-                    failed({ machine: kinds((unit) => unit.machine !== undefined).join(', '), reason: (error as Error).message });
+                    failed({ kind: 'machine', name: kinds((unit) => unit.machine !== undefined).join(', '), reason: (error as Error).message });
                 }
             }
             arm();
         },
         changes(changes) {
-            const results: Results = [];
-            chain(changes, new Set(), results);
-            drain(results);
+            traced(
+                'change',
+                changes.map((change) => change.path),
+                () => {
+                    const results: Results = [];
+                    chain(changes, new Set(), results);
+                    drain(results);
+                }
+            );
             arm();
         },
         guard,
+        refusal,
+        trace: () => JSON.parse(JSON.stringify(runs)) as LogicTraceRun[],
+        clearTrace() {
+            runs.length = 0;
+        },
         stop() {
             stopped = true;
             for (const cancel of debounced.values()) cancel();

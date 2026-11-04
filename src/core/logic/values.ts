@@ -94,6 +94,25 @@ export function compileExpression(text: string): CompiledExpression {
     return expression;
 }
 
+const PATH_CAPTURE = /(\$\.[^\s'"()\[\],]*?)\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+
+/**
+ * Fills trigger captures into the state paths of an expression: `$.data.promos.{code}.percent` reads the record of the
+ * captured key. Only `{name}` steps of a `$.` path with a capture of that name are filled
+ */
+export function withCaptures(text: string, captures: Readonly<Record<string, string>>): string {
+    if (!text.includes('{') || Object.keys(captures).length === 0) return text;
+    let previous: string;
+    let current = text;
+    do {
+        previous = current;
+        current = current.replace(PATH_CAPTURE, (whole, head: string, name: string) =>
+            Object.hasOwn(captures, name) ? `${head}${captures[name] as string}` : whole
+        );
+    } while (current !== previous);
+    return current;
+}
+
 function setIn(target: Record<string, unknown>, steps: readonly string[], value: unknown): void {
     let current = target;
     for (const step of steps.slice(0, -1)) {
@@ -110,7 +129,7 @@ function setIn(target: Record<string, unknown>, steps: readonly string[], value:
  * names; functions come from `LOGIC_FUNCTIONS`. Throws `LogicError` on a compile or run error
  */
 export function evaluate(text: string, scope: Scope): unknown {
-    const expression = compileExpression(text);
+    const expression = compileExpression(withCaptures(text, scope.captures));
     const context: Record<string, unknown> = { ...LOGIC_FUNCTIONS };
     for (const [name, key] of Object.entries(scope.captures)) context[`${name}`] = key;
     for (const [name, input] of Object.entries(scope.inputs ?? {})) context[`${name}`] = input;

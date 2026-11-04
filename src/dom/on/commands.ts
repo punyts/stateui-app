@@ -148,8 +148,10 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
     } else if (command.command === 'toggle') {
         const path = writePath(command, context);
         const current = context.store.get(path);
-        if (typeof current !== 'boolean') throw new CommandFailure(`${path} does not hold a boolean`);
-        write(path, !current, context);
+        if (current !== undefined && current !== null && typeof current !== 'boolean') {
+            throw new CommandFailure(`${path} holds ${JSON.stringify(current)}, not a boolean`);
+        }
+        write(path, current !== true, context);
     } else if (command.command === 'emit') {
         if (command.target === undefined) throw new CommandFailure('emit needs an event name');
         context.emit(command.target, 'value' in command ? valueOf(command, context) : context.payload);

@@ -140,10 +140,14 @@ export interface LogicWrite {
     value?: JsonValue;
 }
 
+/** What a failure, a trace event or a refusal names: a machine, a rule, a table, a guard rule, or a chain of them */
+export type LogicUnitKind = 'machine' | 'rule' | 'table' | 'guard' | 'chain';
+
 /** A transition that failed or a change a guard refused, for `logic.failed` and the reporter */
 export interface LogicFailure {
-    /** The machine or rule name */
-    machine: string;
+    kind: LogicUnitKind;
+    /** The machine, rule, table or guard name; for a chain, the names that fired in it */
+    name: string;
     /** The machine's state when the transition fired */
     from?: string;
     /** The index of the failing command */
@@ -197,4 +201,54 @@ export interface LogicHost {
     schedule?(ms: number, run: () => void): () => void;
     /** Runs a named server procedure (Full mode); without it every `call` is rejected */
     call?(name: string, payload: JsonValue): Promise<LogicAnswer>;
+}
+
+/** Why a unit whose trigger path matched a change did not fire, or that it fired */
+export type LogicTraceOutcome =
+    /** Its commands ran and committed */
+    | 'fired'
+    /** It started its debounce timer */
+    | 'debounced'
+    /** A command or the commit failed; nothing was written */
+    | 'failed'
+    /** It already fired in this chain (a unit fires at most once per chain) */
+    | 'already-fired'
+    /** The value at its path is the value it had before the change */
+    | 'unchanged'
+    /** Its path went away with a parent (a record was removed); trigger on the record path to see removals */
+    | 'parent-removed'
+    /** The machine is not in the transition's `from` state */
+    | 'other-state'
+    /** `is`, `was` or `if` was false, or no table row matched */
+    | 'condition'
+    /** A guard refused the change */
+    | 'refused';
+
+/** One unit the trace looked at in one step of a chain */
+export interface LogicTraceEvent {
+    /** The chain step: 0 for the changes that started it */
+    depth: number;
+    kind: LogicUnitKind;
+    name: string;
+    outcome: LogicTraceOutcome;
+    /** The concrete path that matched */
+    path?: string;
+    /** The machine's state, and the state it moved to */
+    from?: string;
+    to?: string;
+    /** The index of the table row that ran */
+    row?: number;
+    /** The paths a fired unit wrote */
+    writes?: string[];
+    reason?: string;
+}
+
+/** One run of the engine: what started it and what every matching unit did */
+export interface LogicTraceRun {
+    /** ISO time */
+    at: string;
+    cause: 'change' | 'result' | 'timer' | 'answer' | 'start' | 'guard';
+    /** The paths of the changes (or the result name) that started it */
+    changes: string[];
+    events: LogicTraceEvent[];
 }

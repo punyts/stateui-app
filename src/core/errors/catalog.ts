@@ -154,9 +154,13 @@ export const ERROR_CATALOG = {
     },
     'SUI-LOGIC-STATE': { template: 'State "{name}" at {path} is not a state of machine "{other}"' },
     'SUI-LOGIC-EXPRESSION': { template: 'Expression at {path} does not compile: {name}' },
+    'SUI-LOGIC-TEXT-PATH': {
+        template: 'Value {target} at {path} is a text template, so it gives the path as text; use a record source (the key record with the path) to read the value there',
+        severity: 'warning'
+    },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-ON-SHAPE': { template: 'The "{event}" entry at {path} is not a command or a list of commands' },
-    'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },
+    'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}: {reason}' },
     'SUI-RUN-ON-TARGET': { template: 'Target "{target}" of event "{event}" does not resolve at {path}' },
     'SUI-RUN-ICON': { template: 'Icon "{name}" at {path} is in neither the core set nor the icons of the app' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' },

@@ -30,7 +30,8 @@ export const TEMPLATE_PLACEHOLDERS = [
     'locale',
     'file',
     'limit',
-    'actual'
+    'actual',
+    'reason'
 ] as const;
 
 export type TemplatePlaceholder = (typeof TEMPLATE_PLACEHOLDERS)[number];

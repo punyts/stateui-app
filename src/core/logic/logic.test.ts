@@ -187,8 +187,9 @@ const BASE: JsonObject = Object.freeze({
 
 /** Applies a user's change to the host's state and hands it to the engine, as a runner does */
 function userChange(memory: ReturnType<typeof memoryHost>, engine: ReturnType<typeof createLogicEngine>, path: string, value: JsonValue): void {
+    const previous = memory.get(path);
     memory.apply({ path, value });
-    engine.changes([{ path, value }]);
+    engine.changes([previous === undefined ? { path, value } : { path, value, previous }]);
 }
 
 describe('path patterns', () => {
@@ -415,7 +416,7 @@ describe('createLogicEngine', () => {
 
         // Assert
         expect(memory.get('$.data.first')).toBeUndefined();
-        expect(memory.failures).toEqual([{ machine: 'broken', command: 1, reason: '$.data.missing has no value' }]);
+        expect(memory.failures).toEqual([{ kind: 'rule', name: 'broken', command: 1, reason: '$.data.missing has no value' }]);
     });
 
     it('should fire a rule at most once per chain', () => {
@@ -560,9 +561,9 @@ describe('createLogicEngine', () => {
             { ...memory.host, commit: () => { throw new Error('offline'); } }
         );
 
-        engine.changes([{ path: '$.data.go', value: true }]);
+        userChange(memory, engine, '$.data.go', true);
 
-        expect(memory.failures).toEqual([{ machine: 'r', reason: 'offline' }]);
+        expect(memory.failures).toEqual([{ kind: 'rule', name: 'r', reason: 'offline' }]);
     });
 });
 
@@ -1020,5 +1021,141 @@ describe('createLogicEngine: call', () => {
         expect(paths).toEqual(expect.arrayContaining(['$.logic.rules.r.do.0', '$.logic.machines.m.transitions.0.do.0']));
         expect(validateDocument(document, LIBRARY, { mode: 'persisted' }).errors.map((error) => error.code)).toContain('SUI-DOC-SERVER');
         expect(validateDocument(document, LIBRARY, { mode: 'full' }).errors.filter((error) => error.code === 'SUI-DOC-SERVER')).toEqual([]);
+    });
+});
+
+describe('createLogicEngine: changes, removals and the trace', () => {
+    const DATA: JsonObject = Object.freeze({
+        app: BASE['app'] as JsonValue,
+        data: { flag: false, count: 0, products: { p1: { stock: 3, label: 'In stock' }, p2: { stock: 0, label: 'Sold out' } }, orders: { o1: { status: 'Delivered' } } }
+    }) as JsonObject;
+
+    it('should not fire a trigger when the value did not change', () => {
+        // Arrange
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine({ rules: { r: { when: { path: '$.data.flag' }, do: [{ command: 'increment', target: '$.data.count' }] } } }, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.flag', false);
+        engine.changes([{ path: '$.data', value: memory.get('$.data') as JsonValue, previous: memory.get('$.data') as JsonValue }]);
+        userChange(memory, engine, '$.data.flag', true);
+
+        // Assert
+        expect(memory.get('$.data.count')).toBe(1);
+    });
+
+    it('should not fire a leaf trigger or a guard when its record is removed', () => {
+        // Arrange
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(
+            {
+                rules: {
+                    label: { when: { path: '$.data.products.{id}.stock' }, do: [{ command: 'set', target: '$.data.products.{id}.label', value: 'changed' }] },
+                    removed: { when: { path: '$.data.products.{id}', is: null }, do: [{ command: 'increment', target: '$.data.count' }] },
+                    final: { when: { path: '$.data.orders.{id}.status', was: 'Delivered' }, do: [{ command: 'reject', reason: 'final' }] }
+                }
+            },
+            memory.host
+        );
+
+        // Act
+        memory.apply({ path: '$.data.products.p1' });
+        engine.changes([{ path: '$.data.products.p1', previous: { stock: 3, label: 'In stock' } }]);
+        const deleteOrder = engine.guard({ path: '$.data.orders.o1' });
+        const changeStatus = engine.guard({ path: '$.data.orders.o1.status', value: 'Cancelled' });
+        const sameStatus = engine.guard({ path: '$.data.orders.o1', value: { status: 'Delivered' } });
+
+        // Assert
+        expect(memory.get('$.data.products.p1')).toBeUndefined();
+        expect(memory.get('$.data.count')).toBe(1);
+        expect(deleteOrder).toBeUndefined();
+        expect(changeStatus).toBe('final');
+        expect(sameStatus).toBeUndefined();
+    });
+
+    it('should refuse a set through a missing parent below $.data', () => {
+        // Arrange
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(
+            { rules: { r: { when: { path: '$.data.flag' }, do: [{ command: 'set', target: '$.data.products.gone.label', value: 'x' }] } } },
+            memory.host
+        );
+
+        // Act
+        userChange(memory, engine, '$.data.flag', true);
+
+        // Assert
+        expect(memory.get('$.data.products.gone')).toBeUndefined();
+        expect(memory.failures[0]?.reason).toContain('$.data.products.gone does not exist');
+    });
+
+    it('should fill trigger captures into expression paths', () => {
+        // Arrange
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(
+            { rules: { r: { when: { path: '$.data.products.{id}.stock' }, do: [{ command: 'set', target: '$.data.count', value: '{{ $.data.products.{id}.stock * 10 }}' }] } } },
+            memory.host
+        );
+
+        // Act
+        userChange(memory, engine, '$.data.products.p2.stock', 4);
+
+        // Assert
+        expect(memory.get('$.data.count')).toBe(40);
+        expect(readLogic({ rules: { r: { when: { path: '$.data.x.{id}' }, do: [{ command: 'set', target: '$.data.y', value: '{{ $.data.x.{nope} }}' }] } } }).errors.map((error) => error.message)).toEqual([
+            expect.stringContaining('{nope} in a path is not a capture of this trigger')
+        ]);
+    });
+
+    it('should name the kind of a failing unit and trace why units did or did not fire', () => {
+        // Arrange
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(
+            {
+                rules: {
+                    first: { when: { path: '$.data.flag' }, do: [{ command: 'increment', target: '$.data.count' }] },
+                    again: { when: { path: '$.data.count' }, do: [{ command: 'set', target: '$.data.flag', value: false }] },
+                    never: { when: { path: '$.data.flag', is: 'x' }, do: [{ command: 'increment', target: '$.data.count' }] }
+                }
+            },
+            memory.host
+        );
+
+        // Act
+        userChange(memory, engine, '$.data.flag', true);
+        const [run] = engine.trace();
+
+        // Assert
+        expect(run?.cause).toBe('change');
+        expect(run?.events.map((event) => [event.depth, event.name, event.outcome])).toEqual([
+            [0, 'first', 'fired'],
+            [0, 'never', 'condition'],
+            [1, 'again', 'fired'],
+            [2, 'first', 'already-fired'],
+            [2, 'never', 'condition']
+        ]);
+        expect(run?.events[0]?.writes).toEqual(['$.data.count']);
+    });
+
+    it('should name the clashing nodes of an ambiguous reference', () => {
+        // Arrange
+        const tree = resolveNode(
+            { component: 'page', children: { a: { component: 'modal', children: { name: { component: 'textField' } } }, b: { component: 'modal', children: { name: { component: 'textField' } } } } } as unknown as Node,
+            LIBRARY,
+            {}
+        );
+        const index = createLogicIndex(tree, LIBRARY);
+
+        // Act
+        const errors = readLogic({ rules: { r: { when: { path: '$.data.go' }, do: [{ command: 'set', target: '^name.value', value: 'x' }] } } }, { resolve: index.resolve, explain: index.explain }).errors;
+
+        // Assert
+        expect(errors[0]?.message).toContain('2 nodes are named "name": $.app.children.a.children.name, $.app.children.b.children.name');
+    });
+
+    it('should warn about a value that is a path written as a text template', () => {
+        const { errors } = readLogic({ rules: { r: { when: { path: '$.data.x.{id}' }, do: [{ command: 'set', target: '$.data.y', value: '$.data.x.{{ $id }}.name' }] } } });
+
+        expect(errors.map((error) => [error.code, error.severity])).toEqual([['SUI-LOGIC-TEXT-PATH', 'warning']]);
     });
 });
