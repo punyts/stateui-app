@@ -136,6 +136,7 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
         assembler.components(screen.root as unknown as JsonValue, `$.screens.${name}.root`);
     }
     document.screens = screens;
+    document.start = blueprint.start;
     if (Object.keys(assembler.composed).length > 0) document.composed = assembler.composed;
     if (blueprint.logic !== undefined) document.logic = cloneJson(blueprint.logic as unknown as JsonValue) as JsonObject;
     if (blueprint.locales !== undefined) document.locales = cloneJson(blueprint.locales as unknown as JsonValue) as AppDocument['locales'];

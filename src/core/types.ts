@@ -37,8 +37,10 @@ export interface AppDocument {
     data?: JsonObject;
     /** The shell when the app has screens */
     app: Node;
-    /** The screens of an app assembled from a blueprint; not yet a key of `DOCUMENT_KEYS`, so `validateApp` checks them */
+    /** The screens of an app assembled from a blueprint; each root node's state path is `$.screens.{screen}` */
     screens?: Record<string, DocumentScreen>;
+    /** The screen `$.route` starts on; required with `screens` */
+    start?: string;
     composed?: Record<string, Node>;
     locales?: Record<string, JsonObject>;
     /** Machines and rules (`logic/types.ts`); document only, never in a snapshot */
@@ -60,7 +62,7 @@ export function isAppEvent(name: unknown): name is string {
     return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
 }
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'locale', 'data', 'app', 'composed', 'locales', 'logic'] as const;
+export const DOCUMENT_KEYS = ['theme', 'themes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {

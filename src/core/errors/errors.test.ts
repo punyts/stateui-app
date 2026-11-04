@@ -61,7 +61,8 @@ describe('error catalog', () => {
             'SUI-LINK-SERVER',
             'SUI-DOC-SERVER',
             'SUI-BLUEPRINT-SHAPE',
-            'SUI-USES-MISSING'
+            'SUI-USES-MISSING',
+            'SUI-DOC-SCREEN'
         ]) {
             expect(CODES).toContain(code);
         }

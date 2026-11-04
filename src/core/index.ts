@@ -278,3 +278,5 @@ export type {
 } from './blueprint/index.js';
 export { assembleApp, nearestNames, validateApp } from './assemble/index.js';
 export type { AppValidation, AppValidationError, AssembleOptions, AssembleResult, PartSource, ValidateAppOptions } from './assemble/index.js';
+export { ROUTE_PATH, initialRoute, paramDefaults } from './route/index.js';
+export type { RouteState } from './route/index.js';

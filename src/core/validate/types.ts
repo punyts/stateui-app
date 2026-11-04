@@ -43,6 +43,8 @@ export interface DocumentValidationContext {
     library: ComponentLibrary;
     /** The resolved `app` tree and the composed names expanded at each path (`resolveNode`) */
     tree: ResolvedTree;
+    /** The resolved root of each screen, by screen name; its state path is `$.screens.{screen}` */
+    screens?: Readonly<Record<string, ResolvedTree>>;
 }
 
 /** A plug-in check: returns its errors, each with a state path. It may throw; the run reports that as `SUI-DOC-VALIDATOR` */

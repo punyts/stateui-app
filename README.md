@@ -255,7 +255,12 @@ Order of checks:
 4. Integer-like keys in `children`, `options`, `columns`, `items`, `steps`, `messages` and every object under `data`
    (`SUI-DOC-ORDER`). The `records` or `items` of a node that has an integer `total` are exempt: a paged record view
    reads them by position, so the key is the position and key order carries nothing (`query` writes them this way).
-5. The `app` tree and each document `composed` tree: every component resolves, composed cycles, reserved names, each
+   Screens (`screens`, `start`) are checked here too: a screen name is a part name, an entry is `{ title?, params?,
+   root }` with params as typed declarations (`FIELD_TYPES`), `start` is required with screens and names one, and has
+   no meaning without them. Each problem is `SUI-DOC-SCREEN` at `$.screens.{screen}` or `$.start`. `route` is not a
+   document key: `$.route` is the store branch of navigation (see below).
+5. The `app` tree, each screen's `root` (at `$.screens.{screen}`, no `.root` segment) and each document `composed`
+   tree: every component resolves, composed cycles, reserved names, each
    merged node against its shape (`validateNode`), and `<-` links. A `$.data` target must exist, a node reference must
    reach a property its component declares, and a node reference must reach an exposed runtime property (`SUI-LINK-MISSING`). Exposed properties are runtime
    branches no link can have as its own key, so links cannot loop through node references.
@@ -276,6 +281,10 @@ templates. `nodeChildren(node, path, shape)` (from `@punyts/stateui-app/core`) l
 
 A runtime property that still has its default in a resolved node counts as not set; only a node that gives it another
 value is `SUI-STATE-RUNTIME`.
+
+Layouts, node overrides, ordered keys, `on` entries and the node limit cover the screens as they cover `app`.
+`core/route/` holds the route: `ROUTE_PATH` (`$.route`), `RouteState` (`{ screen, params }`), `paramDefaults(declarations)`
+and `initialRoute(document)`, the `start` screen with copies of its params' defaults (undefined without screens).
 
 ## Dispatching `on` in the browser
 
@@ -393,7 +402,7 @@ Save button saves and a count follows its records without an agent in the loop.
 
 ## App blueprints and owner parts
 The owner tree (`knowledge-base/design/stateui-owner-tree-and-tools.md` in AI Minion) splits an app into a blueprint and
-the owner's parts. `src/core/blueprint/` holds their types and the blueprint reader; resolving and assembling come later.
+the owner's parts. `src/core/blueprint/` holds their types and the blueprint reader; `src/core/assemble/` assembles and validates an app.
 
 - **Types.** `AppBlueprint` (`title`, `uses`, `start`, `shell`, `screens`, `logic`, `locales`), `ThemePart`
   (base `tokens`, `overlays` by name with a `kind` of `OVERLAY_KINDS`), `LogicModule` (`needs`, `params` and the logic
@@ -403,399 +412,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
 - **Declarations.** Screen params, module params and model fields are `{ type, default?, required?, validators? }`, with
   `type` one of `FIELD_TYPES` (`string`, `number`, `integer`, `boolean`, `array`, `object`, `any`, `url`) and the
   library's closed validator names.
-- **Names.** `isPartName(value)` accepts `^[a-z][a-z0-9-]{0,62}# @punyts/stateui-app
-
-Component system and app documents built on `@punyts/stateui`.
-
-## Entry points
-- `@punyts/stateui-app`: everything.
-- `@punyts/stateui-app/core`: the DOM-free part; safe to import under plain Node.
-- `@punyts/stateui-app/protocol`: the runtime message types, limits and structural validator; no DOM and no StateUI, so the preview host can import it.
-- `@punyts/stateui-app/runtime`: `startRuntime` and the protocol (the code that runs inside the preview iframe).
-
-## Error catalog, types and limits
-All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
-
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
-- **Types.** `AppDocument` (`theme`, `themes`, `locale`, `data`, `app`, `composed`, `locales`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
-- **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
-
-## Shape format
-A component's `*.state.json` is its default state, its validation rules and its catalog entry. Code is in `src/core/shape/`, exported from `@punyts/stateui-app/core`.
-
-```json
-{
-    "summary": "A text input with a label",
-    "layout": false,
-    "events": ["change", "invalid"],
-    "commands": ["focus", "clear"],
-    "shared": { "tone": { "default": "accent" }, "size": {} },
-    "properties": {
-        "_label": { "type": "string", "kind": "content", "default": "Label" },
-        "width": { "type": "string", "values": ["narrow", "wide"], "default": "wide" },
-        "value": { "type": "string", "required": true, "validators": { "length": { "max": 40 } } },
-        "header": { "type": "node" },
-        "src": { "type": "url" }
-    }
-}
-```
-
-- **Top-level keys.** `shared` (see below), `summary` (required; one line, at most `MAX_SUMMARY_LENGTH` = 120 characters; served by `ui_components_list`), `properties`, `events` and `commands` (lists of lower camel-case names), `layout` (true when the component lays out children, so a node may carry `layout`), `commandValues` (commands whose `value` must be a key of one of the component's `map` properties, such as `{ "show": "messages" }`; each name must be a declared command and each property a `map`, or `SUI-BUILD-SHAPE`). Keys are rows in the `SHAPE_KEYS` table (and `PROPERTY_KEYS` for a property): name, JSON type and rule. `category` (one of `COMPONENT_CATEGORIES`: `layout`, `navigation`, `forms`, `data`, `feedback`, `overlays`, `content`, `conversation`, `graphics`; anything else is `SUI-BUILD-CATEGORY`, whose message names the list) and `purposes` (three to eight phrases of what the component is for, each non-empty, on one line and at most 60 characters; `checkPurposes` holds the rule, a break is `SUI-BUILD-PURPOSES`) are what search reads; both are optional in the shape and `requireSearchKeys` (under Building a component library) makes them required. `tokens` and `tokenGroup` are described under Component tokens. `placement` is described under Layouts and placement. `childComponents` (a list of component names) limits the components the `children` slot accepts; on a `node` property it limits that slot. A node of another component is `SUI-NODE-CHILD`, reported by `validateDocument` with the state path and the accepted names (a composed component counts as the root component it resolves to).
-- **Property keys.** `type` (required: `string`, `number`, `integer`, `boolean`, `array`, `object`, `any`, `url`, `icon`, `node`, `map`, or a list of them when several are allowed, as in `["array", "map"]`), `default`, `required`, `kind` (`content` is the only extra kind), `values` (allowed values), `validators`, `items`, `requiredWhen`, `runtime`, `exposed`, `reflect`, `row`. A `node` property is a slot and must hold an object with a `component` name.
-- **Maps (`type: "map"`, `items`).** `items` is `"string"` (every value is a string, e.g. a `_errors` content map) or a sub-shape: an object of properties each map value may hold (table `columns`, static `select` options). A map type needs `items` and no other type may have it. Nested `_` properties inside `items` must be kind `content` and every other nested property must not (`SUI-BUILD-KIND`). `validateNode` walks maps and reports each violation with the map key in the path, e.g. `$.app.children.t.columns.total._title`.
-- **`requiredWhen`.** `{ "property": "decorative", "equals": false }` or `{ "property": "iconPosition", "notEquals": "start" }` makes the property required while a sibling property (same table, not itself) has, or does not have, that value. The sibling's value is the node's value or its default; if the sibling or the property is a `<-` link the check is skipped. A missing value is `SUI-STATE-CONDITION`, naming both properties.
-- **`runtime: true`.** Only controllers write the property (`error`, `touched`, `status`). It needs a `default`, cannot be `required` and cannot sit inside map items. A node that sets it, by value or by `<-` link, is `SUI-STATE-RUNTIME`. The flag is on `PropertyShape.runtime` for the catalog.
-- **`exposed: true`.** Valid only with `runtime: true` (otherwise `SUI-BUILD-SHAPE`). An exposed property lives at `runtimePath(nodePath).<name>` and other nodes may link to it by node reference (see Links). `PropertyShape.exposed` is in the `shape` of the catalog entry, so the minion sees which runtime properties it may link to.
-- **`reflect: true`.** `<sui-node>` writes the property as a host attribute. Not allowed on `node`, `array`, `object`, `map` or `any`, or inside map items. `reflectedProperties(shape)` returns the names in shape order; it is the only source of the `reflect(componentName)` list the application gives `<sui-node>`.
-- **`icon` type.** The value is an icon name: lower-case letters, digits and `-` (the empty string means no icon). `validateNode(shape, node, statePath, { isIconName })` also asks the caller's function (the server reads `icons.json`) and reports a rejected name as `SUI-STATE-INVALID`; without it the core knows no icon list.
-- **`row: true`.** Marks a `node` property, or a `node` field of a map item (table column `cell`, `descriptionList` item `node`), as a row template where `$row` links and `$row` `on` targets are legal. `validateNode` reports `$row` in a `<-` link or `on` entry of the node, or inside a slot value that is not a row property, as `SUI-LINK-ROW`. The tree walker calls `validateNode` on a template node itself with `{ insideRow: true }`, which turns the check off.
-- **Shared articulation (`shared`).** One vocabulary for all components, in `src/core/articulation/`: `tone` (neutral, accent, danger, warning, success, info), `variant` (solid, soft, outline, ghost, link), `size` (sm, md, lg), `density` (compact, comfortable, spacious), `elevation` (flat, raised, overlay), `textRole` (display, title, heading, body, label, caption, code). A shape lists the ones it supports in `shared`, each with an optional `default` from the list; `parseShape` expands each into a reflected string property with the list as its `values`. `hidden` (boolean, reflected) is added to every shape and is never declared. An unknown shared name or a `hidden` entry is `SUI-BUILD-SHAPE`, a default outside the list `SUI-BUILD-DEFAULT`. An own property may not use a shared name (a modal's width choice is `width`, a tab strip's look is `appearance`): `SUI-BUILD-SHAPE`. A node that sets a shared property the component does not support is `SUI-STATE-SHARED`, naming the supported ones; a value outside the list is `SUI-STATE-INVALID`. `attributeName(name)` gives the host attribute (`textRole` is `text-role`). `Shape.shared` lists the declared names; the catalog entry lists `shared` (with `hidden`) and `own` properties separately.
-- **Names.** A `_` name must have kind `content` and the reverse (`SUI-BUILD-KIND`). Names starting with `<-`, `$` or `__`, names that are not letters and digits, and the keys `component`, `layout`, `placement`, `theme` and `on` are `SUI-BUILD-NAME`.
-- **Validators** (a closed set, in `VALIDATORS`): `oneOf` (a list of values), `pattern` (a regular expression of at most `MAX_PATTERN_LENGTH` = 200 characters; strings over `MAX_PATTERN_INPUT` = 10000 characters fail it), `regex` (a positive integer up to `MAX_PATTERN_LENGTH`: the value is itself a regular expression of at most that many characters that compiles and has no nested quantifier such as `(a+)+`; string properties only), `range` and `length` (`{ "min": n, "max": n }`, either bound optional; `length` takes non-negative integers). An unknown validator is `SUI-BUILD-VALIDATOR`; options that are malformed or do not apply to the type are `SUI-BUILD-SHAPE`.
-- **URL rule.** A `url` property accepts only `data:` images (`png`, `jpeg`, `gif`, `webp`, `avif`, `bmp`, `svg+xml`), `#` targets and relative targets. Other schemes, `//host`, backslashes, spaces and control characters are refused. A `pattern` validator also applies to a `url` and narrows it further (`"^data:"` for images only, `"^(?!data:)"` for links).
-- **`parseShape(json, file)`** takes the file text or a parsed value and returns `{ shape, errors }`. It reports every problem (unknown keys are `SUI-BUILD-KEY`, a missing or bad summary is `SUI-BUILD-SUMMARY`, a default that does not fit is `SUI-BUILD-DEFAULT`, a bad pattern is `SUI-BUILD-PATTERN`) with the file; `shape` is set only when there are none.
-- **`buildDefaults(shape)`** returns a fresh default state: every property that has a `default`.
-- **`validateNode(shape, node, statePath)`** returns `SUI-STATE-*` violations with the state path: `SUI-STATE-UNKNOWN` (unknown property or a link to one), `SUI-STATE-SHARED` (an unsupported shared property), `SUI-STATE-REQUIRED`, `SUI-STATE-INVALID` (type, allowed values, validators, URL rule, icon name, slot not a node, map contents), `SUI-STATE-CONDITION`, `SUI-STATE-RUNTIME`, `SUI-LINK-ROW` and `SUI-NODE-NAME` (`$` or `__` keys). The optional fourth argument is `{ isIconName?, insideRow? }`. `<-name` links count as providing `name` and their value is not checked. `component`, `children`, `placement`, `theme` and `on` belong to the tree and are not checked here. Two codes exist for the icon component of `@punyts/stateui-components`, which raises them itself: `SUI-STATE-FILLED` (a warning: `filled` on an icon with no filled variant, so the outline is drawn) and `SUI-RUN-ICON` (an icon name found in neither the core set nor `$.runtime.icons`; reported through `@punyts/core`, nothing is drawn).
-
-### Component tokens
-
-A shape declares the knobs a minion may change as `tokens`: nested objects whose leaves are references to semantic tokens.
-
-```json
-{
-    "summary": "A button",
-    "tokens": {
-        "radius": "{radius.md}",
-        "padding": { "inline": "{space.inset.md}", "block": "{space.inset.sm}" },
-        "row": "calc({size.control.md} * {density.factor})"
-    }
-}
-```
-
-- **Group.** The tokens live under `tokenGroup`, a lower-case word (`^[a-z][a-z0-9]*$`, not a default group such as `color`). It defaults to the component name, taken from the shape file name (`button.state.json` gives `button`). A camelCase name (`record-list.state.json` is `recordList`) without `tokenGroup` is `SUI-BUILD-TOKENGROUP` naming the file, as is an unusable `tokenGroup`. Shapes of one family share a group (`field`, `control`).
-- **Defaults.** `inferComponentDefault(value)` checks each default with the value rules of Theme tokens: it must reference at least one semantic token (a literal, a primitive, a component token or an unknown path is `SUI-BUILD-TOKENDEF`), and the type is inferred from the referenced token (a `calc()` of dimensions and numbers with at least one dimension is a `dimension`). A token key that is not lower-case letters and digits is `SUI-BUILD-NAME`.
-- **`Shape.tokens`** lists `{ path, group, type, default }` per leaf, the path starting with the group (`button.padding.inline`); absent when the shape declares none.
-- **`collectComponentTokens(sources)`** takes `{ file, shape }` entries and returns `{ tokens, errors }`: the token set of the library sorted by path. Shapes that share a group must declare identical entries; otherwise each of them gets a `SUI-BUILD-TOKENCONFLICT` naming its file and the first file of the group, and its entries are left out.
-- **Lookup.** The paths and types join `validateTokens` (`componentTokens` option); the `theme` document validator reads them from the library's shapes, so a document or overlay may set `button.radius` only when a shape declares it. The catalog entry carries `tokens` (and `shape.tokens`).
-
-### Shared articulation stylesheet
-
-`generateSharedSheet()` (`src/dom/articulation/`) returns the CSS that turns the reflected attributes into local custom properties: `tone` gives `--tone`, `--tone-soft` and `--tone-on`; `size` gives `--control-height` and `--icon-size`; `elevation` gives `--surface` and `--shadow`; `textRole` (attribute `text-role`) gives `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `hidden` removes the host from layout. The build prepends it to every root component's CSS (a component with no `view.css` gets it alone; style error lines still match the component's file), so component CSS says `background: var(--tone)` and never repeats the tone table. `variant` has no rule here: the component's CSS decides how each variant paints the tone properties. `mountApp` reflects the shared names and `hidden` onto each node's element through `<sui-node>`, so no component code is involved.
-
-`density` on a container sets `--ui-density-factor` to the chosen multiplier (`density.compact`, `comfortable` or `spacious`) on that host and re-declares every semantic token whose default value uses `{density.factor}` (`space.inset`, `gap` and `stack`) from its default expression. A `var()` is resolved where the property is declared, so the re-declaration is what makes the `calc()` use the host's factor; everything below the container follows, so one `density` on a form changes every field. Limit: a node `theme` override of a `space` token is not carried into a nested density host, which re-declares `space.*` from the default expression.
-
-The sheet also draws focus: `:host(:focus-visible)` and `:focus-visible` inside every shadow root get `outline: var(--ui-focus-width) solid var(--ui-color-focus)` and `outline-offset: var(--ui-focus-offset)`, so components do not style focus themselves. Under `@media (forced-colors: active)` the local colours map to system colours (`--tone: ButtonText`, `--tone-soft: Canvas`, `--tone-on: CanvasText`, `--surface: Canvas`), shadows are removed (`--shadow: none`) and the focus outline is `Highlight`; the block comes after the tone and elevation rules and repeats their attribute selectors so it wins.
-
-### Layouts and placement
-
-`src/core/layout/` holds the closed list of layout types: `column`, `row`, `grid`, `region` and `adhoc`. A node sets `layout: { "type": "grid", "cols": 3 }`, and each child sets `placement`. Each type has its own settings and placement fields:
-
-| Type | Container settings | Child placement |
-|------|--------------------|-----------------|
-| `column` | `gap`, `align` | `grow` |
-| `row` | `gap`, `align`, `wrap`, `collapseBelow` | `grow` |
-| `grid` | `cols`, `rows`, `gap`, `collapseBelow` | `col`, `row`, `span`, `rowSpan` |
-| `region` | `gap`, `collapseBelow` | `region` (`n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`, `center`) |
-| `adhoc` | none | `x`, `y`, `width`, `height` |
-
-Allowed values: `gap` is `none`, `sm`, `md` or `lg`; `align` is `start`, `center`, `end` or `stretch`; `wrap` is boolean; `cols`, `rows`, `col`, `row`, `span` and `rowSpan` are integers 1 to 12; `grow` is a number 0 to 12; `collapseBelow` is `sm`, `md`, `lg` or `xl`; `x`, `y`, `width` and `height` are literal dimensions (`4px`, `1.5rem`, `50%`, `0`), never `calc()` or a token reference.
-
-A component that has no `layout` can declare the placement its children carry with a `placement` key in its `*.state.json`: a table of properties like `properties`, where `_` properties are content (tabs: `_tab`, `icon`, `badge`). A shape cannot have both `"layout": true` and `placement`.
-
-`validateDocument` runs the `layout` and `placement` validators, which report `SUI-LAYOUT-TYPE`, `-SETTING`, `-VALUE`, `-FIELD`, `-PLACEMENT` and `-REQUIRED` for unknown or disallowed types, settings and fields, `SUI-LAYOUT-UNSUPPORTED` for a `layout` on a component whose shape does not support it, `SUI-LAYOUT-PARENT` for a `placement` under a parent that has neither a layout nor a placement shape (naming the parent), and `SUI-LAYOUT-ROOT` for a `placement` on the app root. Composed components are checked under `$.composed.<name>`. `validateNode` ignores `layout`; the layout validator reports it.
-
-A component whose shape sets `"layout": true` marks the element that holds its children with `<div layout-host="" />` in its view; the build rejects a layout-capable component without a `layout-host`, and a `layout-host` in a component that does not support `layout`, as `SUI-BUILD-TEMPLATE` naming the view file. `<sui-node>` writes `layout`, `layout-<setting>` attributes and `--layout-<setting>` custom properties on the `layout-host`, and `placement` as attributes (`region="nw"`, `col="2"`, `row-span="2"`) on each child. The build prepends one stylesheet per layout type (`generateLayoutSheets`, `src/dom/layout/`), generated from the closed lists, to every layout-capable component, so changing `layout` or `placement` in state rearranges the children with no component code. The `layout-host` sets `container-type: inline-size`, so keep it a block-level box: a host that sizes to its content collapses to zero width.
-
-**Breakpoints.** `BREAKPOINTS` is `sm` 480, `md` 768, `lg` 1024 and `xl` 1280 px of container width. A `grid`, `row` or `region` with `collapseBelow` stacks its children as one column in key order when its container is narrower than that width; without `collapseBelow` it never collapses. A container query cannot restyle its own container, so the sheet makes the component host `display: block; container-type: inline-size` and the queries restyle the `layout-host` inside it. The width compared is the host's content box, so the host's own padding is not counted. A nested layout host responds to its own component host's width.
-
-**Shrinking.** In a `row` with at least one growing item (`grow` 1 or more), the growing items take the squeeze when the row runs short of space and the other items keep their content width, so a label, a badge or an amount beside a growing text is never cut. A `row` with no growing item shrinks every item, as plain flex does.
-
-Limits: `grow` has rules for whole numbers 0 to 12 only; `adhoc` placement (`x`, `y`, `width`, `height`) uses typed `attr()`, so it needs a browser that supports it (Chromium 133 and later), and the `adhoc` container needs its own height because its children are absolutely positioned; empty tracks of a `region` layout still take the gap.
-
-## Convention scan
-
-`scanLibrary(fileMap)` turns a component library folder into a typed list of components by file convention alone. The
-file map is a record of relative path (forward slashes) to content; only the paths are read, so it needs no file system
-and no DOM.
-
-    <group>/<name>/<name>.<role>.<ext>
-
-| Role | File |
-| --- | --- |
-| view | `<name>.view.html` |
-| css | `<name>.view.css` |
-| controller | `<name>.controller.ts` |
-| state | `<name>.state.json` |
-| composed | `<name>.composed.json` |
-| locale | `<name>.locale.<code>.json` |
-
-- The folder name is the component name, camel-cased for state (`text-field` gives `textField`); the tag is `ui-` plus
-  the folder name. Folder names are lower-case kebab. Parent folders are grouping only and become `group`.
-- A folder is root (`view.html` and `state.json`) or composed (`composed.json`), never both.
-- Result: `{ components, errors }`. Each component is `{ name, tier, tag, group, files, locales }`, sorted by name. A
-  component with any problem is left out and its errors are reported; the others are still returned.
-- Errors: `SUI-BUILD-FILE` (a file outside a component folder), `SUI-BUILD-ROLE` (an unknown role or a file name
-  different from its folder), `SUI-BUILD-NAME` (a folder name that is not lower-case kebab), `SUI-BUILD-DUPLICATE` (two
-  components with the same name, including a root and a composed one; both files named), `SUI-BUILD-TIER` (root and
-  composed files in one folder) and `SUI-BUILD-MISSING` (a root component without its view or state file).
-
-## Exposed paths of a composed component
-
-`exposes` in a `*.composed.json` (or in a document's `composed` entry) maps an override path to what it changes: `"footer.children.confirm.tone": "Confirm button tone"`. It is the interface the minion reads in `ui_component_get`.
-
-- `parseComposed(json, file)` returns the default tree without `exposes`, the `exposes` list and `SUI-BUILD-SHAPE` or `SUI-BUILD-EXPOSES` errors (an `exposes` that is not an object, a path with an empty segment, a description that is empty or not a string). `checkComposedExposes(parsed, library, file)` then reports each path that resolves nowhere, with the file. `buildLibrary` runs both and a component with an error gets no catalog entry or module.
-- A path resolves when every segment is a key of the resolved default tree (nested composed components are expanded), or when the last segment is a property, slot, `children` or `layout` the nested node's shape declares (`body.children` on a form that has no children yet), or `on` / `on.<event>` for an event the shape declares.
-- A document's `composed` entries are checked the same way by `validateDocument`: `SUI-DOC-EXPOSES` at `$.composed.<name>.exposes.<path>` (or `$.composed.<name>.exposes` when the value is not an object).
-- `checkExposes(exposes, tree, library, composed?)` and `exposedPathResolves(resolved, path, library)` are the shared checks.
-
-## Resolving a node
-
-`resolveNode(node, library, composed?, { path? })` turns a node into one merged, fully resolved tree. It is pure and
-never throws; problems come back in `errors`.
-
-- A root component's node is merged over the shape's defaults. A composed component's node is merged over its default
-  tree; its values address nested nodes by path, such as `footer.children.confirm._title`.
-- Every nested node (`children` and node-typed slots) is resolved the same way, so a composed component can contain
-  another one.
-- Merging is deep and sparse. Arrays are replaced whole; `children`, slot maps and the entries of a keyed `map`
-  property (a table's `columns`) merge by key; `null` removes a default child, slot node or `map` entry
-  (`children.table.columns.actions: null`). Where the shape does not make the place a `map` property, `null` is a value
-  and stays one: a nullable property, `$.data`, or a `map` property set to `null` as a whole. A node that names a
-  different component replaces the node under it.
-- A composed file's `exposes` key is metadata and never reaches a resolved node. A node may still override a path that is not exposed; `exposes` is guidance, not a lock.
-- The document's `composed` entries win over the library; a name that is also a library name is `SUI-DOC-COMPOSED`
-  (`checkComposedNames`).
-- A composed component that contains itself through default trees is `SUI-NODE-CYCLE`, with the chain in the message;
-  an unknown component is `SUI-NODE-UNKNOWN`. Both carry the state path.
-- `instances` maps each state path where a composed component was expanded to the composed names, outermost first.
-
-```ts
-const { node, errors, instances } = resolveNode({ component: 'confirmDialog' }, library, document.composed);
-```
-
-## Links
-
-Code is in `src/core/links/`, exported from `@punyts/stateui-app/core`. A `<-key` property makes the node's `key` a
-store alias (`store.link`) of its target, so reads, writes and change events follow the data.
-
-- **`extractLinks(resolvedTree, { path? })`** returns `{ tree, links, linkedPaths, errors }`. `links` holds
-  `{ statePath, key, target }` for every `<-key` (in nodes and in nested objects such as map items; `on` entries are
-  skipped), `tree` is a copy without them. A target must start with `$.data` or `$row`, be the sync status (`$.runtime.sync`, `.mode`,
-  `.status` or `.waiting`), or be a node reference (`^name.path`, `.path`) to an exposed runtime property; `$.server` or a path below it is `SUI-LINK-SERVER`
-  (server-only), anything else is `SUI-LINK-TARGET`, an empty key is `SUI-NODE-NAME`. `linkedPaths` lists every linked property path (`statePath.key`); locale overlays and state snapshots exclude
-  them.
-- **Node references.** `^name.path` (nearest ancestor, the node itself included, named `name` or an instance of composed
-  component `name`) and `.path` (own subtree) may be a link target when the property they reach is `exposed` in that
-  node's shape: `"<-value": "^orders.current.customer"`. With `options.library` (and `instances`, the `resolveNode`
-  result) `extractLinks` resolves the reference to the runtime path, `^orders.current` giving
-  `$.runtime.nodes.app.…orders.current`. A node that does not exist, or whose shape has no such exposed property (not
-  exposed, or not there at all), is `SUI-LINK-MISSING` with the state path of the link. `..x`, absolute `$.app` targets
-  and any other form are `SUI-LINK-TARGET`. Without a library references are returned as written. Inside a row
-  template (a `row: true` slot or map-item field) relative references resolve against the node that owns the
-  template; `resolveRowLinks` takes `owner` (the owner's chain) for the same rule, and `library`.
-- **`applyLinks(store, links)`** calls `store.link(statePath.key, target)` and returns errors: `SUI-LINK-CYCLE` when the
-  target is the property, inside it, above it or loops through other links, `SUI-LINK-MISSING` otherwise, each with the
-  node path. It is idempotent per store (the same link twice does nothing; a new target re-points) and tries every link.
-  `disposeLinks(store, links)` unlinks what `applyLinks` created; listeners stay registered.
-- **`runtimePath(appPath)`** is the only place that builds a node's runtime path: `$.app.a.b` gives
-  `$.runtime.nodes.app.a.b`. `RUNTIME_PATHS` names `nodes`, `icons` and `empty`, which are separate keys.
-- **`resolveRowLinks(rowNode, rowPath, { path? })`** is `extractLinks` for one record-view slot: `$row.x` becomes
-  `<rowPath>.x` (for example `$.runtime.nodes.app.orders.slots.3.row.customer`) with `allowMissing: true`, so a missing
-  field reads as `undefined` and updates when it appears. Only `row` is re-pointed. `path` is the row node's state path
-  and defaults to the parent of `rowPath`.
-
-## `on` entries and targets
-
-A node's `on` maps an event its component declares to one command object or an ordered list of them.
-
-```json
-"on": { "press": [ { "command": "set", "target": "$.data.name", "value": "x" }, { "command": "close", "target": "$parent" } ] }
-```
-
-A command object is `{ command, target?, value? }`. `value` is the command's argument: what `set` writes, the key
-`select` takes, the payload `emit` sends. When `value` is absent, `emit` sends the event's payload.
-
-| Command | `target` | `value` |
-| --- | --- | --- |
-| `set` | a property to write (`$.data.name`, `.pressed`) | required |
-| `toggle` | a boolean property | none |
-| `emit` | the event name, such as `chat.send` (not resolved) | the payload |
-| a component command | a node; absent means the node itself | the argument |
-
-Targets: `^name.path` (nearest node, starting with the node itself, whose key is `name` or that is an instance of
-composed component `name`, then the path below it), `.path` (own subtree), `$parent` (nearest ancestor whose component
-declares the command), `$row` / `$row.path` (the record a row template's slot shows) and `$.app…` (absolute). Dot
-climbing (`..x`) is rejected.
-
-**`$row`.** Legal as a `target` and as a `value` (`"value": "$row.id"`) only inside a row template (the value of a
-`row: true` property or map-item field). It resolves through the slot's `row` alias, so `{ "command": "set", "target":
-"$.data.selected", "value": "$row.id" }` writes the id of the record the slot shows and `{ "command": "delete", "target":
-"$row" }` is a component command handled by the node that owns the template (the nearest node of its chain whose shape
-declares the command). Outside a row template `$row` is `SUI-ON-TARGET` (and `SUI-LINK-ROW` from `validateNode`). Other
-relative targets (`^name.path`, `.path`) inside a row template resolve against the owning node's `$.app` path, never
-against the slot's runtime path. `resolveTarget(target, chain, rootPath, rowPath?)` takes the row alias path (any marker
-when validating) and `findRowProvider` picks the owner for a command aimed at `$row`.
-
-`validateOn(resolveResult, library)` returns `SUI-ON-SHAPE` (an entry that is not a command object or a list of them),
-`SUI-ON-EVENT`, `SUI-ON-COMMAND`, `SUI-ON-VALUE` (a literal `value` of a command the target lists in `commandValues` that is not a key of that map, read from the node or its default; a `$` path or `{{ }}` value is not checked) and `SUI-ON-TARGET` errors with the state path. `parseTarget` and `resolveTarget` are
-exported so the runtime dispatcher uses the same rules.
-
-## Document validation
-
-`validateDocument(document, catalog, options?)` runs every structural check without a DOM and returns
-`{ valid, errors }`. `catalog` is a `ComponentLibrary` or the content of `catalog.json` (`libraryFromCatalog` converts
-it). `valid` ignores warnings. The function never throws; every error carries a state path (`$` when it concerns the
-whole document). `options.isIconName` checks icon names against the server's `icons.json`. `options.mode` (`standalone`,
-`persisted` or `full`) says how the app keeps its state: in `standalone` and `persisted` mode there is no app server, so
-every string of the document that names `$.server` or a path below it (an `on` target, a command value) is
-`SUI-DOC-SERVER`; `full` or no mode allows it.
-
-Order of checks:
-
-1. A value that is not an object, or cannot be serialised, is `SUI-DOC-SHAPE`.
-2. The closed limits (nodes, depth, bytes, data). A breach returns only the limit errors and nothing else runs, so an
-   oversized document is never resolved.
-3. Root keys and their types (`SUI-DOC-TYPE`; `runtime` and unknown keys are `SUI-DOC-KEY`), and a missing `app`
-   (`SUI-NODE-MISSING`).
-4. Integer-like keys in `children`, `options`, `columns`, `items`, `steps`, `messages` and every object under `data`
-   (`SUI-DOC-ORDER`). The `records` or `items` of a node that has an integer `total` are exempt: a paged record view
-   reads them by position, so the key is the position and key order carries nothing (`query` writes them this way).
-5. The `app` tree and each document `composed` tree: every component resolves, composed cycles, reserved names, each
-   merged node against its shape (`validateNode`), and `<-` links. A `$.data` target must exist, a node reference must
-   reach a property its component declares, and a node reference must reach an exposed runtime property (`SUI-LINK-MISSING`). Exposed properties are runtime
-   branches no link can have as its own key, so links cannot loop through node references.
-6. The registered plug-in validators, whose errors are merged.
-
-`registerDocumentValidator(name, (context) => BuildError[])` returns a function that removes it. `context` holds the
-`document`, the `library` and the resolved `tree` (`node`, `instances`). Validators run in registration order; the `on`
-validator (`validateOn`) is registered by default, and the layout, placement, theme and locale validators of epic 3
-register the same way. A validator that throws is reported as `SUI-DOC-VALIDATOR`. The `step` validator warns
-(`SUI-STATE-STEP`) when a node whose component has the number properties `min` and `step` (the number field) writes both
-as numbers with `step` above 0 and `min` not a multiple of `step`: the field counts its values from `min`, so `min: 0.01,
-step: 1` refuses 1250. Use `min: 0` or a step that divides `min`. It is a document validator because `validateNode`
-sees one property at a time and the rule relates two.
-
-Node fields inside map items (a table column's `cell`, a `descriptionList` item `node`) are resolved, validated against
-their component's shape and checked for `on` and links like any other node; those of a `row: true` field are row
-templates. `nodeChildren(node, path, shape)` (from `@punyts/stateui-app/core`) lists the nodes below a node this way.
-
-A runtime property that still has its default in a resolved node counts as not set; only a node that gives it another
-value is `SUI-STATE-RUNTIME`.
-
-## Dispatching `on` in the browser
-
-`createDispatcher({ host, store, library, instances?, rootPath?, hooks? })` listens on `host` (the element the store is
-mounted on) and runs the `on` entry of the node that raised an event. It returns `{ dispose() }`.
-
-**Events.** A root component raises an event on its own element, with `bubbles` and `composed` set; `detail` is the
-payload:
-
-    element.dispatchEvent(new CustomEvent('press', { detail, bubbles: true, composed: true }));
-
-The node is the one at the element's state path. An event the node's `on` does not mention does nothing.
-
-**Slots in the runtime branch.** An event raised by a node under `$.runtime.nodes` (a record-view slot, a table cell) runs
-the `on` entry of that runtime node. Its owner is the longest prefix of its app path that is a node of `$.app`; relative
-targets resolve against the owner's chain, and `$row` against the `row` alias of the nearest slot at or above the node
-(`<slot>.row`).
-
-**Commands.** An entry is one command or an ordered list. A failing command stops the list and reports, through
-`@punyts/core` and `hooks.onError`, with the node's state path: `SUI-RUN-ON-TARGET` (a target that does not resolve),
-`SUI-RUN-ON-COMMAND` (the store refuses a write, `toggle` meets a value that is not a boolean, a component command is not
-declared or not handled, a handler or `onEmit` throws) or `SUI-RUN-ON-SHAPE` (a malformed entry).
-
-- `set`: writes `value` to the target property or path.
-- `toggle`: negates the boolean at the target.
-- `emit`: calls `hooks.onEmit(target, payload)`. `target` is the event name; the payload is `value`, or the event's
-  `detail` when `value` is absent.
-- Any other command is a component command. The target defaults to the node itself; `$parent` is the nearest ancestor
-  whose shape declares the command.
-
-**Component command interface.** A root component lists its commands in the shape's `commands`. At run time its element
-carries a `commands` object with one synchronous function per listed command:
-
-```ts
-controller: ({ element }) => {
-    (element as CommandElement).commands = {
-        close: (value, payload) => { /* value: the command's value; payload: the event's detail */ }
-    };
-    return { dispose: () => { delete (element as CommandElement).commands; } };
-}
-```
-
-A command aimed at `$row` from a row template is also given the store path of the record as a third argument. The function
-throws to fail. The dispatcher does not search closed shadow roots.
-
-## Logic
-
-The `logic` root of a document holds **machines**, **rules** and decision **tables** that act on state changes with built-in commands, so a
-Save button saves and a count follows its records without an agent in the loop.
-
-```json
-"logic": {
-  "machines": {
-    "addContact": {
-      "state": "$.data.flags.phase", "initial": "editing",
-      "transitions": [
-        { "from": "editing", "when": { "path": "$.data.flags.saved", "is": true }, "to": "saving",
-          "do": [ { "command": "set", "target": "$.data.flags.saved", "value": false },
-                  { "command": "save-data", "into": "$.data.contacts", "value": { "form": "^entry" }, "as": "save" } ] },
-        { "from": "saving", "when": { "result": "save", "is": "accepted" }, "to": "editing",
-          "do": [ { "command": "reset", "target": "^entry" }, { "command": "notify", "target": "toast", "value": { "text": "Added" } } ] },
-        { "from": "saving", "when": { "result": "save", "is": "rejected" }, "to": "editing" }
-      ]
-    }
-  },
-  "rules": {
-    "count": { "when": { "path": "$.data.contacts" }, "do": [ { "command": "set", "target": "$.data.stats.count", "value": "{{ size($.data.contacts) }}" } ] },
-    "noDrafts": { "when": { "path": "$.data.contacts.{id}", "if": "$trigger.name == 'draft'" }, "do": [ { "command": "reject", "reason": "Draft is not a name" } ] },
-    "window": { "when": { "path": "$.app.children.contacts.window" }, "do": [ { "command": "query", "from": "$.data.contacts", "sort": "name", "window": "$trigger", "into": "^contacts" } ] }
-  }
-}
-```
-
-- **Triggers.** `path` is a state path whose steps may be `*` (one segment) or `{name}` (one segment, captured); it
-  matches a change at, below or above it. `result` is the `as` name of a `save-data` or `delete-data` command of the
-  same machine (or a `call`). `is` compares the value (or the result status, `accepted` or `rejected`), `was` the value
-  before the change (`$previous`), `if` is an expression. `debounce` (milliseconds) fires a path trigger once the path
-  has been quiet that long, with the last change. `after` (milliseconds, a machine transition with `from` only) fires
-  that long after the machine entered the state; an `after` transition that stays in its state repeats.
-- **Machines.** The current state is the value at `state` (`initial` is written when it has none). The first
-  transition of the current state whose trigger matches fires; `from` absent matches any state, `to` absent keeps it.
-- **Tables.** `tables.<name>` has `when`, `inputs` (names to values, read once and named `$<name>` in the rows) and
-  `rows` of `{ match?, if?, do }`. The first row whose `match` (input names to values) and `if` hold runs its
-  commands; a row with neither is the default and must be last. A table fires once per chain.
-  ```json
-  "shipping": { "when": { "path": "$.data.order" }, "inputs": { "country": "$.data.order.country", "total": "$.data.order.total" },
-    "rows": [ { "match": { "country": "NL" }, "if": "$total >= 50", "do": [ { "command": "set", "target": "$.data.order.shipping", "value": 0 } ] },
-              { "do": [ { "command": "set", "target": "$.data.order.shipping", "value": 5 } ] } ] }
-  ```
-- **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
-  `save-data` (a record into a data map, with a new key or `key`), `delete-data`, `pull-data` (a record into a form),
-  `query` (sort, filter and window a data map into a list's records, keyed by position (the key is the position in the sorted, filtered result, so a window
-  starting at 20 has the keys `20`, `21`, ...; the record's own key goes in its key field), and its `total`), `notify` (app
-  event `notify.<name>`), `emit` (to the server), `call` (a server procedure `target` with `value`; machines only and
-  Full mode only, `SUI-DOC-SERVER` elsewhere; the answer comes back as the result `as`, with `$result.value` or
-  `$result.reason`) and `reject`. A rule whose only command is `reject` is a **guard**:
-  it refuses the change.
-- **Values.** `{{ expression }}` templates; `$.path`, `^node.path` (a unique node key or composed name), `$trigger`,
-  `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
-  `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
-  `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,
-  `string`, `slice`, `now`, `today`. `slice(value, start, end?)` cuts a string, or the items of an array or
-  map, like JavaScript's `slice` (negative positions count from the end); `now()` is the UTC time as an ISO string and
-  `today()` the local date as `YYYY-MM-DD`, for a "due today" comparison.
-- **All or nothing.** A transition's commands run on a working copy and commit together. A failing command commits
-  nothing and raises `logic.failed` (`{ machine, from?, command?, reason }`) on the root node. A machine or rule fires
-  at most once per chain, a chain stops at depth 8, and command results start new chains after the current one.
-- **Where it runs.** `mountApp` runs it in the browser for Standalone and Persisted apps, for the store's own
-  (untagged) writes only, so writes that arrive through sync are not run again; logic writes carry the origin
-  `logic` and are synced. A refused change is undone. Full apps run it on the app server's authority
-  (`@punyts/stateui-mcp`). The engine itself (`createLogicEngine`, `createLogicIndex`, `readLogic`) has no
-  environment and runs on any `LogicHost`; the host's `schedule(ms, run)` (returning a cancel function) runs the timers
-  and its `call(name, payload)` answers `call` (with none, a call is rejected). Timers live in memory: they are armed
-  again when the engine starts and `engine.stop()` cancels them.
-, which is never integer-like. `slugifyName(raw, taken)`
+- **Names.** `isPartName(value)` accepts `^[a-z][a-z0-9-]{0,62}$`, which is never integer-like. `slugifyName(raw, taken)`
   lower-cases, turns other character runs into one `-`, prefixes a leading digit with `n`, keeps 63 characters and adds
   `-2`, `-3`, … while the name is taken.
 - **Reader.** `readBlueprint(json)` returns `{ blueprint, errors }`, with `blueprint` only when there are no errors. Each
@@ -816,11 +433,10 @@ Save button saves and a count follows its records without an agent in the loop.
   app reads (`{ kind, name }`) once. Pure: the result shares nothing with the inputs, so changing one theme part shows
   in every app assembled from it.
 - **Validating.** `validateApp(blueprint, parts, catalog, { name?, ...ValidateDocumentOptions })` assembles and runs
-  `validateDocument` on the shell document, then on each screen's root in the place of `$.app`, moving those errors to
-  `$.screens.{screen}.root`. Each error gains `part`: the owner component (`$.composed.{name}`), the first theme
+  `validateDocument` on the assembled document, which checks the shell at `$.app` and each screen at
+  `$.screens.{screen}`. Each error gains `part`: the owner component (`$.composed.{name}`), the first theme
   (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`) or the app. A component already reported
-  `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. Until `screens` is a document key, a screen's links
-  cannot point into the shell.
+  `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. The assembled document carries `start`.
 
 ## Starting an application: `mountApp`
 

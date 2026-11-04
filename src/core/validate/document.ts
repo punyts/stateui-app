@@ -1,6 +1,8 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isNodeValue, isObject } from '../resolve/merge.js';
+import { isPartName } from '../blueprint/names.js';
+import { FIELD_TYPES } from '../blueprint/types.js';
 import { DOCUMENT_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 
@@ -58,6 +60,8 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
         errors.push(buildError('SUI-NODE-MISSING', { path, statePath: path }));
     }
 
+    errors.push(...checkScreens(document));
+
     const composed = document['composed'];
     if (Object.hasOwn(document, 'composed')) {
         if (!isObject(composed)) {
@@ -69,6 +73,72 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
         }
     }
     return errors;
+}
+
+const SCREEN_KEYS = ['title', 'params', 'root'];
+const DECLARATION_KEYS = ['type', 'default', 'required', 'validators'];
+
+function screenError(path: string, reason: string): BuildError {
+    return buildError('SUI-DOC-SCREEN', { path, reason, statePath: path });
+}
+
+/** Why a screen's params are not typed declarations, or undefined */
+function paramsProblem(params: JsonValue): string | undefined {
+    if (!isObject(params)) return '"params" must be an object of typed declarations';
+    for (const [name, declaration] of Object.entries(params)) {
+        if (!isObject(declaration)) return `param "${name}" must be a typed declaration`;
+        const unknown = Object.keys(declaration).find((key) => !DECLARATION_KEYS.includes(key));
+        if (unknown !== undefined) return `param "${name}" has the unknown key "${unknown}"`;
+        if (!(FIELD_TYPES as readonly JsonValue[]).includes(declaration['type'] ?? null)) return `param "${name}" needs a type: ${FIELD_TYPES.join(', ')}`;
+    }
+    return undefined;
+}
+
+/**
+ * The `screens` and `start` keys: `screens` maps part names to `{ title?, params?, root }` with a node as `root`, and
+ * `start` names one of them; one without the other is an error. Each problem is `SUI-DOC-SCREEN` at the screen's path
+ */
+function checkScreens(document: Record<string, JsonValue>): BuildError[] {
+    const errors: BuildError[] = [];
+    const hasScreens = Object.hasOwn(document, 'screens');
+    const screens = document['screens'];
+    if (hasScreens && !isObject(screens)) errors.push(wrongType('screens', '$.screens'));
+    if (isObject(screens)) {
+        if (Object.keys(screens).length === 0) errors.push(screenError('$.screens', 'an app with screens needs at least one'));
+        for (const [name, screen] of Object.entries(screens)) {
+            const path = `$.screens.${name}`;
+            if (!isPartName(name)) errors.push(screenError(path, `"${name}" is not a screen name (lower-case letters, digits and -)`));
+            if (!isObject(screen)) {
+                errors.push(screenError(path, 'a screen is { title?, params?, root }'));
+                continue;
+            }
+            const unknown = Object.keys(screen).filter((key) => !SCREEN_KEYS.includes(key));
+            for (const key of unknown) errors.push(screenError(path, `unknown key "${key}"`));
+            if (screen['title'] !== undefined && typeof screen['title'] !== 'string') errors.push(screenError(path, '"title" must be text'));
+            if (!isNodeValue(screen['root'])) errors.push(screenError(path, 'a screen needs a "root" node'));
+            const problem = screen['params'] === undefined ? undefined : paramsProblem(screen['params']);
+            if (problem !== undefined) errors.push(screenError(path, problem));
+        }
+    }
+
+    const start = document['start'];
+    if (Object.hasOwn(document, 'start')) {
+        if (typeof start !== 'string') errors.push(wrongType('start', '$.start'));
+        else if (!hasScreens) errors.push(screenError('$.start', '"start" needs "screens"'));
+        else if (isObject(screens) && !Object.hasOwn(screens, start)) errors.push(screenError('$.start', `"${start}" names no screen`));
+    } else if (hasScreens) {
+        errors.push(screenError('$.start', 'an app with screens needs "start"'));
+    }
+    return errors;
+}
+
+/** The screen root nodes of a document, by screen name, with the state path of each root */
+export function screenRoots(document: Record<string, JsonValue>): { name: string; path: string; root: JsonValue }[] {
+    const screens = document['screens'];
+    if (!isObject(screens)) return [];
+    return Object.entries(screens)
+        .filter(([, screen]) => isObject(screen) && isNodeValue(screen['root']))
+        .map(([name, screen]) => ({ name, path: `$.screens.${name}`, root: (screen as Record<string, JsonValue>)['root'] as JsonValue }));
 }
 
 interface Frame {
@@ -94,6 +164,7 @@ export function checkOrderedKeys(document: Record<string, JsonValue>): BuildErro
     };
 
     push(document['app'], '$.app', false);
+    for (const screen of screenRoots(document)) push(screen.root, screen.path, false);
     if (isObject(document['composed'])) {
         for (const [name, tree] of Object.entries(document['composed'])) push(tree, `$.composed.${name}`, false);
     }

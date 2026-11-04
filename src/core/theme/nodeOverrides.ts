@@ -167,6 +167,7 @@ export function validateNodeThemes(context: DocumentValidationContext, component
     const types = typeTable(components);
     const check = (node: Node, path: string): void => checkTheme(node, path, types, errors);
     walk(context.tree.node, APP_PATH, context.library, check);
+    for (const [name, tree] of Object.entries(context.screens ?? {})) walk(tree.node, `$.screens.${name}`, context.library, check);
     const composed = context.document.composed;
     if (composed === undefined || !isObject(composed as JsonValue)) return errors;
     for (const [name, tree] of Object.entries(composed)) {

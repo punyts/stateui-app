@@ -13,11 +13,6 @@ export interface ValidateAppOptions extends ValidateDocumentOptions {
     name?: string;
 }
 
-const APP_PATH = '$.app';
-
-/** `$.app` as a whole path segment, in a state path or a message */
-const APP_SEGMENT = /\$\.app(?![A-Za-z0-9_-])/g;
-
 /** The part that holds a state path of the assembled document */
 function partOf(path: string, document: AppDocument, blueprint: AppBlueprint, app: PartRef): PartRef {
     const [root, name] = path.split('.').slice(1);
@@ -33,16 +28,9 @@ function partOf(path: string, document: AppDocument, blueprint: AppBlueprint, ap
     return app;
 }
 
-/** An error found with a screen's root in the place of `$.app`, moved to the screen's path */
-function onScreen(error: BuildError, screen: string): BuildError {
-    const path = `$.screens.${screen}.root`;
-    return { ...error, message: error.message.replace(APP_SEGMENT, path), statePath: error.statePath?.replace(APP_SEGMENT, path) };
-}
-
 /**
- * Assembles an app and checks the result with `validateDocument`: the shell as `$.app` with the rest of the document,
- * then each screen's root in the place of `$.app`, keeping only the errors inside the screen and moving them to
- * `$.screens.{screen}.root`. Each error names the part that holds it: an owner component (`$.composed.{name}`), the
+ * Assembles an app and checks the result with `validateDocument`, which checks the shell at `$.app` and each screen's
+ * root at `$.screens.{screen}`. Each error names the part that holds it: an owner component (`$.composed.{name}`), the
  * first theme (`$.theme`, `$.themes`), a dataset (`$.data.{binding}`), or the app itself. The `SUI-USES-MISSING`
  * errors of assembling come first
  */
@@ -58,19 +46,12 @@ export function validateApp(
         : (catalog as ComponentLibrary);
     const app: PartRef = { kind: 'apps', name };
     const assembled = assembleApp(blueprint, parts, { library });
-    const { screens, ...shellDocument } = assembled.document;
 
     // A component assembling already reported missing is not reported again at each node that names it
     const missing = new Set(assembled.errors.flatMap((error) => (error.component === undefined ? [] : [error.component])));
     const reported = (error: BuildError): boolean => !(error.code === 'SUI-NODE-UNKNOWN' && error.component !== undefined && missing.has(error.component));
 
-    const found: BuildError[] = [...assembled.errors, ...validateDocument(shellDocument, library, documentOptions).errors.filter(reported)];
-    for (const [screen, value] of Object.entries(screens ?? {})) {
-        const result = validateDocument({ ...shellDocument, app: value.root }, library, documentOptions);
-        for (const error of result.errors.filter(reported)) {
-            if (error.statePath === APP_PATH || error.statePath?.startsWith(`${APP_PATH}.`)) found.push(onScreen(error, screen));
-        }
-    }
+    const found: BuildError[] = [...assembled.errors, ...validateDocument(assembled.document, library, documentOptions).errors.filter(reported)];
 
     const errors: AppValidationError[] = found.map((error) => ({ ...error, part: partOf(error.statePath ?? '$', assembled.document, blueprint, app) }));
     return { valid: isValid(errors), errors, document: assembled.document, uses: assembled.uses };

@@ -6,7 +6,8 @@ import { resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary, LibraryEntry } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
 import type { AppDocument, JsonObject, JsonValue, Node } from '../types.js';
-import { checkOrderedKeys, checkRoot, checkServerUse } from './document.js';
+import { checkOrderedKeys, checkRoot, checkServerUse, screenRoots } from './document.js';
+import type { ResolvedTree } from '../on/index.js';
 import { documentValidators } from './registry.js';
 import type { CatalogSource, DocumentValidation, ValidateDocumentOptions } from './types.js';
 import { checkTree } from './tree.js';
@@ -60,6 +61,13 @@ function runChecks(
     const resolved = resolveNode(app as Node, library, composed);
     errors.push(...resolved.errors, ...checkTree(resolved.node, resolved.instances, APP_PATH, library, data, options));
 
+    const screens: Record<string, ResolvedTree> = {};
+    for (const screen of screenRoots(document)) {
+        const result = resolveNode(screen.root as Node, library, composed, { path: screen.path });
+        errors.push(...result.errors, ...checkTree(result.node, result.instances, screen.path, library, data, options));
+        screens[screen.name] = { node: result.node, instances: result.instances };
+    }
+
     for (const [name, tree] of Object.entries(composed)) {
         if (!isObject(tree) || typeof tree['component'] !== 'string') continue;
         const path = `$.composed.${name}`;
@@ -78,7 +86,7 @@ function runChecks(
         }
     }
 
-    const context = { document: document as unknown as AppDocument, library, tree: { node: resolved.node, instances: resolved.instances } };
+    const context = { document: document as unknown as AppDocument, library, tree: { node: resolved.node, instances: resolved.instances }, screens };
     for (const [name, validator] of documentValidators()) {
         try {
             errors.push(...validator(context));

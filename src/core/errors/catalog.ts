@@ -35,6 +35,7 @@ export const ERROR_CATALOG = {
         template: 'The document uses {target} at {path}, which needs Full mode (an app server), and the app runs in {name} mode'
     },
     'SUI-DOC-VALIDATOR': { template: 'Validator "{name}" failed while checking the document' },
+    'SUI-DOC-SCREEN': { template: 'Screen entry at {path} is not valid: {reason}' },
     'SUI-DOC-ORDER': { template: 'Key "{key}" at {path} is integer-like and would be reordered; use a prefixed key' },
     'SUI-DOC-LIMIT-NODES': { template: 'The document has {actual} nodes; the limit is {limit}' },
     'SUI-DOC-LIMIT-DEPTH': { template: 'Nodes nest {actual} levels deep at {path}; the limit is {limit}' },

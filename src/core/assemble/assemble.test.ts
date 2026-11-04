@@ -22,6 +22,7 @@ describe('assembleApp', () => {
         expect(errors).toEqual([]);
         expect(document.app).toEqual(STORE_APP.shell);
         expect(Object.keys(document.screens ?? {})).toEqual(['home', 'product']);
+        expect(document.start).toBe('home');
         expect(document.screens?.['product']?.params).toEqual({ id: { type: 'string', required: true } });
         expect(document.theme).toEqual({ tokens: { color: { brand: '#204080' } } });
         expect(document.themes).toEqual({ dark: { kind: 'mode', tokens: { color: { brand: '#8090c0' } } } });
@@ -156,21 +157,21 @@ describe('validateApp', () => {
         const blueprint: AppBlueprint = { start: 'home', shell, screens: { home: { root: { component: 'panel' } } }, locales: { de: {} } };
 
         const app = validateApp(blueprint, {}, STORE_LIBRARY);
-        const single = validateDocument({ app: shell, locales: { de: {} } }, STORE_LIBRARY);
+        const single = validateDocument({ app: shell, screens: { home: { root: { component: 'panel' } } }, start: 'home', locales: { de: {} } }, STORE_LIBRARY);
 
         expect(single.errors.length).toBeGreaterThan(0);
         expect(app.errors.map(({ part: _part, ...error }) => error)).toEqual(single.errors);
         expect(app.valid).toBe(single.valid);
     });
 
-    it('should move an error inside a screen to the screen path and name the app as its part', () => {
+    it('should report an error inside a screen at the screen path and name the app as its part', () => {
         const blueprint = copy(STORE_APP);
         (blueprint.screens['home']?.root.children as JsonObject)['bad'] = { component: 'text', wrong: 1 };
 
         const result = validateApp(blueprint, STORE_PARTS, STORE_LIBRARY, { name: 'store' });
 
         expect(result.errors.length).toBeGreaterThan(0);
-        expect(result.errors.every((error) => error.statePath?.startsWith('$.screens.home.root.children.bad'))).toBe(true);
+        expect(result.errors.every((error) => error.statePath?.startsWith('$.screens.home.children.bad'))).toBe(true);
         expect(result.errors.every((error) => !error.message.includes('$.app'))).toBe(true);
         expect(result.errors[0]?.part).toEqual({ kind: 'apps', name: 'store' });
     });
@@ -183,7 +184,7 @@ describe('validateApp', () => {
 
         // As for a single document, the error is reported in the component and again where an instance expands it
         const inComponent = result.errors.filter((error) => error.statePath?.startsWith('$.composed.product-card.'));
-        const atInstance = result.errors.filter((error) => error.statePath?.startsWith('$.screens.product.root.children.card.'));
+        const atInstance = result.errors.filter((error) => error.statePath?.startsWith('$.screens.product.children.card.'));
 
         expect(inComponent.length).toBeGreaterThan(0);
         expect(inComponent.every((error) => error.part.kind === 'components' && error.part.name === 'product-card')).toBe(true);

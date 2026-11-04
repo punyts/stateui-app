@@ -24,7 +24,10 @@ export function documentValidators(): [string, DocumentValidator][] {
     return [...validators.entries()];
 }
 
-registerDocumentValidator('on', (context) => validateOn(context.tree, context.library));
+registerDocumentValidator('on', (context) => [
+    ...validateOn(context.tree, context.library),
+    ...Object.entries(context.screens ?? {}).flatMap(([name, tree]) => validateOn(tree, context.library, { path: `$.screens.${name}` }))
+]);
 registerDocumentValidator('layout', validateLayouts);
 registerDocumentValidator('placement', validatePlacements);
 registerDocumentValidator('step', validateSteps);

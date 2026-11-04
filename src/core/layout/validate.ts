@@ -45,6 +45,7 @@ function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Ch
 /** The trees to check: the resolved `app` tree and every composed tree on its own */
 export function forEachTree(context: DocumentValidationContext, check: Check): void {
     walk(context.tree.node, APP_PATH, context.library, check);
+    for (const [name, tree] of Object.entries(context.screens ?? {})) walk(tree.node, `$.screens.${name}`, context.library, check);
     const composed = context.document.composed;
     if (composed === undefined || !isObject(composed as JsonValue)) return;
     for (const [name, tree] of Object.entries(composed)) {

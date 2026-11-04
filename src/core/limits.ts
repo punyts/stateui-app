@@ -8,7 +8,7 @@ import type { AppDocument } from './types.js';
  * A document over any of them is rejected before any other check runs
  */
 
-/** Most nodes in a document, counting `app` and every composed tree */
+/** Most nodes in a document, counting `app`, every screen root and every composed tree */
 export const MAX_NODES = 2000;
 
 /** Most node levels from a tree root (a root is level 1) */
@@ -93,6 +93,11 @@ export function checkLimits(document: AppDocument): BuildError[] {
     if (errors.length > 0) return errors;
 
     const roots: Frame[] = [{ value: document.app, depth: 0, path: '$.app' }];
+    if (isRecord(document.screens)) {
+        for (const [name, screen] of Object.entries(document.screens)) {
+            if (isRecord(screen)) roots.push({ value: screen.root, depth: 0, path: `$.screens.${name}` });
+        }
+    }
     if (isRecord(document.composed)) {
         for (const [name, tree] of Object.entries(document.composed)) {
             roots.push({ value: tree, depth: 0, path: `$.composed.${name}` });
