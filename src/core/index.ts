@@ -234,3 +234,5 @@ export type {
     ReadLogicOptions,
     ReadLogicResult
 } from './logic/index.js';
+export { BM25_B, BM25_K1, FIELD_WEIGHTS, STOP_WORDS, SYNONYM_GROUPS, createSearchIndex, stem, synonymExpander, tokenize, words } from './search/index.js';
+export type { SearchEntry, SearchFields, SearchHit, SearchIndex, SearchOptions, SynonymExpander } from './search/index.js';
