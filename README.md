@@ -11,7 +11,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
 
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN`, `SUI-SYNC` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-PATTERN`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN`, `SUI-SYNC` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
 - **Types.** `AppDocument` (`theme`, `themes`, `appThemes`, `locale`, `data`, `app`, `screens`, `start`, `composed`, `locales`, `logic`; `DOCUMENT_KEYS`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
 - **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
 
@@ -142,6 +142,17 @@ and no DOM.
 - A path resolves when every segment is a key of the resolved default tree (nested composed components are expanded), or when the last segment is a property, slot, `children` or `layout` the nested node's shape declares (`body.children` on a form that has no children yet), or `on` / `on.<event>` for an event the shape declares.
 - A document's `composed` entries are checked the same way by `validateDocument`: `SUI-DOC-EXPOSES` at `$.composed.<name>.exposes.<path>` (or `$.composed.<name>.exposes` when the value is not an object).
 - `checkExposes(exposes, tree, library, composed?)` and `exposedPathResolves(resolved, path, library)` are the shared checks.
+
+## Patterns
+
+A pattern is a ready tree for a shell or a screen, found by search and copied into an app. Its file is `<name>.pattern.json` under `patterns/<kind>/<name>/`, where the kind is `shell` or `screen` (`PATTERN_KINDS`). `src/core/convention/patterns.ts` reads, checks and applies one.
+
+- **Keys.** `summary` (one line, at most 120 characters), `purposes` (the `checkPurposes` rule of components), `tree` (a node), and optional `kind` (it must match the folder), `slots` and `params`. Paths in `slots` and `params` use the syntax of `exposes`, relative to the tree (`children.grid.pageSize`); there is no templating in the tree.
+- **Slots** map a name to `{ path, description }`: the node where the agent adds content after the pattern is applied.
+- **Params** map a name to `{ type, default?, required?, paths, description }`. `type` is one of `PATTERN_PARAM_TYPES` (`string`, `number`, `boolean`, `path`, a state path such as `$.data.products`); `paths` lists every tree path the value is written to. A param needs a `default` that fits its type, or `required: true`.
+- **`readPattern(json, file, kind)`** returns `{ pattern?, errors }`. Each problem is `SUI-PATTERN-SHAPE` with its path; an unknown key names the keys allowed there.
+- **`checkPattern(pattern, library, file)`** reports, as `SUI-PATTERN-SHAPE`: a component not in the library; a node of a root component that fails `validateNode` (the node error's code leads the reason; a composed node is not opened); a slot or param path that does not resolve (`exposedPathResolves`); a shell without exactly one `outlet`; a screen that holds one. `checkPatternPurposes(patterns)` reports a purpose two patterns share as `SUI-BUILD-PURPOSE-DUPLICATE`.
+- **`applyPattern(pattern, values?)`** returns `{ tree?, slots, errors }`: a copy of the tree with each value (or its default) written at each of its paths, and the slots as `{ name, path, description }`. An unknown param (the message lists the params), a missing required param or a value of the wrong type is `SUI-PATTERN-PARAM`, and no tree is returned. The pattern is not changed.
 
 ## Resolving a node
 
@@ -432,7 +443,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
 - **Types.** `AppBlueprint` (`title`, `uses`, `start`, `shell`, `screens`, `logic`, `locales`), `ThemePart`
   (base `tokens`, `overlays` by name with a `kind` of `OVERLAY_KINDS`), `LogicModule` (`needs`, `params` and the logic
   units), `ModelPart` (`fields`), `DatasetPart` (`model?`, `records`), `ComposedPart` (a tree, `exposes` and the search
-  keys) and `PatternPart` (types only). `PART_KINDS` lists the owner roots and `PartRef` names a part by kind and name;
+  keys) and `PatternPart` (read and checked under Patterns). `PART_KINDS` lists the owner roots and `PartRef` names a part by kind and name;
   the immutable `id` belongs to the storing adapter.
 - **Declarations.** Screen params, module params and model fields are `{ type, default?, required?, validators? }`, with
   `type` one of `FIELD_TYPES` (`string`, `number`, `integer`, `boolean`, `array`, `object`, `any`, `url`) and the

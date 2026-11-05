@@ -3,7 +3,7 @@ export type { DeclarationProblem } from './declaration.js';
 export { isPartName, slugifyName } from './names.js';
 export { readBlueprint } from './read.js';
 export type { ReadBlueprintResult } from './read.js';
-export { FIELD_TYPES, PART_KINDS } from './types.js';
+export { FIELD_TYPES, PART_KINDS, PATTERN_KINDS, PATTERN_PARAM_TYPES } from './types.js';
 export type {
     AppBlueprint,
     BlueprintScreen,
@@ -21,7 +21,9 @@ export type {
     ParamDeclaration,
     PartKind,
     PartRef,
+    PatternKind,
     PatternParam,
+    PatternParamType,
     PatternPart,
     PatternSlot,
     PersonaBinding,

@@ -135,9 +135,19 @@ export interface PatternSlot {
     description: string;
 }
 
+/** The kinds of pattern: a shell (the frame with one outlet) or a screen */
+export const PATTERN_KINDS = ['shell', 'screen'] as const;
+
+export type PatternKind = (typeof PATTERN_KINDS)[number];
+
+/** The types of a pattern param; `path` is a state path string, such as `$.data.products` */
+export const PATTERN_PARAM_TYPES = ['string', 'number', 'boolean', 'path'] as const;
+
+export type PatternParamType = (typeof PATTERN_PARAM_TYPES)[number];
+
 /** A value a pattern takes, written at its paths */
 export interface PatternParam {
-    type: FieldType;
+    type: PatternParamType;
     default?: JsonValue;
     required?: boolean;
     paths: string[];
@@ -146,7 +156,7 @@ export interface PatternParam {
 
 /** A shell or screen pattern (the `*.pattern.json` format); the kind stands in for a category */
 export interface PatternPart {
-    kind: 'shell' | 'screen';
+    kind: PatternKind;
     summary: string;
     purposes: string[];
     tree: Node;

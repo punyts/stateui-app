@@ -45,15 +45,20 @@ export type {
     ValidatorOptions
 } from './shape/index.js';
 export {
+    applyPattern,
     checkComposedExposes,
     checkExposes,
+    checkPattern,
+    checkPatternPurposes,
     exposedPathResolves,
     EXPOSES_KEY,
+    fitsParamType,
     parseComposed,
+    readPattern,
     scanLibrary,
     withoutExposes
 } from './convention/index.js';
-export type { ExposedPath, ExposesIssue, ParsedComposed } from './convention/index.js';
+export type { AppliedSlot, ApplyPatternResult, ExposedPath, ExposesIssue, ParsedComposed, PatternPurposes, ReadPatternResult } from './convention/index.js';
 export type { ComponentFiles, ComponentTier, FileMap, ScanResult, ScannedComponent } from './convention/index.js';
 export { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks, resolveRowLinks, runtimePath } from './links/index.js';
 export type { ExtractOptions, ExtractResult, Link, LinkStore, ReferenceOptions, RowLinkOptions } from './links/index.js';
@@ -268,6 +273,8 @@ export type { SearchEntry, SearchFields, SearchHit, SearchIndex, SearchOptions, 
 export {
     FIELD_TYPES,
     PART_KINDS,
+    PATTERN_KINDS,
+    PATTERN_PARAM_TYPES,
     declarationProblems,
     isFieldType,
     isKeyName,
@@ -295,7 +302,9 @@ export type {
     ParamDeclaration,
     PartKind,
     PartRef,
+    PatternKind,
     PatternParam,
+    PatternParamType,
     PatternPart,
     PatternSlot,
     PersonaBinding,
