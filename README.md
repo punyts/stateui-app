@@ -11,7 +11,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
 
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-MODULE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
 - **Types.** `AppDocument` (`theme`, `themes`, `locale`, `data`, `app`, `composed`, `locales`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
 - **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
 
@@ -586,6 +586,17 @@ message.
   removed. Password-type fields are the caller's to name (E7.1).
 - The function returns what the store holds now; it does not know which values the user changed. The host loads the
   result over the document, so values equal to the document's are harmless.
+- **Persona instances** (`instance.ts`). An `AppInstance` is `{ app, screens, route?, theme?: { active }, data? }`:
+  what one persona did in an app, shaped like a `StateSnapshot` plus each screen's articulation by name.
+  `MountOptions.instance` lays it over the definition before the store exists (`layInstance`), and the document is
+  never written. In `app` and `screens` only keys the definition has are laid (an object recurses, any other value
+  replaces); content, `<-` links and node structure never are, and values of nodes or screens the app no longer has
+  are dropped silently. `data` is laid the same way but takes new keys (a persona's records). A route to a screen the
+  app no longer has, or whose params no longer fit, opens the start screen, and an active overlay name or kind the app
+  no longer has keeps the document's; each is a `SUI-INSTANCE-STALE` warning in `MountedApp.errors`. The theme step
+  lays the kept names over the document's (`MountContext.instanceActive`).
+- **`diffInstance(definition, current)`** returns only what differs, as a sparse object: objects recurse, other values
+  (arrays whole) come from `current`, and a key `current` no longer has is `null`. Equal states give `{}`.
 
 ## Sync modes and offline use
 

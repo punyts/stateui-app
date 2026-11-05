@@ -12,6 +12,7 @@ import { OUTLET_COMPONENT, ROUTE_PATH, findOutlet, initialRoute, isRouteRefusal,
 import { isNodeValue } from '../../core/resolve/merge.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
+import { layInstance } from '../../core/snapshot/index.js';
 import { PREFIXES } from '../../core/types.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
 import { validateDocument } from '../../core/validate/index.js';
@@ -212,16 +213,32 @@ export function mountApp(
         restoreRowLinks(links.tree, rows, path);
         screenTrees = { ...screenTrees, [name]: links.tree };
     }
+    const state = initialState(document, extracted.tree, mode, screenTrees);
+    let instanceActive: Record<string, string> = {};
+    if (options.instance !== undefined) {
+        const laid = layInstance(
+            { app: state.app as unknown as JsonObject, ...(screenTrees === undefined ? {} : { screens: screenTrees as unknown as Record<string, JsonObject> }), data: state.data },
+            options.instance,
+            document
+        );
+        state.app = laid.app as unknown as Node;
+        if (laid.screens !== undefined) state.screens = laid.screens as unknown as Record<string, Node>;
+        state.data = laid.data;
+        if (laid.route !== undefined) state.route = laid.route;
+        instanceActive = laid.active;
+        errors.push(...laid.warnings);
+    }
     const context: MountContext = {
         host,
         document,
         library,
         componentTokens: collected.tokens,
         instances: resolved.instances,
-        state: initialState(document, extracted.tree, mode, screenTrees),
+        state,
         options: baseOptions(library, collected.tokens),
         hooks,
-        mountOptions: options
+        mountOptions: options,
+        instanceActive
     };
 
     const steps = mountSteps();

@@ -78,7 +78,8 @@ function follow(context: StartedContext): () => void {
 }
 
 /**
- * Fills `$.theme` before the store exists: the active names over `{ mode: "light", brand: "default", motion: "full" }`
+ * Fills `$.theme` before the store exists: the instance's active names (`MountOptions.instance`) over the document's over
+ * `{ mode: "light", brand: "default", motion: "full" }`
  * (`system` resolved from the browser), the overlay of each kind merged over the default tree, and the document's
  * `theme.tokens` last, so the document's own values win at start. Once the store exists it applies overlays when
  * `$.theme.active` changes and follows the browser while `mode` or `motion` is `system`. The document was validated by then
@@ -86,7 +87,7 @@ function follow(context: StartedContext): () => void {
 registerMountStep(THEME_STEP, {
     prepare(context) {
         const theme = context.document.theme;
-        const active = { ...DEFAULT_ACTIVE, ...(theme?.active ?? {}) };
+        const active = { ...DEFAULT_ACTIVE, ...(theme?.active ?? {}), ...context.instanceActive };
         const { overlays } = buildOverlayCatalog(context.document.themes);
         const resolved = resolveSystem(active, context.hooks);
         const composed = mergeTokenTrees(composeOverlays(overlays, resolved), theme?.tokens ?? {});

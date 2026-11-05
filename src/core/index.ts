@@ -67,8 +67,8 @@ export type {
     ResolveResult,
     RootEntry
 } from './resolve/index.js';
-export { snapshotState } from './snapshot/index.js';
-export type { SnapshotOptions, SnapshotStore, StateSnapshot } from './snapshot/index.js';
+export { diffInstance, layInstance, snapshotState } from './snapshot/index.js';
+export type { AppInstance, InstanceBase, LaidInstance, SnapshotOptions, SnapshotStore, StateSnapshot } from './snapshot/index.js';
 export {
     COMMAND_KEYS,
     SYSTEM_COMMANDS,
