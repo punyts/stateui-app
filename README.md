@@ -470,6 +470,28 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`), the logic module of a binding or param error
   (the `part` assembling gave it) or the app. A component already reported
   `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. The assembled document carries `start`.
+- **Converting** (`src/core/convert/`). `splitDocument({ name, document, snapshot?, taken? })` turns one stored app of
+  the old single-document form into owner parts: `{ app?: { name, blueprint }, themes, models, datasets, components,
+  renamed, report }`. Pure, so each adapter runs it over its own storage.
+  - Names become slugs (`slugifyName`); a name in `taken` (by part kind) or already given in the run gets `-2`, `-3`, …;
+    the stored name stays as the blueprint's `title`. `renamed` lists each name that changed.
+  - With one hidden-strip `tabs` (`strip: "hidden"`), the shell is the app with an `outlet` in its place (keeping its
+    `placement`), each tab a screen titled by its `_tab`, and `start` the strip's `active` tab. An `on` command that
+    sets the strip's `active` to a tab name becomes a `navigate` to that screen. Without one, the shell is a bare
+    `outlet`, which takes the root's app-event `on` entries, and the whole tree is the screen `main`.
+  - State paths into moved nodes, whole values or inside `{{ }}`, follow them to `$.screens.{screen}` in nodes and
+    logic. The document's locale overlays split the same way: a tab's part goes to its screen, the rest stays the app's.
+  - `theme.tokens` and `themes` become a theme named after the app; `theme.active` and `locale` are choices, not
+    definitions, and are dropped.
+  - Each key of `data` becomes a dataset `{app}-{key}` with a model of the same name (`inferModel`), bound back under
+    the key. The snapshot's `data` wins over the document's; its articulation under `app` is dropped. A list becomes
+    records keyed by their `id` (a slug when the id is integer-like or repeated, `r{n}` without one).
+  - `composed` becomes owner components (`parseComposed`), and the nodes that name them follow the new names.
+  - `report` lists `{ path, reason }` for what does not convert, and then no parts come back: a document that already
+    has screens, a second hidden-strip `tabs`, a strip that logic or a node refers to other than through those `set`
+    commands, a strip with its own `on` or a `<-` link, data that holds no records (a scalar, a list of scalars, an
+    object of scalars) or integer-like record keys, and a composed tree or inferred model that does not read.
+    The app's `id` and `sync` mode are the adapter's to keep.
 - **Models** (`src/core/models/`). A model part is `{ fields }`, typed declarations by field name in order (`date` and
   `enum` are not types: a date is a `string` with a `pattern`, an enum a `oneOf`). `readModel(json)` returns
   `{ model, errors }`, each problem a `SUI-MODEL-SHAPE` at its path (`$` is the model): an unknown key, missing
