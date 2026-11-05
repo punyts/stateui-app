@@ -1,17 +1,25 @@
 import { report } from '@punyts/core';
+import { buildError } from '../../core/errors/index.js';
 import { cloneJson } from '../../core/resolve/index.js';
 import {
     OVERLAY_KINDS,
+    THEME_KEY,
+    activeAfterSwitch,
     buildOverlayCatalog,
+    hasAppTheme,
+    startTheme,
+    themeSource,
+    themeWords,
     composeOverlays,
     hasOverlay,
     mergeOverDefaults,
     mergeTokenTrees,
     overlayError
 } from '../../core/theme/index.js';
+import type { ThemeSource } from '../../core/theme/index.js';
 import type { JsonObject } from '../../core/types.js';
 import { registerMountStep } from '../mount/steps.js';
-import type { StartedContext } from '../mount/types.js';
+import type { MountContext, StartedContext } from '../mount/types.js';
 import { followSystem, resolveSystem } from './system.js';
 
 /** The names `$.theme.active` holds unless the document gives others */
@@ -46,13 +54,29 @@ function readActive(context: StartedContext): Record<string, string> {
 }
 
 /**
+ * The whole token tree of a theme: the overlays the active names pick (`system` resolved from the browser) merged over
+ * the default tree, the theme's own tokens last, and the groups of the component tokens opened
+ */
+function themeTokens(source: ThemeSource, active: Readonly<Record<string, string>>, context: MountContext): JsonObject {
+    const { overlays } = buildOverlayCatalog(source.overlays);
+    const resolved = resolveSystem(active, context.hooks);
+    const tokens = mergeOverDefaults(mergeTokenTrees(composeOverlays(overlays, resolved), source.tokens)) as JsonObject;
+    for (const token of context.componentTokens) openGroups(tokens, token.path);
+    return tokens;
+}
+
+/**
  * Keeps the tokens in step with `$.theme.active` once the store exists. A change to `active.<kind>` applies that
  * overlay (the browser's choice for `system`), and a change of a media query re-applies `mode` or `motion` while it is
- * `system`. A name that is not an overlay is reported and changes nothing
+ * `system`. A name that is not an overlay is reported and changes nothing. In an app with `appThemes`, a change to
+ * `active.theme` rebuilds the tokens from the new theme with the overlay names `activeAfterSwitch` keeps; a name the
+ * app does not have is `SUI-STATE-INVALID` and the active theme is set back
  */
 function follow(context: StartedContext): () => void {
-    const { store, hooks } = context;
-    const { overlays } = buildOverlayCatalog(context.document.themes);
+    const { store, hooks, document } = context;
+    let theme = context.state.theme.active[THEME_KEY];
+    let source = themeSource(document, theme);
+    let overlays = buildOverlayCatalog(source.overlays).overlays;
     const applied: Record<string, string> = resolveSystem(readActive(context), hooks);
 
     const sync = (kind: string): void => {
@@ -68,7 +92,30 @@ function follow(context: StartedContext): () => void {
         applied[kind] = name;
     };
 
+    const switchTheme = (): void => {
+        const path = `${ACTIVE_PATH}.${THEME_KEY}`;
+        const name: unknown = store.get(path);
+        if (name === theme) return;
+        if (!hasAppTheme(document, name)) {
+            const error = buildError('SUI-STATE-INVALID', { name: THEME_KEY, path, component: themeWords(document), statePath: path });
+            report.error('theme not switched', { code: error.code });
+            hooks.onError?.(error);
+            store.set(path, theme as never);
+            return;
+        }
+        theme = name;
+        source = themeSource(document, name);
+        overlays = buildOverlayCatalog(source.overlays).overlays;
+        const active = activeAfterSwitch(readActive(context), overlays, source.overlays);
+        Object.assign(applied, resolveSystem(active, hooks));
+        store.set(TOKENS_PATH, themeTokens(source, active, context) as never);
+        for (const kind of OVERLAY_KINDS) {
+            if (store.get(`${ACTIVE_PATH}.${kind}`) !== active[kind]) store.set(`${ACTIVE_PATH}.${kind}`, active[kind] as never);
+        }
+    };
+
     const listeners = OVERLAY_KINDS.map((kind): [string, () => void] => [`${ACTIVE_PATH}.${kind}`, () => sync(kind)]);
+    if (theme !== undefined) listeners.push([`${ACTIVE_PATH}.${THEME_KEY}`, switchTheme]);
     for (const [path, listener] of listeners) store.on(path, listener);
     const stop = followSystem(hooks, sync);
     return () => {
@@ -79,21 +126,20 @@ function follow(context: StartedContext): () => void {
 
 /**
  * Fills `$.theme` before the store exists: the instance's active names (`MountOptions.instance`) over the document's over
- * `{ mode: "light", brand: "default", motion: "full" }`
- * (`system` resolved from the browser), the overlay of each kind merged over the default tree, and the document's
- * `theme.tokens` last, so the document's own values win at start. Once the store exists it applies overlays when
- * `$.theme.active` changes and follows the browser while `mode` or `motion` is `system`. The document was validated by then
+ * `{ mode: "light", brand: "default", motion: "full" }` (`system` resolved from the browser), the overlay of each kind
+ * merged over the default tree, and the theme's tokens last, so its own values win at start. In an app with
+ * `appThemes`, `active.theme` names the theme (the instance's, the document's, or the first), whose tokens and overlays
+ * are used. Once the store exists it applies overlays when `$.theme.active` changes and follows the browser while
+ * `mode` or `motion` is `system`. The document was validated by then
  */
 registerMountStep(THEME_STEP, {
     prepare(context) {
-        const theme = context.document.theme;
-        const active = { ...DEFAULT_ACTIVE, ...(theme?.active ?? {}), ...context.instanceActive };
-        const { overlays } = buildOverlayCatalog(context.document.themes);
-        const resolved = resolveSystem(active, context.hooks);
-        const composed = mergeTokenTrees(composeOverlays(overlays, resolved), theme?.tokens ?? {});
-        const tokens = mergeOverDefaults(composed) as JsonObject;
-        for (const token of context.componentTokens) openGroups(tokens, token.path);
-        context.state.theme = { tokens, active };
+        const document = context.document;
+        const theme = startTheme(document, context.instanceActive[THEME_KEY]);
+        const active: Record<string, string> = { ...DEFAULT_ACTIVE, ...(document.theme?.active ?? {}), ...context.instanceActive };
+        if (theme === undefined) delete active[THEME_KEY];
+        else active[THEME_KEY] = theme;
+        context.state.theme = { tokens: themeTokens(themeSource(document, theme), active, context), active };
     },
     start: follow
 });

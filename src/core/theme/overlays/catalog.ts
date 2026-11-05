@@ -25,15 +25,16 @@ export function hasOverlay(overlays: ThemeOverlays, kind: string, name: string):
 /**
  * The shipped overlays with the document's `themes` map added after the same validation as `validateThemeOverlay`.
  * A name that is already a shipped overlay of the same kind, or `system` for `mode` and `motion`, is
- * `SUI-THEME-OVERLAY`. An overlay with an error is left out; warnings do not leave one out
+ * `SUI-THEME-OVERLAY`. An overlay with an error is left out; warnings do not leave one out. `base` is the state path
+ * the overlays are reported under (`$.appThemes.{name}.overlays` for a theme of `appThemes`)
  */
-export function buildOverlayCatalog(themes: Readonly<Record<string, ThemeOverlay>> | undefined): OverlayCatalog {
+export function buildOverlayCatalog(themes: Readonly<Record<string, ThemeOverlay>> | undefined, base = '$.themes'): OverlayCatalog {
     const overlays: Record<string, Record<string, TokenOverlay>> = {};
     for (const [kind, named] of Object.entries(SHIPPED_OVERLAYS)) overlays[kind] = { ...named };
     const errors: BuildError[] = [];
 
     for (const [name, theme] of Object.entries(themes ?? {})) {
-        const statePath = `$.themes.${name}`;
+        const statePath = `${base}.${name}`;
         const kind: unknown = theme.kind;
         const tokens: unknown = theme.tokens;
         if (typeof kind !== 'string' || !isOverlayKind(kind)) {

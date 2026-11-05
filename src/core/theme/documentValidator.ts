@@ -1,4 +1,5 @@
 import { buildError } from '../errors/index.js';
+import { THEME_KEY, hasAppTheme, themeSource, themeWords } from './appThemes.js';
 import type { BuildError } from '../errors/index.js';
 import { collectComponentTokens } from '../shape/componentTokens.js';
 import { registerDocumentValidator } from '../validate/registry.js';
@@ -60,12 +61,20 @@ export function validateThemeTokens(context: DocumentValidationContext): BuildEr
  * `mode` and `motion`. An unknown kind or name is `SUI-THEME-OVERLAY`
  */
 export function validateThemeOverlays(context: DocumentValidationContext): BuildError[] {
-    const { overlays, errors } = buildOverlayCatalog(context.document.themes);
-    const active: unknown = context.document.theme?.active;
+    const { document } = context;
+    const { overlays: own, errors } = buildOverlayCatalog(document.themes);
+    const active: unknown = document.theme?.active;
     if (typeof active !== 'object' || active === null || Array.isArray(active)) return errors;
+    const chosen = (active as Record<string, unknown>)[THEME_KEY];
+    // The overlay names are looked up in the theme `active.theme` names, when the app has it
+    const overlays = hasAppTheme(document, chosen) ? buildOverlayCatalog(themeSource(document, chosen).overlays).overlays : own;
     for (const [kind, name] of Object.entries(active)) {
         const statePath = `$.theme.active.${kind}`;
         if (typeof name !== 'string') continue;
+        if (kind === THEME_KEY && document.appThemes !== undefined) {
+            if (!hasAppTheme(document, name)) errors.push(buildError('SUI-STATE-INVALID', { name: kind, path: statePath, component: themeWords(document), statePath }));
+            continue;
+        }
         if (!isOverlayKind(kind)) errors.push(overlayError('kind', name, kind, statePath, statePath));
         else if (name === SYSTEM && SYSTEM_KINDS.includes(kind)) continue;
         else if (!hasOverlay(overlays, kind, name)) errors.push(overlayError('unknown', name, kind, statePath, statePath));
@@ -73,11 +82,33 @@ export function validateThemeOverlays(context: DocumentValidationContext): Build
     return errors;
 }
 
-/** The registered `theme` validator: the tokens and active names, the overlays, then every node's `theme` override */
+/**
+ * Checks each theme of `appThemes` as `theme.tokens` and `themes` are checked, at `$.appThemes.{name}.tokens` and
+ * `$.appThemes.{name}.overlays`
+ */
+export function validateAppThemes(context: DocumentValidationContext): BuildError[] {
+    const errors: BuildError[] = [];
+    for (const [name, theme] of Object.entries(context.document.appThemes ?? {})) {
+        const base = `$.appThemes.${name}`;
+        if (typeof theme !== 'object' || theme === null) continue;
+        const tokens: unknown = theme.tokens;
+        if (tokens !== undefined && (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens))) errors.push(wrongType('tokens', `${base}.tokens`));
+        else {
+            for (const error of validateTokens(theme.tokens ?? {}, { componentTokens: libraryTokens(context) })) {
+                errors.push(error.statePath === undefined ? error : { ...error, statePath: error.statePath.replace('$.theme.tokens', `${base}.tokens`) });
+            }
+        }
+        errors.push(...buildOverlayCatalog(theme.overlays, `${base}.overlays`).errors);
+    }
+    return errors;
+}
+
+/** The registered `theme` validator: the tokens and active names, the overlays, the app's themes, then every node's `theme` override */
 export function validateTheme(context: DocumentValidationContext): BuildError[] {
     return [
         ...validateThemeTokens(context),
         ...validateThemeOverlays(context),
+        ...validateAppThemes(context),
         ...validateNodeThemes(context, libraryTokens(context))
     ];
 }

@@ -19,7 +19,7 @@ export type { TypeLookup } from './value.js';
 export { mergeOverDefaults, validateTokens } from './validate.js';
 export type { ValidateTokensOptions } from './validate.js';
 export { THEME_VALIDATOR, validateThemeTokens } from './documentValidator.js';
-export { validateTheme, validateThemeOverlays } from './documentValidator.js';
+export { validateAppThemes, validateTheme, validateThemeOverlays } from './documentValidator.js';
 export { validateNodeThemes } from './nodeOverrides.js';
 export {
     KIND_GROUPS,
@@ -38,3 +38,5 @@ export {
 } from './overlays/index.js';
 export type { OverlayCatalog, OverlayKind, ThemeOverlays, TokenOverlay, ValidateOverlayOptions } from './overlays/index.js';
 export { DEFAULT_TOKEN_DESCRIPTIONS, TOKEN_DESCRIPTIONS_FILE } from './descriptions.js';
+export { THEME_KEY, activeAfterSwitch, appThemeNames, hasAppTheme, startTheme, themeSource, themeWords } from './appThemes.js';
+export type { ThemeSource } from './appThemes.js';

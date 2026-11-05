@@ -3,7 +3,7 @@ export { ERROR_CATALOG, ERROR_PREFIXES, TEMPLATE_PLACEHOLDERS, buildError, isVal
 export type { BuildError, CatalogEntry, ErrorCode, ErrorDetails, Severity, TemplatePlaceholder } from './errors/index.js';
 export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';
 export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, isAppEvent } from './types.js';
-export type { AppDocument, AppEventName, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
+export type { AppDocument, AppEventName, AppTheme, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {
     COMPONENT_CATEGORIES,
     MAX_PATTERN_INPUT,
@@ -132,13 +132,21 @@ export {
     SHIPPED_OVERLAYS,
     SYSTEM,
     SYSTEM_KINDS,
+    THEME_KEY,
     THEME_VALIDATOR,
+    activeAfterSwitch,
+    appThemeNames,
     buildOverlayCatalog,
     composeOverlays,
+    hasAppTheme,
     hasOverlay,
     isOverlayKind,
     mergeTokenTrees,
     overlayError,
+    startTheme,
+    themeSource,
+    themeWords,
+    validateAppThemes,
     validateNodeThemes,
     validateTheme,
     validateThemeOverlay,
@@ -152,6 +160,7 @@ export type {
     OverlayCatalog,
     OverlayKind,
     ThemeOverlays,
+    ThemeSource,
     TokenOverlay,
     ValidateOverlayOptions,
     TokenLayer,

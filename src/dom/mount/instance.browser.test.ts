@@ -54,6 +54,10 @@ const DOCUMENT = {
     },
     start: 'home',
     themes: { night: { kind: 'mode', tokens: { color: { surface: { base: '#101820' } } } } },
+    appThemes: {
+        plain: { tokens: {}, overlays: { night: { kind: 'mode', tokens: { color: { surface: { base: '#101820' } } } } } },
+        bold: { tokens: { color: { accent: { base: '#0030ff' } } }, overlays: { night: { kind: 'mode', tokens: { color: { surface: { base: '#000020' } } } } } }
+    },
     data: { bag: {} }
 } as unknown as AppDocument;
 
@@ -139,7 +143,7 @@ describe('a persona instance in mountApp', () => {
         expect(app.store?.get('$.theme.active.mode')).toBe('light');
     });
 
-    it('should never write the definition: a deep-frozen document mounts, takes interaction and disposes', () => {
+    it('should never write the definition: a deep-frozen document mounts, takes interaction and a theme switch, and disposes', () => {
         // Arrange
         const frozen = deepFreeze(JSON.parse(JSON.stringify(DOCUMENT)) as AppDocument);
         const instance = deepFreeze({ app: { children: { search: { value: 'lamp' } } }, screens: {}, data: { bag: { l1: { qty: 1 } } } } as AppInstance);
@@ -150,6 +154,7 @@ describe('a persona instance in mountApp', () => {
             app.store?.set('$.app.children.search.value' as never, 'chair' as never);
             app.store?.set('$.data.bag.l2' as never, { qty: 2 } as never);
             app.store?.set('$.theme.active.mode' as never, 'night' as never);
+            app.store?.set('$.theme.active.theme' as never, 'bold' as never);
             (find(host, 'x-ins-button') as Element).dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
             app.store?.set('$.screens.product.children.qty.value' as never, '5' as never);
             app.navigate('home');

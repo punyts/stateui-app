@@ -3,7 +3,7 @@ import type { BuildError } from '../errors/index.js';
 import { cloneJson, isObject } from '../resolve/merge.js';
 import { initialRoute, isRouteRefusal, routeTo } from '../route/index.js';
 import type { RouteState } from '../route/index.js';
-import { OVERLAY_KINDS, SYSTEM, SYSTEM_KINDS, buildOverlayCatalog, hasOverlay } from '../theme/index.js';
+import { OVERLAY_KINDS, SYSTEM, SYSTEM_KINDS, THEME_KEY, buildOverlayCatalog, hasAppTheme, hasOverlay, startTheme, themeSource } from '../theme/index.js';
 import type { OverlayKind } from '../theme/index.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { AppDocument, JsonObject, JsonValue } from '../types.js';
@@ -79,10 +79,15 @@ function stale(target: string, path: string, reason: string): BuildError {
  * The definition's starting values with a persona's instance laid over them. The base and the instance are never
  * changed. Values of nodes and screens the definition no longer has are dropped without a word: they are what a person
  * did with a part that is gone. A route to a screen the app no longer has (or whose params no longer fit) falls back to
- * the start route, and an active overlay name the app no longer has falls back to the document's; each is a
+ * the start route, a theme (`theme.active.theme`) the app no longer lists falls back to its first, and an active overlay
+ * name the theme the app opens with does not have falls back to the document's; each is a
  * `SUI-INSTANCE-STALE` warning
  */
-export function layInstance(base: InstanceBase, instance: AppInstance, document: Pick<AppDocument, 'screens' | 'start' | 'themes'>): LaidInstance {
+export function layInstance(
+    base: InstanceBase,
+    instance: AppInstance,
+    document: Pick<AppDocument, 'screens' | 'start' | 'theme' | 'themes' | 'appThemes'>
+): LaidInstance {
     const warnings: BuildError[] = [];
     const app = isObject(instance.app) ? layTree(base.app, instance.app) : (cloneJson(base.app) as JsonObject);
 
@@ -110,8 +115,16 @@ export function layInstance(base: InstanceBase, instance: AppInstance, document:
     }
 
     const active: Record<string, string> = {};
-    const { overlays } = buildOverlayCatalog(document.themes);
-    for (const [kind, name] of Object.entries(instance.theme?.active ?? {})) {
+    const given = instance.theme?.active ?? {};
+    const requested = given[THEME_KEY];
+    if (requested !== undefined && document.appThemes !== undefined) {
+        if (hasAppTheme(document, requested)) active[THEME_KEY] = requested;
+        else warnings.push(stale(`the theme "${requested}"`, `$.theme.active.${THEME_KEY}`, `the app opens its theme "${startTheme(document) as string}"`));
+    }
+    // The overlay names are looked up in the theme the app opens with
+    const { overlays } = buildOverlayCatalog(themeSource(document, startTheme(document, active[THEME_KEY])).overlays);
+    for (const [kind, name] of Object.entries(given)) {
+        if (kind === THEME_KEY && document.appThemes !== undefined) continue;
         const path = `$.theme.active.${kind}`;
         const known = (OVERLAY_KINDS as readonly string[]).includes(kind);
         if (known && (hasOverlay(overlays, kind, name) || (name === SYSTEM && SYSTEM_KINDS.includes(kind as OverlayKind)))) {

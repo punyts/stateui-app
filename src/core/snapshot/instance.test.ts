@@ -142,7 +142,48 @@ describe('layInstance', () => {
     });
 });
 
+describe('layInstance with the app themes', () => {
+    /** Two themes; only `sand` has the mode overlay `night` */
+    const THEMED = deepFreeze({
+        ...DOCUMENT,
+        themes: undefined,
+        appThemes: { sea: { tokens: {} }, sand: { tokens: {}, overlays: { night: { kind: 'mode', tokens: {} } } } }
+    }) as unknown as AppDocument;
+
+    it('should keep the instance theme and look its overlay names up in that theme', () => {
+        // Act
+        const laid = layInstance(BASE, { ...EMPTY, theme: { active: { theme: 'sand', mode: 'night' } } }, THEMED);
+
+        // Assert
+        expect(laid.warnings).toEqual([]);
+        expect(laid.active).toEqual({ theme: 'sand', mode: 'night' });
+    });
+
+    it('should drop a theme the app no longer lists with a warning, and the overlay names its first theme lacks', () => {
+        // Act
+        const laid = layInstance(BASE, { ...EMPTY, theme: { active: { theme: 'forest', mode: 'night' } } }, THEMED);
+
+        // Assert
+        expect(laid.active).toEqual({});
+        expect(laid.warnings.map((warning) => warning.message)).toEqual([
+            'The instance holds the theme "forest" at $.theme.active.theme, which the app no longer has; the app opens its theme "sea"',
+            'The instance holds the mode overlay "night" at $.theme.active.mode, which the app no longer has; the app keeps its own choice'
+        ]);
+    });
+});
+
 describe('diffInstance', () => {
+    it('should give the active theme after a switch', () => {
+        // Arrange
+        const definition = deepFreeze({ theme: { active: { theme: 'sea', mode: 'light' } } }) as unknown as JsonObject;
+
+        // Act
+        const diff = diffInstance(definition, { theme: { active: { theme: 'sand', mode: 'light' } } } as unknown as JsonObject);
+
+        // Assert
+        expect(diff).toEqual({ theme: { active: { theme: 'sand' } } });
+    });
+
     it('should return exactly the path and value of the one typed value that differs', () => {
         // Arrange
         const current = JSON.parse(JSON.stringify(BASE)) as JsonObject;

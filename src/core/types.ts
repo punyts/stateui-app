@@ -15,6 +15,12 @@ export interface ThemeOverlay {
     tokens: JsonObject;
 }
 
+/** One theme of an app with several: its base tokens and its overlays by name */
+export interface AppTheme {
+    tokens: JsonObject;
+    overlays?: Record<string, ThemeOverlay>;
+}
+
 /** The theme part of a document: token values and the active overlay name per kind */
 export interface ThemeState {
     tokens?: JsonObject;
@@ -35,6 +41,11 @@ export interface DocumentScreen {
 export interface AppDocument {
     theme?: ThemeState;
     themes?: Record<string, ThemeOverlay>;
+    /**
+     * Every theme an assembled app offers, by name, in the order of `uses.themes`; `$.theme.active.theme` picks one at
+     * run time. `theme.tokens` and `themes` stay the first theme's
+     */
+    appThemes?: Record<string, AppTheme>;
     locale?: string;
     data?: JsonObject;
     /** The shell when the app has screens */
@@ -64,7 +75,7 @@ export function isAppEvent(name: unknown): name is string {
     return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
 }
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic'] as const;
+export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {

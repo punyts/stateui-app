@@ -158,7 +158,8 @@ function bindModules(blueprint: AppBlueprint, parts: PartSource, assembler: Asse
 
 /**
  * Builds the document the runtime mounts from a blueprint and the owner's parts. The first theme of `uses.themes`
- * gives `theme.tokens` and `themes` (its overlays); every listed theme must exist. Each `uses.data` binding becomes
+ * gives `theme.tokens` and `themes` (its overlays), and `appThemes` carries every listed theme by name (tokens and
+ * overlays) for switching at run time; every listed theme must exist. Each `uses.data` binding becomes
  * `data.{binding}`: the dataset's records, or an empty map for a persona binding. Owner components named by a node of
  * the shell, a screen or another used owner component go into `composed` as their trees with `exposes`, without the
  * search keys; an owner component wins over a library component of the same name, as `composed` does. `app` is the
@@ -181,6 +182,12 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
         document.theme = { tokens: cloneJson(first.tokens) as JsonObject };
         if (first.overlays !== undefined) document.themes = cloneJson(first.overlays as unknown as JsonValue) as unknown as AppDocument['themes'];
     }
+    const listed: NonNullable<AppDocument['appThemes']> = {};
+    for (const name of themes) {
+        const part = Object.hasOwn(parts.themes ?? {}, name) ? parts.themes?.[name] : undefined;
+        if (part !== undefined) listed[name] = cloneJson(part as unknown as JsonValue) as unknown as NonNullable<AppDocument['appThemes']>[string];
+    }
+    if (Object.keys(listed).length > 0) document.appThemes = listed;
 
     const data: JsonObject = {};
     /** The model of each binding whose target exists; null for a dataset without a model */

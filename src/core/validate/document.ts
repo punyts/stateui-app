@@ -46,6 +46,7 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     const typed: [string, (value: JsonValue) => boolean][] = [
         ['theme', isObject],
         ['themes', (value) => isMapOf(value, isObject)],
+        ['appThemes', (value) => isMapOf(value, (entry) => isObject(entry) && isObject(entry['tokens'] ?? {}) && isObject(entry['overlays'] ?? {}))],
         ['locale', (value) => typeof value === 'string'],
         ['data', isObject],
         ['locales', (value) => isMapOf(value, isObject)],

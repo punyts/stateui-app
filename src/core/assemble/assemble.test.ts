@@ -180,6 +180,22 @@ describe('assembleApp', () => {
         expect(assembleApp(blueprint, parts).errors).toEqual([]);
     });
 
+    it('should carry every listed theme by name, and keep theme and themes the first one', () => {
+        // Arrange
+        const blueprint = copy(STORE_APP);
+        blueprint.uses = { ...blueprint.uses, themes: ['plain', 'store'] };
+
+        // Act
+        const { document, uses } = assembleApp(blueprint, STORE_PARTS);
+
+        // Assert
+        expect(Object.keys(document.appThemes ?? {})).toEqual(['plain', 'store']);
+        expect(document.appThemes?.['store']).toEqual(STORE_PARTS.themes?.['store']);
+        expect(document.theme).toEqual({ tokens: {} });
+        expect(document.themes).toBeUndefined();
+        expect(uses.filter((part) => part.kind === 'themes').map((part) => part.name)).toEqual(['plain', 'store']);
+    });
+
     it('should report a missing theme with the nearest names', () => {
         const blueprint = copy(STORE_APP);
         blueprint.uses = { ...blueprint.uses, themes: ['stor'] };

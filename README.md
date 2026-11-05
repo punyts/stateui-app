@@ -450,7 +450,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
 - **Assembling.** `assembleApp(blueprint, parts, { library? })` takes a `PartSource` (plain maps of `themes`, `modules`,
   `models`, `datasets` and `components` by name; no IO) and returns `{ document, errors, uses }`. The document is today's
   `AppDocument` plus `screens`: `app` is the shell, `theme.tokens` and `themes` (the overlays) come from the first of
-  `uses.themes`, `data.{binding}` holds the bound dataset's records (for a persona binding, the model's defaults over an
+  `uses.themes` (`appThemes` holds every listed theme by name), `data.{binding}` holds the bound dataset's records (for a persona binding, the model's defaults over an
   empty map: `applyDefaults(model, {})`), `composed` holds
   the owner components that a node of the shell, a screen or another used component names (their trees with `exposes`,
   without the search keys; an owner component wins over a library component of the same name), and `locales` are the
@@ -763,6 +763,18 @@ Code is in `src/core/theme/overlays/` (exported from `./core`) and `src/dom/them
 - **`system`.** `$.theme.active.mode: "system"` applies `light` or `dark` from `prefers-color-scheme` at start and when the query
   changes; `motion: "system"` applies `reduced` or `full` from `prefers-reduced-motion`. `$.theme.active.<kind>` stays `system`.
   Setting an explicit name stops following; setting `system` again resumes. The system never selects `contrast`.
+- **Several themes** (`core/theme/appThemes.ts`). An assembled app carries `appThemes`: every theme of `uses.themes` by
+  name, each `{ tokens, overlays? }`; `theme` and `themes` stay the first's, so a one-theme document mounts as before.
+  `$.theme.active.theme` names the active one (the instance's, then the document's `theme.active.theme`, then the first:
+  `startTheme`), whose tokens and overlays are used at start. Setting it (`set` in `on` or logic, `ui_state_set`)
+  rebuilds `$.theme.tokens` from the new theme with no reload. The overlay names carry over when the new theme has them
+  (`system` too); otherwise they fall back to its own first overlay of the kind, then `system` for `mode` and
+  `motion`, then the shipped `default` brand (`activeAfterSwitch`). A name the app does not list is
+  `SUI-STATE-INVALID` (through `hooks.onError`, naming the app's themes) and the store is set back. The document
+  validator checks each entry of `appThemes` at `$.appThemes.{name}` and `theme.active.theme` against the list. The
+  persona's choice is part of the instance (`MountOptions.instance.theme.active.theme`); a name no longer listed falls
+  back to the first theme with `SUI-INSTANCE-STALE`. The preview runtime's `theme` message still applies overlays of
+  the first theme.
 - **Environment.** `src/dom/theme/system.ts` is the only module that reads `matchMedia` (a test scans the source). `mountApp`'s `hooks`
   accept `matchMedia` (default `window.matchMedia`) so tests can fire a change; `dispose` removes the listeners. Without
   `matchMedia`, `system` means `light` and `full`.
