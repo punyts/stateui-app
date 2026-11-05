@@ -26,6 +26,7 @@ import { startBrowserLogic } from './logic.js';
 import { startScreens, writeRoute } from './screens.js';
 import type { ScreenView } from './screens.js';
 import { mountSteps } from './steps.js';
+import '../route/index.js';
 import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
 
 const DEFAULT_LOCALE = 'en';
@@ -219,7 +220,8 @@ export function mountApp(
         instances: resolved.instances,
         state: initialState(document, extracted.tree, mode, screenTrees),
         options: baseOptions(library, collected.tokens),
-        hooks
+        hooks,
+        mountOptions: options
     };
 
     const steps = mountSteps();

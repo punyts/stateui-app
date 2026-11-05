@@ -61,6 +61,11 @@ export interface RuntimeOptions {
     host?: Element;
     /** The locale overlays of the library's components (`<name>.locale.<code>.json`), used by the `locale` message; none when absent */
     componentOverlays?: ComponentOverlays;
+    /**
+     * Whether an app with screens keeps `$.route` in the URL fragment (`MountOptions.route`). False when absent: the
+     * runtime runs in a frame of its host, where a history entry would also move the host page's back button
+     */
+    route?: boolean;
 }
 
 /** How many messages the runtime dropped, by reason */
@@ -345,7 +350,7 @@ export function startRuntime(
                         postErrors([error]);
                     }
                 },
-                { mode: message.mode ?? 'standalone' }
+                { mode: message.mode ?? 'standalone', route: options.route ?? false }
             );
         } finally {
             unregister();

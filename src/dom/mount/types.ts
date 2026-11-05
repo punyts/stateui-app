@@ -50,6 +50,8 @@ export interface MountContext {
     /** The options given to `<sui-node>`; `prepare` may add `theme` and extend `reflect` */
     options: NodeOptions;
     hooks: DispatchHooks & SystemHooks;
+    /** The options `mountApp` was called with */
+    mountOptions: MountOptions;
 }
 
 /** What a step sees in `start`: the store is there, links are applied, nothing has rendered yet */
@@ -71,6 +73,12 @@ export interface MountStep {
 export interface MountOptions {
     /** How the app keeps its state; `standalone` when absent */
     mode?: AppMode;
+    /**
+     * Whether an app with screens keeps `$.route` in the URL fragment of its window (`#/product?id=p42`): read on start,
+     * pushed on navigation, followed on the back button and a hash change. True when absent; a host that embeds the app
+     * in a page whose URL it must not touch (a preview) passes false
+     */
+    route?: boolean;
 }
 
 /** What `mountApp` returns */
