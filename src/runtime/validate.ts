@@ -23,8 +23,8 @@ export type DropReason = 'invalid' | 'unknown' | 'oversized';
 export type ValidationResult = { ok: true; message: RuntimeMessage } | { ok: false; reason: DropReason };
 
 const encoder = new TextEncoder();
-/** The synced branches, which changes and writes reach */
-const SYNC_PATH = /^\$\.(data|app|theme|locale)(\.[^.\s]+)*$/;
+/** The synced branches, which changes and writes reach; `$.route` is protected, so a write to it is refused by the store */
+const SYNC_PATH = /^\$\.(data|app|screens|route|theme|locale)(\.[^.\s]+)*$/;
 /** The sync status the host writes */
 const STATUS_PATH = /^\$\.runtime\.sync(\.[^.\s]+)*$/;
 const MODES = ['standalone', 'persisted', 'full'];
@@ -58,14 +58,25 @@ function isStateSnapshot(message: Record<string, unknown>): boolean {
     return isJsonObject(message['data']) && isJsonObject(message['app']);
 }
 
+/** An `AppInstance`: `app` and `screens` objects, and optionally a route with a screen name, data and active overlay names */
+function isInstance(value: unknown): boolean {
+    if (!isJsonObject(value) || !hasOnlyKeys(value, ['app', 'screens', 'route', 'theme', 'data'])) return false;
+    if (!isRecord(value['app']) || !isRecord(value['screens'])) return false;
+    const route = value['route'];
+    if (route !== undefined && !(isRecord(route) && hasOnlyKeys(route, ['screen', 'params']) && isText(route['screen'], MAX_NAME_LENGTH))) return false;
+    const theme = value['theme'];
+    if (theme !== undefined && !(isRecord(theme) && hasOnlyKeys(theme, ['active']) && (theme['active'] === undefined || isRecord(theme['active'])))) return false;
+    return value['data'] === undefined || isRecord(value['data']);
+}
+
 function isSafePath(path: unknown, pattern: RegExp): path is string {
     if (typeof path !== 'string' || path.length > MAX_PATH_LENGTH || !pattern.test(path)) return false;
     return path.split('.').every((segment) => !FORBIDDEN_SEGMENTS.has(segment));
 }
 
 /**
- * True when `path` is a state path a write may reach: a synced branch (`$.data`, `$.app`, `$.theme`, `$.locale`) or
- * the sync status (`$.runtime.sync`)
+ * True when `path` is a state path a write may reach: a synced branch (`$.data`, `$.app`, `$.screens`, `$.route`,
+ * `$.theme`, `$.locale`) or the sync status (`$.runtime.sync`)
  */
 export function isWritablePath(path: unknown): path is string {
     return isSafePath(path, SYNC_PATH) || isSafePath(path, STATUS_PATH);
@@ -140,11 +151,12 @@ function isFileResult(m: Record<string, unknown>): boolean {
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
-        hasOnlyKeys(m, ['document', 'state', 'icons', 'mode']) &&
+        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode']) &&
         (m['mode'] === undefined || MODES.includes(m['mode'] as string)) &&
         isJsonObject(m['document']) &&
         isRecord(m['document']['app']) &&
         (m['state'] === undefined || (isRecord(m['state']) && isStateSnapshot(m['state']))) &&
+        (m['instance'] === undefined || isInstance(m['instance'])) &&
         (m['icons'] === undefined || isIconsMap(m['icons'])),
     write: (m) =>
         hasOnlyKeys(m, ['writes', 'icons']) &&

@@ -113,7 +113,8 @@ function truncate(text: string): string {
 /** Writes from the host are sync writes: the store tags their events, so capture does not post them back */
 const SYNC_WRITE = { origin: SYNC_ORIGIN };
 /** Paths below the app tree, where a written node is mounted rather than stored */
-const APP_NODE_PREFIX = '$.app.';
+/** The node trees a host write may mount a node in: the shell and the screens */
+const NODE_PREFIXES = ['$.app.', '$.screens.'];
 
 function protocolError(error: BuildError): ProtocolError {
     const result: ProtocolError = { code: error.code, message: truncate(error.message) };
@@ -145,11 +146,12 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
  * `event.source === parent` (pass `window.parent`), it passes `validateMessage` and its `nonce` is `nonce`; anything
  * else is dropped and counted (`stats()`).
  *
- * - `load` mounts the application with `mountApp` in the message's `mode` (a running one is disposed first), puts the
- *   state over it and writes the `icons` map to `$.runtime.icons` before the first render, then posts `ready`. A
+ * - `load` mounts the application with `mountApp` in the message's `mode` (a running one is disposed first), with its
+ *   `instance` laid over the definition (`MountOptions.instance`), puts the state over it and writes the `icons` map to `$.runtime.icons` before the first render, then posts `ready`. A
  *   document that does not mount posts `error` with the errors and no `ready`.
- * - `write` sets or removes paths of the synced branches (`$.data`, `$.app`, `$.theme`, `$.locale`; a changed
- *   `component` re-renders only that node through `<sui-node>`) and of the sync status `$.runtime.sync`, as sync
+ * - `write` sets or removes paths of the synced branches (`$.data`, `$.app`, `$.screens`, `$.theme`, `$.locale`; a
+ *   whole node below `$.app` or `$.screens.{name}` is mounted as a load would; `$.route` is protected, so a write of it
+ *   is refused: the host moves it with a `navigate` command) and of the sync status `$.runtime.sync`, as sync
  *   writes: they post no `change`. It merges its `icons` into `$.runtime.icons`.
  * - `event` raises an app event (`sync.rejected`): the root node's `on` entry for it runs with the payload.
  * - `ping` is answered with `pong`.
@@ -350,7 +352,7 @@ export function startRuntime(
                         postErrors([error]);
                     }
                 },
-                { mode: message.mode ?? 'standalone', route: options.route ?? false }
+                { mode: message.mode ?? 'standalone', route: options.route ?? false, ...(message.instance !== undefined && { instance: message.instance }) }
             );
         } finally {
             unregister();
@@ -372,7 +374,7 @@ export function startRuntime(
     function applyWrite(app: MountedApp, store: NonNullable<MountedApp['store']>, write: PathWrite): BuildError[] {
         // A runtime property the host still has from an older view is the component's own, so it is not written over
         if (isRuntimeProperty(store, library, write.path)) return [];
-        const inApp = write.path.startsWith(APP_NODE_PREFIX);
+        const inApp = NODE_PREFIXES.some((prefix) => write.path.startsWith(prefix));
         if (inApp && write.remove !== true && isNodeValue(write.value)) return app.writeNode(write.path, write.value as never, SYNC_WRITE);
         let done: boolean;
         if (write.remove === true) done = inApp && isNodeValue(store.get(write.path as never)) ? app.removeNode(write.path, SYNC_WRITE) : store.delete(write.path, SYNC_WRITE);

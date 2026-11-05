@@ -13,6 +13,10 @@ describe('runtime message validator', () => {
     it.each([
         base('load', { document: { app: { component: 'panel' } }, state: { data: {}, app: {} }, icons: { a: { outline: ['M0 0'] } } }),
         base('load', { document: { app: { component: 'panel' } }, mode: 'full' }),
+        base('load', {
+            document: { app: { component: 'panel' } },
+            instance: { app: {}, screens: { home: {} }, route: { screen: 'home', params: { id: 'p1' } }, theme: { active: { mode: 'dark' } }, data: { bag: {} } }
+        }),
         base('write', { writes: [{ path: '$.data.a', value: 1 }, { path: '$.app.children.x', remove: true }] }),
         base('write', { writes: [{ path: '$.runtime.sync', value: { mode: 'full', status: 'offline', waiting: 2 } }, { path: '$.theme.mode', value: 'dark' }] }),
         base('event', { name: 'sync.rejected', payload: { path: '$.data.a', reason: 'no' } }),
@@ -42,6 +46,8 @@ describe('runtime message validator', () => {
         ['extra field', base('ping', { id: 1, more: true })],
         ['load without app', base('load', { document: {} })],
         ['load with an unknown mode', base('load', { document: { app: { component: 'panel' } }, mode: 'cloud' })],
+        ['load with an instance without screens', base('load', { document: { app: { component: 'panel' } }, instance: { app: {} } })],
+        ['load with a route without a screen', base('load', { document: { app: { component: 'panel' } }, instance: { app: {}, screens: {}, route: { params: {} } } })],
         ['event that is not an app event', base('event', { name: 'press' })],
         ['change without an id', base('change', { change: { path: '$.data.a', op: 'set', value: 1 } })],
         ['change with an unknown op', base('change', { change: { id: 'c', path: '$.data.a', op: 'push', value: 1 } })],

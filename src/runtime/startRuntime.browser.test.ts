@@ -166,6 +166,53 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('change')).toHaveLength(0);
     });
 
+    it('should lay the instance over the definition on load: the shell, a screen, the data and the route', async () => {
+        // Arrange
+        const document = {
+            data: { name: 'Ada' },
+            app: panel({ hello: { component: 'label', '<-text': '$.data.name' }, view: { component: 'outlet' } }),
+            screens: {
+                home: { root: panel({ title: { component: 'badge', text: 'home' } }) },
+                about: { root: panel({ title: { component: 'badge', text: 'about' } }) }
+            },
+            start: 'home'
+        } as unknown as AppDocument;
+        const instance = { app: {}, screens: { about: { children: { title: { text: 'about us' } } } }, route: { screen: 'about' }, data: { name: 'Grace' } };
+
+        // Act
+        send(message('load', { document, instance }));
+        await tick();
+
+        // Assert
+        const text = textOf(host);
+        expect(ofType('ready')).toHaveLength(1);
+        expect(text).toContain('label:Grace');
+        expect(text).toContain('badge:about us');
+        expect(text).not.toContain('badge:home');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should take a host write below a screen as a sync write and refuse one of the protected route', async () => {
+        // Arrange
+        const document = {
+            app: panel({ view: { component: 'outlet' } }),
+            screens: { home: { root: panel({ title: { component: 'badge', text: 'home' } }) }, about: { root: panel({}) } },
+            start: 'home'
+        } as unknown as AppDocument;
+        send(message('load', { document }));
+        await tick();
+
+        // Act
+        send(message('write', { writes: [{ path: '$.screens.home.children.title.text', value: 'welcome' }, { path: '$.route', value: { screen: 'about' } }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('badge:welcome');
+        expect(ofType('change')).toHaveLength(0);
+        const errors = ofType('error').flatMap((posted) => posted['errors'] as { code: string; statePath?: string }[]);
+        expect(errors).toEqual([expect.objectContaining({ code: 'SUI-RUN-WRITE', statePath: '$.route' })]);
+    });
+
     it('should replace the document data with the state data, so a shorter list and a removed key stay gone', async () => {
         // Arrange
         const document: AppDocument = {

@@ -1,3 +1,4 @@
+import type { AppInstance } from '../core/snapshot/index.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue } from '../core/types.js';
 
 export { APP_EVENTS } from '../core/types.js';
@@ -102,12 +103,14 @@ export interface RuntimeChange {
 
 /**
  * Mounts the application: the document, the state to load over it, the icons it uses beyond the core set and the
- * mode (`standalone` when absent)
+ * mode (`standalone` when absent). `instance` is a persona's instance, laid over the definition as `mountApp` lays
+ * `MountOptions.instance` (the shell, the screens, the data and the route)
  */
 export interface LoadMessage extends Envelope<'load'> {
     document: AppDocument;
     mode?: RuntimeMode;
     state?: StateSnapshotData;
+    instance?: AppInstance;
     icons?: IconsMap;
 }
 
