@@ -109,15 +109,22 @@ const NOT_WRITES = new Set(['notify', 'emit', 'call', 'reject', 'navigate']);
  * capture, `*` or a `{{ }}` template). Node references (`^name`) resolve at run time and are left out
  */
 function writeSteps(unit: { machine?: LogicMachine; transitions: readonly LogicTransition[]; table?: LogicTable }): (string | null)[][] {
-    const commands = [...unit.transitions.flatMap((transition) => transition.do ?? []), ...(unit.table?.rows.flatMap((row) => row.do) ?? [])];
-    const paths = commands.flatMap((command) => {
+    return writePaths(unit).map((path) => path.replace(/\{\{[\s\S]*?\}\}/g, '{}').slice(2).split('.').map((step) => (step === '*' || step.includes('{') ? null : step)));
+}
+
+/** The commands of a unit: its transitions' and its table rows' */
+function unitCommands(unit: { transitions: readonly LogicTransition[]; table?: LogicTable }): LogicCommand[] {
+    return [...unit.transitions.flatMap((transition) => transition.do ?? []), ...(unit.table?.rows.flatMap((row) => row.do) ?? [])];
+}
+
+/** The state paths a unit's commands can write, and its machine's state path, as written (`$.data.bag.{id}.total`) */
+function writePaths(unit: { machine?: LogicMachine; transitions: readonly LogicTransition[]; table?: LogicTable }): string[] {
+    const paths = unitCommands(unit).flatMap((command) => {
         if (command.command === 'navigate') return [ROUTE_PATH];
         return NOT_WRITES.has(command.command) ? [] : WRITE_KEYS.flatMap((key) => (typeof command[key] === 'string' ? [command[key] as string] : []));
     });
     if (unit.machine) paths.push(unit.machine.state);
-    return paths
-        .filter((path) => path.startsWith('$.'))
-        .map((path) => path.replace(/\{\{[\s\S]*?\}\}/g, '{}').slice(2).split('.').map((step) => (step === '*' || step.includes('{') ? null : step)));
+    return paths.filter((path) => path.startsWith('$.'));
 }
 
 /** True when a write at `steps` can change a value at, below or above the pattern's path */
@@ -164,6 +171,64 @@ function chainOrder<T extends { id: string; machine?: LogicMachine; table?: Logi
         order.push(next);
     }
     return order;
+}
+
+/** The units and guards of a logic document, in document order (machines, rules, tables) */
+function buildUnits(logic: LogicDocument): { units: Unit[]; guards: Guard[] } {
+    const units: Unit[] = [];
+    const guards: Guard[] = [];
+    const pattern = (when: LogicTransition['when']): PathPattern | undefined => (when.path === undefined ? undefined : compilePattern(when.path));
+    for (const [name, machine] of Object.entries(logic.machines ?? {})) {
+        units.push({ id: `machine:${name}`, kind: 'machine', name, machine, transitions: machine.transitions, patterns: machine.transitions.map((transition) => pattern(transition.when)) });
+    }
+    for (const [name, rule] of Object.entries(logic.rules ?? {})) {
+        const compiled = pattern(rule.when);
+        if (isGuard(rule.do)) {
+            if (compiled) guards.push({ name, pattern: compiled, trigger: rule.when, reason: rule.do[0]?.reason ?? `refused by ${name}` });
+            continue;
+        }
+        units.push({ id: `rule:${name}`, kind: 'rule', name, transitions: [{ when: rule.when, do: rule.do }], patterns: [compiled] });
+    }
+    for (const [name, table] of Object.entries(logic.tables ?? {})) {
+        units.push({ id: `table:${name}`, kind: 'table', name, table, transitions: [{ when: table.when }], patterns: [pattern(table.when)] });
+    }
+    return { units, guards };
+}
+
+/** Where a unit runs in a logic document, and the state paths it reads and writes */
+export interface LogicUnitPlace {
+    readonly kind: 'machine' | 'rule' | 'table' | 'guard';
+    readonly name: string;
+    /** 1-based place in the order a chain looks units up; absent for a guard, which is asked before a change commits */
+    readonly position?: number;
+    /** Trigger paths, table input paths and `from` paths of commands */
+    readonly reads: readonly string[];
+    /** The paths its commands write, and a machine's state path */
+    readonly writes: readonly string[];
+}
+
+/** The `$.` paths among the values of a unit's triggers, table inputs and command `from` keys */
+function readPaths(unit: { transitions: readonly LogicTransition[]; table?: LogicTable }): string[] {
+    const paths = [
+        ...unit.transitions.map((transition) => transition.when.path),
+        ...Object.values(unit.table?.inputs ?? {}),
+        ...unitCommands(unit).map((command) => command['from'])
+    ];
+    return paths.filter((path): path is string => typeof path === 'string' && path.startsWith('$.'));
+}
+
+const unique = (paths: readonly string[]): string[] => [...new Set(paths)];
+
+/**
+ * The units of a logic document in the order the engine looks them up for a change (`chainOrder`), with the paths each
+ * reads and writes, then the guards. For a build tool that says where a written unit runs; it reads no state
+ */
+export function logicRunOrder(logic: LogicDocument): LogicUnitPlace[] {
+    const { units, guards } = buildUnits(logic);
+    return [
+        ...chainOrder(units).map((unit, index) => ({ kind: unit.kind, name: unit.name, position: index + 1, reads: unique(readPaths(unit)), writes: unique(writePaths(unit)) })),
+        ...guards.map((guard) => ({ kind: 'guard' as const, name: guard.name, reads: guard.trigger.path === undefined ? [] : [guard.trigger.path], writes: [] }))
+    ];
 }
 
 function isGuard(commands: readonly LogicCommand[]): boolean {
@@ -235,21 +300,9 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         failed({ kind: unit.kind, name: unit.name, ...details });
     };
 
-    const pattern = (when: LogicTransition['when']): PathPattern | undefined => (when.path === undefined ? undefined : compilePattern(when.path));
-    for (const [name, machine] of Object.entries(logic.machines ?? {})) {
-        units.push({ id: `machine:${name}`, kind: 'machine', name, machine, transitions: machine.transitions, patterns: machine.transitions.map((transition) => pattern(transition.when)) });
-    }
-    for (const [name, rule] of Object.entries(logic.rules ?? {})) {
-        const compiled = pattern(rule.when);
-        if (isGuard(rule.do)) {
-            if (compiled) guards.push({ name, pattern: compiled, trigger: rule.when, reason: rule.do[0]?.reason ?? `refused by ${name}` });
-            continue;
-        }
-        units.push({ id: `rule:${name}`, kind: 'rule', name, transitions: [{ when: rule.when, do: rule.do }], patterns: [compiled] });
-    }
-    for (const [name, table] of Object.entries(logic.tables ?? {})) {
-        units.push({ id: `table:${name}`, kind: 'table', name, table, transitions: [{ when: table.when }], patterns: [pattern(table.when)] });
-    }
+    const built = buildUnits(logic);
+    units.push(...built.units);
+    guards.push(...built.guards);
 
     const ordered = chainOrder(units);
 

@@ -417,7 +417,8 @@ Save button saves and a count follows its records without an agent in the loop.
 - **Where it runs.** `mountApp` runs it in the browser for Standalone and Persisted apps, for the store's own
   (untagged) writes only, so writes that arrive through sync are not run again; logic writes carry the origin
   `logic` and are synced. A refused change is undone. Full apps run it on the app server's authority
-  (`@punyts/stateui-mcp`). The engine itself (`createLogicEngine`, `createLogicIndex`, `readLogic`) has no
+  (`@punyts/stateui-mcp`). `logicRunOrder(logic)` lists the units in the order the engine runs them, with the paths
+  each reads and writes, for build tools. The engine itself (`createLogicEngine`, `createLogicIndex`, `readLogic`) has no
   environment and runs on any `LogicHost`; the host's `schedule(ms, run)` (returning a cancel function) runs the timers
   and its `call(name, payload)` answers `call` (with none, a call is rejected). Its optional `guard(change)` is asked
   after the guard rules: its reason refuses the change, and `save-data` or `delete-data` gets it as the `rejected`
