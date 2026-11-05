@@ -11,7 +11,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
 
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-USES`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
 - **Types.** `AppDocument` (`theme`, `themes`, `locale`, `data`, `app`, `composed`, `locales`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
 - **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
 
@@ -442,7 +442,10 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   part names or listed twice, a binding that is neither `{ dataset }` nor `{ model, scope: "persona" }`, a binding name that
   is not a key name, a module name that is not a part name), a shell or screen root that is not a node, a screen without
   `root`, no screens, a screen name that is not a part name, a `start` that names no screen, and params that are not typed
-  declarations. The contents of `logic`, the parts `uses` names and the shell's `outlet` are checked when the app is
+  declarations. `declarationProblems(value, path)` checks one typed declaration for the blueprint, models and modules: its
+  keys, a type of `FIELD_TYPES`, a boolean `required`, validators that are known, well formed (their own `parse`) and
+  apply to the type (`pattern` on a `number` does not; `any` takes every validator), and a default that fits the type
+  and its own validators. `isKeyName` is the rule for binding, param and field names (`^[A-Za-z_][A-Za-z0-9_]*$`). The contents of `logic`, the parts `uses` names and the shell's `outlet` are checked when the app is
   assembled.
 - **Assembling.** `assembleApp(blueprint, parts, { library? })` takes a `PartSource` (plain maps of `themes`, `modules`,
   `models`, `datasets` and `components` by name; no IO) and returns `{ document, errors, uses }`. The document is today's
@@ -459,6 +462,17 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   `$.screens.{screen}`. Each error gains `part`: the owner component (`$.composed.{name}`), the first theme
   (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`) or the app. A component already reported
   `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. The assembled document carries `start`.
+- **Models** (`src/core/models/`). A model part is `{ fields }`, typed declarations by field name in order (`date` and
+  `enum` are not types: a date is a `string` with a `pattern`, an enum a `oneOf`). `readModel(json)` returns
+  `{ model, errors }`, each problem a `SUI-MODEL-SHAPE` at its path (`$` is the model): an unknown key, missing
+  `fields`, a field name that is not a key name and every problem `declarationProblems` finds.
+  `checkRecord(model, record, key?)` and `checkDataset(model, records)` give `SUI-MODEL-FIELD` with the record key and
+  the field for a value of the wrong type or failing its validators (the shapes' own `fitsType` and
+  `passesValidators`), a required field without a default and no value, and a field the model does not declare; a
+  field set to null counts as absent. `applyDefaults(model, record)` returns a copy with the defaults of absent and null
+  fields, in field order, then the record's other keys. `inferModel(records)` (an array or records by key) types each
+  field from the samples: an integer and a fraction make `number`, other mixes and only nulls make `any`, every field
+  optional; names are kept as found, so one that is not a key name fails `readModel` until the caller renames it.
 
 ## Starting an application: `mountApp`
 

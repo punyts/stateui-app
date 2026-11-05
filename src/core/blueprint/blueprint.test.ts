@@ -172,6 +172,15 @@ describe('readBlueprint', () => {
         expect(errorsOf(storeWith('screens.product.params', ['id']))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens.product.params']);
     });
 
+    it('should refuse a param default that does not fit its type or validators, and validator options that are not valid', () => {
+        const at = 'screens.product.params.id';
+
+        expect(errorsOf(storeWith(at, { type: 'integer', default: 'one' }))).toEqual([`SUI-BLUEPRINT-SHAPE $.${at}.default`]);
+        expect(errorsOf(storeWith(at, { type: 'string', default: 'x', validators: { oneOf: ['a', 'b'] } }))).toEqual([`SUI-BLUEPRINT-SHAPE $.${at}.default`]);
+        expect(errorsOf(storeWith(at, { type: 'string', validators: { length: { min: 'one' } } }))).toEqual([`SUI-BLUEPRINT-SHAPE $.${at}.validators.length`]);
+        expect(errorsOf(storeWith(at, { type: 'boolean', validators: { range: { min: 0 } } }))).toEqual([`SUI-BLUEPRINT-SHAPE $.${at}.validators.range`]);
+    });
+
     it('should accept every field type and the library validators in a declaration', () => {
         const params = Object.fromEntries(FIELD_TYPES.map((type) => [`p_${type}`, { type }]));
         const checked = { type: 'string', default: 'a', required: false, validators: { pattern: '^[a-z]$', length: { max: 1 } } };

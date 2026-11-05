@@ -248,10 +248,15 @@ export type { SearchEntry, SearchFields, SearchHit, SearchIndex, SearchOptions, 
 export {
     FIELD_TYPES,
     PART_KINDS,
+    declarationProblems,
+    isFieldType,
+    isKeyName,
     isPartName,
     readBlueprint,
     slugifyName
 } from './blueprint/index.js';
+export { applyDefaults, checkDataset, checkRecord, inferModel, readModel } from './models/index.js';
+export type { ReadModelResult } from './models/index.js';
 export type {
     AppBlueprint,
     BlueprintScreen,
@@ -260,6 +265,7 @@ export type {
     DataBinding,
     DatasetBinding,
     DatasetPart,
+    DeclarationProblem,
     FieldDeclaration,
     FieldType,
     LogicModule,
@@ -282,3 +288,4 @@ export type { AppValidation, AppValidationError, AssembleOptions, AssembleResult
 export { NAVIGATE_COMMAND, ROUTE_PATH, checkNavigate, initialRoute, isRouteRefusal, paramDefaults, routeTo } from './route/index.js';
 export type { NavigateProblem, RouteScreens, RouteState } from './route/index.js';
 export { OUTLET_COMPONENT, findOutlet, screenPath } from './route/index.js';
+export { FRAGMENT_PREFIX, formatFragment, parseFragment, sameRoute } from './route/index.js';

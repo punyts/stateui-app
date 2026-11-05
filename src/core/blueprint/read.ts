@@ -1,22 +1,17 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
-import { isValidatorName } from '../shape/validators.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
+import { declarationProblems, isKeyName } from './declaration.js';
 import { isPartName } from './names.js';
-import { FIELD_TYPES } from './types.js';
 import type { AppBlueprint } from './types.js';
 
 const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'shell', 'screens', 'logic', 'locales'];
 const USES_KEYS = ['themes', 'data', 'logic'];
 const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
-const DECLARATION_KEYS = ['type', 'default', 'required', 'validators'];
 const LOGIC_KEYS = ['machines', 'rules', 'tables'];
 const PERSONA_SCOPE = 'persona';
-
-/** A binding name is the key under `$.data`; a param name is read as `$params.{name}` */
-const KEY_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export interface ReadBlueprintResult {
     /** Absent when there are errors */
@@ -96,7 +91,7 @@ class Reader {
         if (!this.object(value, path, 'uses.data')) return;
         for (const [name, binding] of Object.entries(value)) {
             const at = `${path}.${name}`;
-            if (!KEY_NAME.test(name)) this.shape(at, `binding name "${name}" must be a key name`);
+            if (!isKeyName(name)) this.shape(at, `binding name "${name}" must be a key name`);
             this.binding(binding, at);
         }
     }
@@ -150,27 +145,13 @@ class Reader {
         if (!this.object(value, path, 'params')) return;
         for (const [name, declaration] of Object.entries(value)) {
             const at = `${path}.${name}`;
-            if (!KEY_NAME.test(name)) this.shape(at, `param name "${name}" must be a key name`);
+            if (!isKeyName(name)) this.shape(at, `param name "${name}" must be a key name`);
             this.declaration(declaration, at);
         }
     }
 
     declaration(value: JsonValue, path: string): void {
-        if (!isObject(value)) {
-            this.shape(path, 'must be a typed declaration { "type", "default"?, "required"?, "validators"? }');
-            return;
-        }
-        this.knownKeys(value, DECLARATION_KEYS, path);
-        if (!(FIELD_TYPES as readonly JsonValue[]).includes(value['type'] ?? null)) {
-            this.shape(`${path}.type`, `type must be one of ${FIELD_TYPES.join(', ')}`);
-        }
-        if (value['required'] !== undefined && typeof value['required'] !== 'boolean') this.shape(`${path}.required`, 'must be true or false');
-        const validators = value['validators'];
-        if (validators === undefined) return;
-        if (!this.object(validators, `${path}.validators`, 'validators')) return;
-        for (const name of Object.keys(validators)) {
-            if (!isValidatorName(name)) this.shape(`${path}.validators.${name}`, `unknown validator "${name}"`);
-        }
+        for (const problem of declarationProblems(value, path)) this.shape(problem.path, problem.reason);
     }
 
     logic(value: JsonValue, path: string): void {

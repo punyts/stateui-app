@@ -1,3 +1,5 @@
+export { declarationProblems, isFieldType, isKeyName } from './declaration.js';
+export type { DeclarationProblem } from './declaration.js';
 export { isPartName, slugifyName } from './names.js';
 export { readBlueprint } from './read.js';
 export type { ReadBlueprintResult } from './read.js';
