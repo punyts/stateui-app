@@ -387,7 +387,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         }
         return undefined;
     };
-    const guard = (change: LogicChange): string | undefined => refusal(change)?.reason;
+    const guard = (change: LogicChange): string | undefined => refusal(change)?.reason ?? host.guard?.(change);
 
     /** Runs a transition and commits its writes; returns them as changes, or nothing when it failed */
     const fire = (unit: Unit, hit: Hit, results: Results): LogicChange[] => {

@@ -433,6 +433,30 @@ describe('createLogicEngine', () => {
         expect(memory.failures).toEqual([]);
     });
 
+    it('should give the host guard\'s reason as the rejected result of save-data, and write nothing', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            rules: {
+                save: { when: { path: '$.data.go', is: true }, do: [{ command: 'save-data', into: '$.data.contacts', key: 'c9', value: { name: 7 }, as: 'saved' }] },
+                sorry: { when: { result: 'saved', is: 'rejected' }, do: [{ command: 'set', target: '$.data.error', value: '$result.reason' }] }
+            }
+        };
+        const memory = memoryHost(
+            { ...BASE, data: { contacts: {} } },
+            { guard: (change) => (change.path === '$.data.contacts.c9' ? 'Field "name" of record "c9" is not a string' : undefined) }
+        );
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.go', true);
+
+        // Assert
+        expect(memory.get('$.data.error')).toBe('Field "name" of record "c9" is not a string');
+        expect(memory.get('$.data.contacts')).toEqual({});
+        expect(engine.guard({ path: '$.data.contacts.c9', value: { name: 7 } })).toBe('Field "name" of record "c9" is not a string');
+        expect(engine.guard({ path: '$.data.other', value: 1 })).toBeUndefined();
+    });
+
     it('should refuse a rule result name that no rule or table command has, and a guard that waits for a result', () => {
         // Arrange
         const logic = {

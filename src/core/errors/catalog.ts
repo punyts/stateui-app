@@ -19,7 +19,8 @@ export const ERROR_PREFIXES = [
     'SUI-ROUTE',
     'SUI-SHELL',
     'SUI-BUILD',
-    'SUI-RUN'
+    'SUI-RUN',
+    'SUI-SYNC'
 ] as const;
 
 export interface CatalogEntry {
@@ -178,6 +179,9 @@ export const ERROR_CATALOG = {
     'SUI-USES-MODEL': { template: 'The data binding "{name}" at {path} {reason}' },
     'SUI-USES-NEEDS': { template: 'The logic module "{target}" needs the data binding "{name}", and the app binds none at {path}' },
     'SUI-ROUTE-SCREEN': { template: 'navigate at {path} names no screen: {reason}' },
+    'SUI-SYNC-SHARED': {
+        template: 'The data binding "{name}" at {path} shares the dataset "{target}", which needs Full mode (an app server) to stay in step across apps, and the app runs in {other} mode'
+    },
     'SUI-ROUTE-PARAMS': { template: 'The params of navigate at {path} do not fit: {reason}' },
     'SUI-SHELL-OUTLET': { template: 'The outlet at {path} is not valid: {reason}' },
     'SUI-LOGIC-COMMAND': { template: 'Unknown logic command "{command}" at {path}' },

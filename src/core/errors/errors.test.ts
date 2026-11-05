@@ -68,6 +68,7 @@ describe('error catalog', () => {
             'SUI-MODULE-PARAM',
             'SUI-DOC-SCREEN',
             'SUI-ROUTE-SCREEN',
+            'SUI-SYNC-SHARED',
             'SUI-ROUTE-PARAMS'
         ]) {
             expect(CODES).toContain(code);

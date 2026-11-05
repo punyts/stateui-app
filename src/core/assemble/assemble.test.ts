@@ -287,6 +287,28 @@ describe('validateApp', () => {
         expect(result.valid).toBe(true);
     });
 
+    it('should refuse a shared dataset binding of a Persisted app and allow persona bindings', () => {
+        // Act
+        const persisted = validateApp(STORE_APP, STORE_PARTS, STORE_LIBRARY, { name: 'store', mode: 'persisted' });
+
+        // Assert
+        expect(persisted.valid).toBe(false);
+        expect(persisted.errors.filter((error) => error.code === 'SUI-SYNC-SHARED')).toEqual([
+            expect.objectContaining({ statePath: '$.uses.data.products', part: { kind: 'apps', name: 'store' }, message: expect.stringContaining('"catalog"') })
+        ]);
+        expect(persisted.errors.filter((error) => error.code !== 'SUI-SYNC-SHARED')).toEqual([]);
+    });
+
+    it('should allow a shared dataset binding in Full, Standalone and no mode', () => {
+        // Act
+        const results = (['full', 'standalone', undefined] as const).map((mode) =>
+            validateApp(STORE_APP, STORE_PARTS, STORE_LIBRARY, { name: 'store', ...(mode !== undefined && { mode }) })
+        );
+
+        // Assert
+        expect(results.map((result) => result.errors.map((error) => error.code))).toEqual([[], [], []]);
+    });
+
     it('should give the same result as the single document for a blueprint with only the start screen and no uses', () => {
         const shell = { component: 'page', children: { main: { component: 'outlet' }, note: { component: 'text', wrong: 1 } } };
         const blueprint: AppBlueprint = { start: 'home', shell, screens: { home: { root: { component: 'panel' } } }, locales: { de: {} } };

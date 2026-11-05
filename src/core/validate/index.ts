@@ -1,5 +1,6 @@
 export { documentValidators, registerDocumentValidator } from './registry.js';
 export { libraryFromCatalog, validateDocument } from './validateDocument.js';
+export { checkSharedData } from './sharedData.js';
 export type {
     AppMode,
     CatalogComponent,

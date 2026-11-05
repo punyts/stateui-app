@@ -205,6 +205,11 @@ export interface LogicHost {
     screens?(): RouteScreens | undefined;
     /** Runs a named server procedure (Full mode); without it every `call` is rejected */
     call?(name: string, payload: JsonValue): Promise<LogicAnswer>;
+    /**
+     * The host's own refusal of a proposed change, asked after the guard rules (the server checks shared dataset
+     * records against their model); `save-data` and `delete-data` give its reason as their `rejected` result
+     */
+    guard?(change: LogicChange): string | undefined;
 }
 
 /** Why a unit whose trigger path matched a change did not fire, or that it fired */

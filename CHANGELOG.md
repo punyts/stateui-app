@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Shared datasets need Full mode** (O2.9 of the owner-tree epic 2): `validateApp` with `mode: "persisted"` reports each binding to a shared dataset as `SUI-SYNC-SHARED` (new family `SUI-SYNC`) at `$.uses.data.{binding}`; `checkSharedData(blueprint, mode)` is exported from `core`. `LogicHost.guard(change)` is a host's own refusal, asked after the guard rules; `save-data` and `delete-data` give its reason as their `rejected` result.
 - **`queryRecords`** (O2.6 of the owner-tree epic 2): the filter, sort and window of the logic `query` command as an exported function of `core` (`core/logic/query.ts`, types `RecordQuery` and `RecordQueryResult`), which the `query` command now uses. Behavior is unchanged.
 - **Instances in the runtime** (O2.11 of the owner-tree epic 2): the `load` message takes `instance` (an `AppInstance`), passed to `mountApp` as `MountOptions.instance`. A host `write` may reach `$.screens` (a whole node below `$.screens.{name}` is mounted as below `$.app`), and changes and writes of `$.screens` and `$.route` pass validation; a write of `$.route` is refused by the store, which protects it.
 - **Converter** (O1.10): `splitDocument` turns a stored single document (and its state snapshot) into an app blueprint, a theme, datasets with inferred models and owner components, splitting a hidden-strip `tabs` into one screen per tab; `report` lists what it cannot convert, and such an app gets no parts.

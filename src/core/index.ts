@@ -302,6 +302,7 @@ export type {
     ThemePartOverlay
 } from './blueprint/index.js';
 export { assembleApp, nearestNames, validateApp } from './assemble/index.js';
+export { checkSharedData } from './validate/index.js';
 export type { AppValidation, AppValidationError, AssembleOptions, AssembleResult, PartSource, ValidateAppOptions } from './assemble/index.js';
 export { splitDocument } from './convert/index.js';
 export type { SplitInput, SplitProblem, SplitRename, SplitResult } from './convert/index.js';

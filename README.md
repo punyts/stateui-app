@@ -11,7 +11,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
 
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN`, `SUI-SYNC` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
 - **Types.** `AppDocument` (`theme`, `themes`, `appThemes`, `locale`, `data`, `app`, `screens`, `start`, `composed`, `locales`, `logic`; `DOCUMENT_KEYS`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
 - **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
 
@@ -419,7 +419,9 @@ Save button saves and a count follows its records without an agent in the loop.
   `logic` and are synced. A refused change is undone. Full apps run it on the app server's authority
   (`@punyts/stateui-mcp`). The engine itself (`createLogicEngine`, `createLogicIndex`, `readLogic`) has no
   environment and runs on any `LogicHost`; the host's `schedule(ms, run)` (returning a cancel function) runs the timers
-  and its `call(name, payload)` answers `call` (with none, a call is rejected). Timers live in memory: they are armed
+  and its `call(name, payload)` answers `call` (with none, a call is rejected). Its optional `guard(change)` is asked
+  after the guard rules: its reason refuses the change, and `save-data` or `delete-data` gets it as the `rejected`
+  result (the app server checks shared dataset records against their model this way). Timers live in memory: they are armed
   again when the engine starts and `engine.stop()` cancels them.
 
 ## App blueprints and owner parts
@@ -469,7 +471,10 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   `$.screens.{screen}`. Each error gains `part`: the owner component (`$.composed.{name}`), the first theme
   (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`), the logic module of a binding or param error
   (the `part` assembling gave it) or the app. A component already reported
-  `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. The assembled document carries `start`.
+  `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. The assembled document carries `start`. With
+  `mode: "persisted"` each binding to a shared dataset is `SUI-SYNC-SHARED` at `$.uses.data.{binding}`
+  (`checkSharedData(blueprint, mode)`): only the app server keeps a shared dataset in step across apps, so it needs
+  Full mode; persona bindings are allowed in every mode.
 - **Converting** (`src/core/convert/`). `splitDocument({ name, document, snapshot?, taken? })` turns one stored app of
   the old single-document form into owner parts: `{ app?: { name, blueprint }, themes, models, datasets, components,
   renamed, report }`. Pure, so each adapter runs it over its own storage.

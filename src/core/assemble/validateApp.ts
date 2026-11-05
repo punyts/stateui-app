@@ -3,7 +3,7 @@ import { isValid } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import type { AppDocument } from '../types.js';
-import { libraryFromCatalog, validateDocument } from '../validate/index.js';
+import { checkSharedData, libraryFromCatalog, validateDocument } from '../validate/index.js';
 import type { CatalogSource, ValidateDocumentOptions } from '../validate/index.js';
 import { assembleApp } from './assembleApp.js';
 import type { AppValidation, AppValidationError, PartSource } from './types.js';
@@ -32,7 +32,8 @@ function partOf(path: string, document: AppDocument, blueprint: AppBlueprint, ap
  * Assembles an app and checks the result with `validateDocument`, which checks the shell at `$.app` and each screen's
  * root at `$.screens.{screen}`. Each error names the part that holds it: an owner component (`$.composed.{name}`), the
  * first theme (`$.theme`, `$.themes`), a dataset (`$.data.{binding}`), a logic module (its binding and param errors),
- * or the app itself. The errors of assembling come first
+ * or the app itself. The errors of assembling come first, then a Persisted app's bindings to shared datasets
+ * (`SUI-SYNC-SHARED`, `checkSharedData`)
  */
 export function validateApp(
     blueprint: AppBlueprint,
@@ -51,7 +52,11 @@ export function validateApp(
     const missing = new Set(assembled.errors.flatMap((error) => (error.component === undefined ? [] : [error.component])));
     const reported = (error: BuildError): boolean => !(error.code === 'SUI-NODE-UNKNOWN' && error.component !== undefined && missing.has(error.component));
 
-    const found: BuildError[] = [...assembled.errors, ...validateDocument(assembled.document, library, documentOptions).errors.filter(reported)];
+    const found: BuildError[] = [
+        ...assembled.errors,
+        ...checkSharedData(blueprint, documentOptions.mode),
+        ...validateDocument(assembled.document, library, documentOptions).errors.filter(reported)
+    ];
 
     const errors: AppValidationError[] = found.map((error) => {
         const part = (error as AppValidationError).part ?? partOf(error.statePath ?? '$', assembled.document, blueprint, app);
