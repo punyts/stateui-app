@@ -55,6 +55,8 @@ export interface ReadLogicOptions {
     resolve?(reference: string): string | undefined;
     /** Why a reference does not resolve (no node or several have its name), for the error */
     explain?(reference: string): string | undefined;
+    /** The path the units are reported under: `$.logic` (the default) for a document, `$` for a logic module */
+    root?: string;
 }
 
 export interface ReadLogicResult {
@@ -422,24 +424,25 @@ function sharedResultNames(root: JsonObject): string[] {
  */
 export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadLogicResult {
     const reader = new Reader(options);
+    const root = options.root ?? '$.logic';
     const logic: LogicDocument = {};
     if (value === undefined) return { logic, errors: [] };
     if (!isObject(value as JsonValue)) {
-        reader.shape('$.logic', '"logic" must be an object');
+        reader.shape(root, '"logic" must be an object');
         return { logic, errors: reader.errors };
     }
-    const root = value as JsonObject;
-    reader.unknownKeys(root, ['machines', 'rules', 'tables'], '$.logic');
-    reader.sharedResults = sharedResultNames(root);
+    const units = value as JsonObject;
+    reader.unknownKeys(units, ['machines', 'rules', 'tables'], root);
+    reader.sharedResults = sharedResultNames(units);
     for (const key of ['machines', 'rules', 'tables'] as const) {
-        if (!Object.hasOwn(root, key)) continue;
-        const map = root[key];
+        if (!Object.hasOwn(units, key)) continue;
+        const map = units[key];
         if (!isObject(map)) {
-            reader.shape(`$.logic.${key}`, `"${key}" must be a keyed map`);
+            reader.shape(`${root}.${key}`, `"${key}" must be a keyed map`);
             continue;
         }
         for (const [name, entry] of Object.entries(map)) {
-            const path = `$.logic.${key}.${name}`;
+            const path = `${root}.${key}.${name}`;
             if (key === 'machines') {
                 const machine = reader.machine(entry, path);
                 if (machine) (logic.machines ??= {})[name] = machine;

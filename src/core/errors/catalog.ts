@@ -13,6 +13,7 @@ export const ERROR_PREFIXES = [
     'SUI-LOGIC',
     'SUI-BLUEPRINT',
     'SUI-MODEL',
+    'SUI-MODULE',
     'SUI-USES',
     'SUI-ROUTE',
     'SUI-SHELL',
@@ -164,6 +165,13 @@ export const ERROR_CATALOG = {
     'SUI-BLUEPRINT-SHAPE': { template: 'Blueprint at {path} is not valid: {name}' },
     'SUI-MODEL-SHAPE': { template: 'Model at {path} is not valid: {name}' },
     'SUI-MODEL-FIELD': { template: 'Field "{name}" of record "{key}" does not fit its model: {reason}' },
+    'SUI-MODULE-NODE': { template: 'The logic module names a node or screen at {path} ({target}); a module works on the data it needs only' },
+    'SUI-MODULE-NEEDS': { template: 'The logic module reaches {target} at {path}, which is not in its needs; declared: {other}' },
+    'SUI-MODULE-PARAM': { template: 'Param "{name}" of the logic module at {path}: {reason}' },
+    'SUI-MODULE-ONCE': {
+        template: '{command} at {path} runs once per open instance of the app, so two open instances {reason}; a module should write derived values only',
+        severity: 'warning'
+    },
     'SUI-USES-MISSING': { template: 'The app uses the {target} "{name}" at {path}, and the owner has no such part; nearest names: {other}' },
     'SUI-ROUTE-SCREEN': { template: 'navigate at {path} names no screen: {reason}' },
     'SUI-ROUTE-PARAMS': { template: 'The params of navigate at {path} do not fit: {reason}' },

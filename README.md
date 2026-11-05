@@ -11,7 +11,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
 
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-MODULE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values.
 - **Types.** `AppDocument` (`theme`, `themes`, `locale`, `data`, `app`, `composed`, `locales`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
 - **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
 
@@ -473,6 +473,22 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   fields, in field order, then the record's other keys. `inferModel(records)` (an array or records by key) types each
   field from the samples: an integer and a fraction make `number`, other mixes and only nulls make `any`, every field
   optional; names are kept as found, so one that is not a key name fails `readModel` until the caller renames it.
+- **Logic modules** (`src/core/logic/modules.ts`). A module is `{ needs, params, machines?, rules?, tables? }`: logic
+  over data, with the data it needs by binding name (`{ "bag": { "model": "bag-line" } }`) and typed params.
+  `readModule(json)` reads the units as `readLogic` does (`ReadLogicOptions.root` `$`, so paths are the module's
+  own) and the needs and param declarations as `SUI-LOGIC-SHAPE`. A module names no node: a `^name` reference, a
+  `$.app` or `$.screens` path and `navigate` are `SUI-MODULE-NODE`. A `$.data` path whose first segment is not a
+  need (or is a capture, `*` or missing) is `SUI-MODULE-NEEDS`; `$params.{name}` of an undeclared param is
+  `SUI-MODULE-PARAM`. `increment` and `save-data` without `key` are `SUI-MODULE-ONCE` warnings, because a module
+  runs once per open instance of an app and should write derived values only.
+  `instantiateModule(module, params, { name })` gives one app's copy: each value is checked against its declaration (a
+  missing required param, a misfit and an undeclared name are `SUI-MODULE-PARAM`), defaults fill the rest, and every
+  `$params.{name}` is replaced by its value, so the engine needs no new variable and params are constant. A string that
+  is exactly `$params.{name}` becomes the value (any type); inside `{{ … }}`, `if` and `filter` it becomes a JSON
+  literal (strings JSON-escaped; an array or object there is an error). Unit names and `as` results (with the
+  `result` triggers that wait for them) get the prefix `{name}:` (`MODULE_UNIT_SEPARATOR`; unit names have no rule
+  of their own, and a dot would read as a path step in `$.logic.rules.cart:totals`). The units join the app's in one
+  `LogicDocument` and take their place in the run order like any other.
 
 ## Starting an application: `mountApp`
 

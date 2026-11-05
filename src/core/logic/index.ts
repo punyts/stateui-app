@@ -6,6 +6,8 @@ export { createLogicEngine } from './engine.js';
 export type { LogicEngine } from './engine.js';
 export { captureNames, compilePattern, fillCaptures, isStatePath, matchPattern, pathSteps } from './pattern.js';
 export type { PathPattern, PatternMatch, PatternStep } from './pattern.js';
+export { MODULE_UNIT_SEPARATOR, instantiateModule, readModule } from './modules.js';
+export type { InstantiateModuleOptions, InstantiateModuleResult, ReadModuleResult } from './modules.js';
 export { readLogic } from './read.js';
 export type { ReadLogicOptions, ReadLogicResult } from './read.js';
 export {

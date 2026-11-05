@@ -207,19 +207,24 @@ export {
     LOGIC_ORIGIN,
     MAX_CHAIN_DEPTH,
     MAX_DELAY,
+    MODULE_UNIT_SEPARATOR,
     NOTIFY_PREFIX,
     LogicError,
     compilePattern,
     createLogicEngine,
     createLogicIndex,
+    instantiateModule,
     matchPattern,
-    readLogic
+    readLogic,
+    readModule
 } from './logic/index.js';
 export type {
     LogicAnswer,
     LogicChange,
     LogicCommand,
     LogicCommandName,
+    InstantiateModuleOptions,
+    InstantiateModuleResult,
     LogicDocument,
     LogicEngine,
     LogicFailure,
@@ -241,7 +246,8 @@ export type {
     PathPattern,
     PatternMatch,
     ReadLogicOptions,
-    ReadLogicResult
+    ReadLogicResult,
+    ReadModuleResult
 } from './logic/index.js';
 export { BM25_B, BM25_K1, FIELD_WEIGHTS, STOP_WORDS, SYNONYM_GROUPS, createSearchIndex, stem, synonymExpander, tokenize, words } from './search/index.js';
 export type { SearchEntry, SearchFields, SearchHit, SearchIndex, SearchOptions, SynonymExpander } from './search/index.js';
