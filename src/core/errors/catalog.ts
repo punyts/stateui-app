@@ -104,7 +104,7 @@ export const ERROR_CATALOG = {
     'SUI-LOCALE-PATH': { template: 'Overlay "{locale}" has a path that does not exist: {path}' },
     'SUI-LAYOUT-SHAPE': { template: 'The layout or placement at {path} is not an object' },
     'SUI-LAYOUT-TYPE': { template: 'The layout at {path} has an unknown or missing type' },
-    'SUI-LAYOUT-SETTING': { template: 'Unknown layout setting "{name}" at {path}' },
+    'SUI-LAYOUT-SETTING': { template: 'Unknown layout setting "{name}" at {path}: {reason}' },
     'SUI-LAYOUT-VALUE': { template: 'Layout setting "{name}" at {path} has a value that is not allowed' },
     'SUI-LAYOUT-UNSUPPORTED': { template: 'Component "{component}" at {path} does not support a layout' },
     'SUI-LAYOUT-FIELD': {

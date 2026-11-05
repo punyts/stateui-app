@@ -111,6 +111,26 @@ describe('layout validator', () => {
         expect(codes(panel(layout))).toEqual([code]);
     });
 
+    it('should name the settings of the layout type in the message of an unknown setting', () => {
+        // Arrange
+        const document = { app: { component: 'panel', layout: { type: 'column', wrap: true }, children: { a: { component: 'text' } } } };
+
+        // Act
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        // Assert
+        expect(errors.map((error) => error.code)).toEqual(['SUI-LAYOUT-SETTING']);
+        expect(errors[0]?.message).toBe('Unknown layout setting "wrap" at $.app.layout.wrap: the column layout takes "type", "gap", "align"');
+    });
+
+    it('should say an adhoc layout takes only its type', () => {
+        // Arrange and Act
+        const errors = validateDocument({ app: { component: 'panel', layout: { type: 'adhoc', gap: 'md' } } }, LIBRARY).errors;
+
+        // Assert
+        expect(errors[0]?.message).toBe('Unknown layout setting "gap" at $.app.layout.gap: the adhoc layout takes only "type"');
+    });
+
     it('should reject a layout on a component whose shape does not support it', () => {
         const errors = validateDocument({ app: { component: 'text', layout: { type: 'column' } } }, LIBRARY).errors;
 

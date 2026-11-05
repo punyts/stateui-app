@@ -781,6 +781,19 @@ describe('readLogic', () => {
         );
         expect(result.logic).toEqual({});
     });
+
+    it('should list the allowed keys in the message of an unknown key', () => {
+        // Arrange
+        const logic = Object.freeze({ rules: { r: { when: { path: '$.data.x' }, do: [{ command: 'reject' }], zz: 1 } } });
+
+        // Act
+        const result = readLogic(logic, { resolve: () => undefined });
+
+        // Assert
+        const error = result.errors.find((found) => found.statePath === '$.logic.rules.r.zz');
+        expect(error?.code).toBe('SUI-LOGIC-SHAPE');
+        expect(error?.message).toBe('Logic at $.logic.rules.r.zz is not valid: unknown key "zz" (the keys here are "when", "do")');
+    });
 });
 
 describe('validateDocument with logic', () => {

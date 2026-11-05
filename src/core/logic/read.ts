@@ -81,7 +81,9 @@ class Reader {
     }
 
     unknownKeys(value: JsonObject, allowed: readonly string[], path: string): void {
-        for (const key of Object.keys(value)) if (!allowed.includes(key)) this.shape(`${path}.${key}`, `unknown key "${key}"`);
+        // The allowed keys go in the message: without them an agent probes with made-up keys and then guesses
+        const known = allowed.map((key) => `"${key}"`).join(', ');
+        for (const key of Object.keys(value)) if (!allowed.includes(key)) this.shape(`${path}.${key}`, `unknown key "${key}" (the keys here are ${known})`);
     }
 
     expression(text: string, path: string): void {

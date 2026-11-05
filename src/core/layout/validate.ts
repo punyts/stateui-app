@@ -65,6 +65,12 @@ function layoutTypeOf(node: JsonObject): LayoutType | undefined {
     return isLayoutType(layout.type) ? layout.type : undefined;
 }
 
+/** The settings a layout type takes, for the message of an unknown one: an agent that guessed can pick the right key */
+function allowedSettings(type: LayoutType): string {
+    const names = Object.keys(LAYOUTS[type].settings).map((name) => `"${name}"`);
+    return names.length === 0 ? `the ${type} layout takes only "type"` : `the ${type} layout takes "type", ${names.join(', ')}`;
+}
+
 function checkLayout(node: Node, path: string, shape: Shape | undefined, errors: BuildError[]): void {
     if (!Object.hasOwn(node, RESERVED_KEYS.layout) || shape === undefined) return;
     const at = `${path}.${RESERVED_KEYS.layout}`;
@@ -87,7 +93,7 @@ function checkLayout(node: Node, path: string, shape: Shape | undefined, errors:
         const settingPath = `${at}.${name}`;
         const spec = Object.hasOwn(settings, name) ? settings[name] : undefined;
         if (spec === undefined) {
-            errors.push(layoutError('SUI-LAYOUT-SETTING', { name, path: settingPath, statePath: settingPath }));
+            errors.push(layoutError('SUI-LAYOUT-SETTING', { name, path: settingPath, statePath: settingPath, reason: allowedSettings(layout.type) }));
         } else if (!fitsField(spec, value)) {
             errors.push(layoutError('SUI-LAYOUT-VALUE', { name, path: settingPath, statePath: settingPath }));
         }
