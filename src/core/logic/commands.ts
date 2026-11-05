@@ -1,7 +1,8 @@
 import { isObject } from '../resolve/merge.js';
 import { ROUTE_PATH, isRouteRefusal, routeTo } from '../route/index.js';
 import type { JsonObject, JsonValue } from '../types.js';
-import { LogicError, condition, resolvePath, resolveValue } from './values.js';
+import { queryRecords } from './query.js';
+import { LogicError, resolvePath, resolveValue } from './values.js';
 import type { Scope } from './values.js';
 import type { WorkingCopy } from './working.js';
 import type { LogicCommand, LogicHost, LogicResult, LogicWrite } from './types.js';
@@ -86,30 +87,6 @@ function outcome(context: CommandContext, command: LogicCommand, result: LogicRe
 }
 
 /** `sort`: a field name (`name`, `-name` for descending), or `{ by, direction }` */
-function readSort(sort: JsonValue): { by: string; descending: boolean } | undefined {
-    if (typeof sort === 'string' && sort !== '') {
-        return sort.startsWith('-') ? { by: sort.slice(1), descending: true } : { by: sort, descending: false };
-    }
-    if (isObject(sort) && typeof sort['by'] === 'string' && sort['by'] !== '') {
-        return { by: sort['by'], descending: sort['direction'] === 'desc' };
-    }
-    return undefined;
-}
-
-function compare(a: JsonValue | undefined, b: JsonValue | undefined): number {
-    if (a === b) return 0;
-    if (a === undefined || a === null) return 1;
-    if (b === undefined || b === null) return -1;
-    if (typeof a === 'number' && typeof b === 'number') return a - b;
-    return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
-}
-
-function readWindow(window: JsonValue, total: number): { first: number; count: number } {
-    const first = isObject(window) && typeof window['first'] === 'number' ? Math.max(0, Math.floor(window['first'])) : 0;
-    const count = isObject(window) && typeof window['count'] === 'number' ? Math.max(0, Math.floor(window['count'])) : total;
-    return { first, count };
-}
-
 type Runner = (command: LogicCommand, context: CommandContext) => void;
 
 const RUNNERS: Record<LogicCommand['command'], Runner> = {
@@ -201,27 +178,23 @@ const RUNNERS: Record<LogicCommand['command'], Runner> = {
         const into = path(command, 'into', context);
         const map = context.copy.get(from) ?? {};
         if (!isObject(map)) throw new LogicError(`${from} is not a data map`);
-        let rows = Object.entries(map);
-        if (command.filter !== undefined) {
-            const filter = command.filter;
-            rows = rows.filter(([key, record]) => condition(filter, { ...context.scope, key, record }));
-        }
-        const sort = command.sort === undefined ? undefined : readSort(resolveValue(command.sort, context.scope, context.host));
-        if (sort) {
-            rows.sort(([, a], [, b]) => {
-                const order = compare(isObject(a) ? a[sort.by] : undefined, isObject(b) ? b[sort.by] : undefined);
-                return sort.descending ? -order : order;
-            });
-        }
-        const window = readWindow(command.window === undefined ? null : resolveValue(command.window, context.scope, context.host), rows.length);
+        const found = queryRecords(
+            map,
+            {
+                ...(command.filter !== undefined && { filter: command.filter }),
+                ...(command.sort !== undefined && { sort: resolveValue(command.sort, context.scope, context.host) }),
+                ...(command.window !== undefined && { window: resolveValue(command.window, context.scope, context.host) })
+            },
+            context.scope
+        );
         const field = context.copy.get(`${into}.key`);
         const keyField = typeof field === 'string' ? field : 'id';
         const records: JsonObject = {};
-        rows.slice(window.first, window.first + window.count).forEach(([key, record], index) => {
-            records[String(window.first + index)] = isObject(record) ? { ...record, [keyField]: key } : record;
+        found.rows.forEach(([key, record], index) => {
+            records[String(found.first + index)] = isObject(record) ? { ...record, [keyField]: key } : record;
         });
         context.copy.set(`${into}.${context.host.records?.(into) ?? 'records'}`, records);
-        context.copy.set(`${into}.total`, rows.length);
+        context.copy.set(`${into}.total`, found.total);
     },
     notify: (command, context) => {
         const name = required(command, 'target');

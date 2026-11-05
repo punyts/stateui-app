@@ -8,6 +8,8 @@ export { captureNames, compilePattern, fillCaptures, isStatePath, matchPattern, 
 export type { PathPattern, PatternMatch, PatternStep } from './pattern.js';
 export { MODULE_UNIT_SEPARATOR, instantiateModule, readModule } from './modules.js';
 export type { InstantiateModuleOptions, InstantiateModuleResult, ReadModuleResult } from './modules.js';
+export { queryRecords } from './query.js';
+export type { RecordQuery, RecordQueryResult } from './query.js';
 export { readLogic } from './read.js';
 export type { ReadLogicOptions, ReadLogicResult } from './read.js';
 export {

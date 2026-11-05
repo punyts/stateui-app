@@ -496,6 +496,9 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   `enum` are not types: a date is a `string` with a `pattern`, an enum a `oneOf`). `readModel(json)` returns
   `{ model, errors }`, each problem a `SUI-MODEL-SHAPE` at its path (`$` is the model): an unknown key, missing
   `fields`, a field name that is not a key name and every problem `declarationProblems` finds.
+  `queryRecords(records, { filter?, sort?, window? }, scope?)` is the evaluator of the `query` command on its own: it
+  returns the window's `[key, record]` rows, the window's `first` and the `total` that matched, and throws a `LogicError`
+  for a filter that does not evaluate (the server queries dataset parts with it).
   `checkRecord(model, record, key?)` and `checkDataset(model, records)` give `SUI-MODEL-FIELD` with the record key and
   the field for a value of the wrong type or failing its validators (the shapes' own `fitsType` and
   `passesValidators`), a required field without a default and no value, and a field the model does not declare; a

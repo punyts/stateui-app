@@ -224,6 +224,7 @@ export {
     createLogicIndex,
     instantiateModule,
     matchPattern,
+    queryRecords,
     readLogic,
     readModule
 } from './logic/index.js';
@@ -255,6 +256,8 @@ export type {
     PathPattern,
     PatternMatch,
     ReadLogicOptions,
+    RecordQuery,
+    RecordQueryResult,
     ReadLogicResult,
     ReadModuleResult
 } from './logic/index.js';
