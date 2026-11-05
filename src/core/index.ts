@@ -281,3 +281,4 @@ export { assembleApp, nearestNames, validateApp } from './assemble/index.js';
 export type { AppValidation, AppValidationError, AssembleOptions, AssembleResult, PartSource, ValidateAppOptions } from './assemble/index.js';
 export { NAVIGATE_COMMAND, ROUTE_PATH, checkNavigate, initialRoute, isRouteRefusal, paramDefaults, routeTo } from './route/index.js';
 export type { NavigateProblem, RouteScreens, RouteState } from './route/index.js';
+export { OUTLET_COMPONENT, findOutlet, screenPath } from './route/index.js';

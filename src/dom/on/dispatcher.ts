@@ -62,16 +62,23 @@ function raisedBy(event: Event, componentTags: ReadonlySet<string>): { path: str
 export function createDispatcher(options: DispatcherOptions): Dispatcher {
     const { host, store, library, hooks } = options;
     const rootPath = options.rootPath ?? DEFAULT_ROOT;
+    const roots = [rootPath, ...(options.roots ?? [])];
     const instances = options.instances ?? {};
     const componentTags = tags(library);
     const names = eventNames(library);
 
-    /** Frames from the root down to `path`; undefined when `path` is not a node below the root */
+    /** The root (`rootPath` or one of `roots`) that `path` is at or below */
+    function rootOf(path: string): string | undefined {
+        return roots.find((root) => path === root || path.startsWith(`${root}.`));
+    }
+
+    /** Frames from the root that holds `path` down to it; undefined when `path` is not a node below a root */
     function chainTo(path: string): Frame[] | undefined {
-        if (path !== rootPath && !path.startsWith(`${rootPath}.`)) return undefined;
-        const steps = path === rootPath ? [] : path.slice(rootPath.length + 1).split('.');
+        const base = rootOf(path);
+        if (base === undefined) return undefined;
+        const steps = path === base ? [] : path.slice(base.length + 1).split('.');
         const chain: Frame[] = [];
-        let current = rootPath;
+        let current = base;
         for (let index = -1; index < steps.length; index += 1) {
             if (index >= 0) current = `${current}.${steps[index] as string}`;
             const value: unknown = store.get(current);
@@ -176,7 +183,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             chain,
             relative: found?.owner ?? chain,
             ...(found?.rowPath === undefined ? {} : { rowPath: found.rowPath }),
-            rootPath,
+            rootPath: rootOf(chain[0]?.path ?? rootPath) ?? rootPath,
             library,
             host,
             store,

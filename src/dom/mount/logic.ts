@@ -6,9 +6,12 @@ import type { ResolvedTree } from '../../core/on/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { ROUTE_PATH } from '../../core/route/index.js';
+import { isRoutePath, writeRoute } from './screens.js';
 import type { AppDocument, JsonValue, Node } from '../../core/types.js';
 
 const WATCHED = ['$.app.$all', '$.data.$all'];
+/** Also watched in an app with screens */
+const SCREEN_WATCHED = ['$.screens.$all', '$.route.$all'];
 const WRITE = { origin: LOGIC_ORIGIN };
 
 export interface BrowserLogicOptions {
@@ -64,24 +67,26 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
      */
     let beforeChange: Map<string, JsonValue | undefined> | undefined;
 
+    const watched = document.screens === undefined ? WATCHED : [...WATCHED, ...SCREEN_WATCHED];
+    /** Writes or deletes `path` with the logic's origin; `$.route` is protected, and `navigate` is the logic's way to write it */
+    const write = (path: string, value: JsonValue | undefined): void => {
+        if (isRoutePath(path)) writeRoute(store as never, path, value, WRITE);
+        else if (value === undefined) store.delete(path, WRITE);
+        else store.set(path, value as never, WRITE);
+    };
+
     const host: LogicHost = {
         get: (path) => (beforeChange?.has(path) ? beforeChange.get(path) : plain(store.get(path))),
         commit(writes: readonly LogicWrite[]) {
             const before = writes.map((write) => plain(store.get(write.path)));
             const done: number[] = [];
             try {
-                writes.forEach((write, position) => {
-                    if (write.value === undefined) store.delete(write.path, WRITE);
-                    else store.set(write.path, write.value as never, WRITE);
+                writes.forEach((one, position) => {
+                    write(one.path, one.value);
                     done.push(position);
                 });
             } catch (error) {
-                for (const position of done.reverse()) {
-                    const { path } = writes[position] as LogicWrite;
-                    const value = before[position];
-                    if (value === undefined) store.delete(path, WRITE);
-                    else store.set(path, value as never, WRITE);
-                }
+                for (const position of done.reverse()) write((writes[position] as LogicWrite).path, before[position]);
                 throw error;
             }
         },
@@ -147,11 +152,11 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
     };
 
     engine.start();
-    store.on(WATCHED, listener);
+    store.on(watched, listener);
     return () => {
         stopped = true;
         engine.stop();
-        store.off(WATCHED, listener);
+        store.off(watched, listener);
     };
 }
 

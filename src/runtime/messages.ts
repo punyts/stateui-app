@@ -117,7 +117,10 @@ export interface WriteMessage extends Envelope<'write'> {
     icons?: IconsMap;
 }
 
-/** A component command from `ui_command`: `target` is the `$.app` state path of a node, `command` a command its component declares */
+/**
+ * A command from `ui_command`: `target` is the state path of a node (`$.app...` or `$.screens.{name}...`) and `command` a
+ * command its component declares, or `navigate` with a screen name as `target` and the params as `value`
+ */
 export interface CommandMessage extends Envelope<'command'> {
     target: string;
     command: string;

@@ -8,7 +8,7 @@ import type { Link } from '../../core/links/index.js';
 import { extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
-import { ROUTE_PATH, isRouteRefusal, routeTo } from '../../core/route/index.js';
+import { OUTLET_COMPONENT, ROUTE_PATH, findOutlet, initialRoute, isRouteRefusal, routeTo, screenPath } from '../../core/route/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
@@ -23,6 +23,8 @@ import { ensureAppRoot } from '../app/index.js';
 import { nodeThemeMapper } from '../theme/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
 import { startBrowserLogic } from './logic.js';
+import { startScreens, writeRoute } from './screens.js';
+import type { ScreenView } from './screens.js';
 import { mountSteps } from './steps.js';
 import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
 
@@ -44,8 +46,11 @@ function baseOptions(library: ComponentLibrary, componentTokens: readonly Compon
     };
 }
 
-function initialState(document: AppDocument, app: Node, mode: AppMode): AppState {
+function initialState(document: AppDocument, app: Node, mode: AppMode, screens: Record<string, Node> | undefined): AppState {
+    const route = initialRoute(document);
     return {
+        ...(screens === undefined ? {} : { screens }),
+        ...(route === undefined ? {} : { route }),
         theme: { tokens: {}, active: {} },
         data: cloneJson((document.data ?? {}) as JsonObject) as JsonObject,
         locale: typeof document.locale === 'string' ? document.locale : DEFAULT_LOCALE,
@@ -86,16 +91,16 @@ function below(path: string, base: string): string[] {
 }
 
 /**
- * The nodes from `$.app` down to the nearest node above `path`, in a copy of the store's tree that holds `node` at
- * `path`, so the node references of a node written after mount resolve as they would in the whole app. Empty when the
- * parent of `path` does not exist
+ * The nodes from the root at `base` (`$.app` or a screen) down to the nearest node above `path`, in a copy of the
+ * store's tree that holds `node` at `path`, so the node references of a node written after mount resolve as they
+ * would in the whole tree. Empty when the parent of `path` does not exist
  */
-function ancestorsOf(app: JsonObject, path: string, node: Node): { node: Node; path: string }[] {
-    const root = cloneJson(app);
-    const segments = below(path, APP_PATH);
-    const ancestors: { node: Node; path: string }[] = [{ node: root as unknown as Node, path: APP_PATH }];
+function ancestorsOf(tree: JsonObject, path: string, node: Node, base: string): { node: Node; path: string }[] {
+    const root = cloneJson(tree);
+    const segments = below(path, base);
+    const ancestors: { node: Node; path: string }[] = [{ node: root as unknown as Node, path: base }];
     let holder: JsonObject = root;
-    let holderPath = APP_PATH;
+    let holderPath = base;
     for (const segment of segments.slice(0, -1)) {
         const next = holder[segment];
         if (typeof next !== 'object' || next === null || Array.isArray(next)) return [];
@@ -129,6 +134,8 @@ function failed(errors: BuildError[]): MountedApp {
         baseLocale: undefined,
         errors,
         raise: () => undefined,
+        visibleScreen: () => undefined,
+        navigate: (screen) => `the app did not mount, so it cannot navigate to "${screen}"`,
         writeNode: (path) => [buildError('SUI-RUN-WRITE', { path, statePath: path })],
         removeNode: () => false,
         dispose: () => undefined
@@ -184,13 +191,30 @@ export function mountApp(
     removeLinked(extracted.tree, extracted.links);
     const baseOverlay = extractBaseOverlay(extracted.tree, extracted.linkedPaths);
     restoreRowLinks(extracted.tree, rowLinks);
+
+    // Each screen resolves and links as the shell does, at its own root `$.screens.{name}`; a node reference in a
+    // screen resolves within that screen, as the validator checks it
+    const screens = document.screens;
+    let screenTrees: Record<string, Node> | undefined;
+    for (const [name, screen] of Object.entries(screens ?? {})) {
+        const path = screenPath(name);
+        const one = resolveNode(cloneJson(screen.root as unknown as JsonObject) as Node, library, document.composed, { path });
+        Object.assign(resolved.instances, one.instances);
+        const links = extractLinks(one.node, { library, instances: resolved.instances, path });
+        if (!isValid(links.errors)) return failed([...errors, ...links.errors]);
+        const rows = links.links.filter((link) => ROW_LINK_TARGET.test(link.target));
+        appLinks.push(...links.links.filter((link) => !ROW_LINK_TARGET.test(link.target)));
+        removeLinked(links.tree, links.links, path);
+        restoreRowLinks(links.tree, rows, path);
+        screenTrees = { ...screenTrees, [name]: links.tree };
+    }
     const context: MountContext = {
         host,
         document,
         library,
         componentTokens: collected.tokens,
         instances: resolved.instances,
-        state: initialState(document, extracted.tree, mode),
+        state: initialState(document, extracted.tree, mode, screenTrees),
         options: baseOptions(library, collected.tokens),
         hooks
     };
@@ -207,6 +231,7 @@ export function mountApp(
 
     const store = createStore<AppState>(context.state);
     store.protect(RUNTIME_PATHS.empty);
+    if (context.state.route !== undefined) store.protect(ROUTE_PATH);
 
     const linkErrors = applyLinks(store, appLinks);
     if (linkErrors.length > 0) {
@@ -234,17 +259,39 @@ export function mountApp(
     setNodeOptions(context.options);
     const rootTag = ensureAppRoot(collected.tokens);
     mount(host, store);
-    const screens = document.screens;
     const navigate =
         screens === undefined
             ? undefined
             : (screen: string, params: JsonValue | undefined): string | undefined => {
                   const route = routeTo(screens, screen, params);
                   if (isRouteRefusal(route)) return route.reason;
-                  return store.set(ROUTE_PATH as never, route as never) ? undefined : `the store refused the write to ${ROUTE_PATH}`;
+                  return writeRoute(store as never, ROUTE_PATH, route) ? undefined : `the store refused the write to ${ROUTE_PATH}`;
               };
-    const dispatcher = createDispatcher({ host, store, library, instances: resolved.instances, rootPath: APP_PATH, hooks, ...(navigate === undefined ? {} : { navigate }) });
+    const screenRoots = Object.keys(screens ?? {}).map(screenPath);
+    const dispatcher = createDispatcher({
+        host,
+        store,
+        library,
+        instances: resolved.instances,
+        rootPath: APP_PATH,
+        roots: screenRoots,
+        hooks,
+        ...(navigate === undefined ? {} : { navigate })
+    });
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));
+    const outletPath = screens === undefined ? undefined : findOutlet(extracted.tree as unknown as JsonValue, APP_PATH);
+    const outletTag = rootEntry(library, OUTLET_COMPONENT)?.tag;
+    const screenView: ScreenView | undefined =
+        screens === undefined
+            ? undefined
+            : startScreens({
+                  host,
+                  store: store as never,
+                  screens: Object.keys(screens),
+                  ...(outletPath === undefined || outletTag === undefined ? {} : { outlet: { path: outletPath, tag: outletTag } })
+              });
+    /** The root (`$.app` or a screen's) that a node written at `path` goes below; undefined for any other path */
+    const baseOf = (path: string): string | undefined => [APP_PATH, ...screenRoots].find((base) => path.startsWith(`${base}.`));
 
     let disposed = false;
     const instances = resolved.instances;
@@ -280,12 +327,18 @@ export function mountApp(
         raise(name, payload): void {
             if (!disposed) dispatcher.raise(name, payload);
         },
+        visibleScreen: () => screenView?.visible(),
+        navigate(screen, params): string | undefined {
+            if (disposed) return `the app is disposed, so it cannot navigate to "${screen}"`;
+            return navigate === undefined ? `the app has no screens, so it cannot navigate to "${screen}"` : navigate(screen, params);
+        },
         writeNode(path, node, writeOptions): BuildError[] {
             const refused = [buildError('SUI-RUN-WRITE', { path, statePath: path })];
-            if (disposed || !path.startsWith(`${APP_PATH}.`) || !isNodeValue(node)) return refused;
+            const base = baseOf(path);
+            if (disposed || base === undefined || !isNodeValue(node)) return refused;
             const one = resolveNode(cloneJson(node as unknown as JsonObject) as Node, library, document.composed, { path });
             if (!isValid(one.errors)) return one.errors;
-            const ancestors = ancestorsOf(JSON.parse(JSON.stringify(store.get(APP_PATH))) as JsonObject, path, one.node);
+            const ancestors = ancestorsOf(JSON.parse(JSON.stringify(store.get(base))) as JsonObject, path, one.node, base);
             if (ancestors.length === 0) return refused;
             for (const key of Object.keys(instances)) if (atOrBelow(key, path)) delete instances[key];
             Object.assign(instances, one.instances);
@@ -304,7 +357,7 @@ export function mountApp(
             return applyLinks(store, links);
         },
         removeNode(path, writeOptions): boolean {
-            if (disposed || !path.startsWith(`${APP_PATH}.`)) return false;
+            if (disposed || baseOf(path) === undefined) return false;
             dropLinks(path);
             for (const key of Object.keys(instances)) if (atOrBelow(key, path)) delete instances[key];
             return store.delete(path as never, writeOptions);
@@ -314,6 +367,7 @@ export function mountApp(
             disposed = true;
             stopLogic?.();
             dispatcher.dispose();
+            screenView?.dispose();
             root.remove();
             unmount(host);
             for (const dispose of disposers.reverse()) {

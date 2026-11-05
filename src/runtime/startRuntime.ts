@@ -376,7 +376,7 @@ export function startRuntime(
     }
 
     function writes(message: WriteMessage): void {
-        const app = mounted;
+        const app: MountedApp = mounted as MountedApp;
         const store = app?.store;
         if (!app || !store) {
             dropped.unhandled += 1;
@@ -409,7 +409,13 @@ export function startRuntime(
             dropped.unhandled += 1;
             return;
         }
-        const run = { host: options.host ?? win.document.body, store: store as unknown as CommandContext['store'], library };
+        const app: MountedApp = mounted as MountedApp;
+        const run = {
+            host: options.host ?? win.document.body,
+            store: store as unknown as CommandContext['store'],
+            library,
+            navigate: (screen: string, params: JsonValue | undefined) => app.navigate(screen, params)
+        };
         const error = runCommandMessage(run, message.target, message.command, message.value);
         if (error) postErrors([error]);
     }

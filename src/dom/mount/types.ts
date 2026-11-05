@@ -3,7 +3,8 @@ import type { NodeOptions } from '@punyts/stateui';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
-import type { AppDocument, AppEventName, JsonObject, Node } from '../../core/types.js';
+import type { RouteState } from '../../core/route/index.js';
+import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
 import type { AppMode } from '../../core/validate/index.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
@@ -18,6 +19,10 @@ export interface AppState {
     locale: string;
     /** The resolved `app` tree, without its `<-` links (they are store aliases) */
     app: Node;
+    /** Each screen's resolved root by name, without its `<-` links; only for a document with screens */
+    screens?: Record<string, Node>;
+    /** The visible screen and its params; only for a document with screens. Protected: only `navigate` writes it */
+    route?: RouteState;
     /** Never from the document: controller state and shared values */
     runtime: {
         /** The runtime branch of each node (`runtimePath`) */
@@ -80,8 +85,12 @@ export interface MountedApp {
     errors: BuildError[];
     /** Runs the root node's `on` entry for an app event with the payload; nothing when the app did not mount */
     raise(name: AppEventName, payload?: unknown): void;
+    /** The screen that shows (`$.route.screen` once mounted); undefined for an app without screens */
+    visibleScreen(): string | undefined;
+    /** Runs `navigate`: moves `$.route` to `screen` with `params`. Returns why it cannot, undefined when it moved */
+    navigate(screen: string, params?: JsonValue): string | undefined;
     /**
-     * Mounts a node written after start at `path` (below `$.app`), as a load would: component defaults and composed
+     * Mounts a node written after start at `path` (below `$.app` or a screen's `$.screens.{name}`), as a load would: component defaults and composed
      * components resolved, its `<-` links applied (node references resolve against the whole app) and the links of the
      * node it replaces removed. A plain store write of a node does none of this. Returns the errors; empty when it mounted
      */

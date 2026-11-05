@@ -220,7 +220,8 @@ A command object is `{ command, target?, value? }`. `value` is the command's arg
 
 Targets: `^name.path` (nearest node, starting with the node itself, whose key is `name` or that is an instance of
 composed component `name`, then the path below it), `.path` (own subtree), `$parent` (nearest ancestor whose component
-declares the command), `$row` / `$row.path` (the record a row template's slot shows) and `$.app…` (absolute). Dot
+declares the command), `$row` / `$row.path` (the record a row template's slot shows) and `$.app…` (absolute; in a
+screen, `$.screens.{name}…` paths of that screen name nodes too, while in the shell they are plain state paths). Dot
 climbing (`..x`) is rejected.
 
 **`$row`.** Legal as a `target` and as a `value` (`"value": "$row.id"`) only inside a row template (the value of a
@@ -285,7 +286,8 @@ A runtime property that still has its default in a resolved node counts as not s
 value is `SUI-STATE-RUNTIME`.
 
 Layouts, node overrides, ordered keys, `on` entries and the node limit cover the screens as they cover `app`.
-`core/route/` holds the route: `ROUTE_PATH` (`$.route`), `RouteState` (`{ screen, params }`), `paramDefaults(declarations)`
+`core/route/` holds the route: `ROUTE_PATH` (`$.route`), `OUTLET_COMPONENT` (`outlet`), `screenPath(name)`
+(`$.screens.{name}`), `findOutlet(tree, path)` (the path of the first `outlet` node), `RouteState` (`{ screen, params }`), `paramDefaults(declarations)`
 and `initialRoute(document)`, the `start` screen with copies of its params' defaults (undefined without screens).
 
 **Navigating.** `{ "command": "navigate", "target": "product", "value": { "id": "$row.id" } }` moves `$.route` to a
@@ -301,8 +303,10 @@ only; a command with `from` by screen only). A component command named `navigate
 
 ## Dispatching `on` in the browser
 
-`createDispatcher({ host, store, library, instances?, rootPath?, hooks? })` listens on `host` (the element the store is
-mounted on) and runs the `on` entry of the node that raised an event. It returns `{ dispose() }`.
+`createDispatcher({ host, store, library, instances?, rootPath?, roots?, hooks?, navigate? })` listens on `host` (the
+element the store is mounted on) and runs the `on` entry of the node that raised an event. It returns `{ dispose() }`.
+`roots` are more roots whose nodes raise events (`mountApp` passes each screen's `$.screens.{name}`); a node's chain and
+absolute targets start at the root that holds it, and app events still run on `rootPath`.
 
 **Events.** A root component raises an event on its own element, with `bubbles` and `composed` set; `detail` is the
 payload:
@@ -466,21 +470,31 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
 
 1. `validateDocument` runs first. Any error (a warning does not count) stops the run: `store` is `undefined`, `errors`
    holds everything found with state paths, and nothing is added to `host`.
-2. `composed` is resolved against the library and `app` is resolved node by node. `<-` properties are removed from the
+2. `composed` is resolved against the library and `app` and each screen's `root` are resolved node by node (a screen at
+   `$.screens.{name}`, where a node reference resolves within that screen, as the validator checks it). `<-` properties are removed from the
    tree, node references are resolved to the exposed runtime properties they reach, and the links become store aliases
    (`applyLinks`) once the store exists. A link that cannot be resolved or applied stops the run.
    A `$row` link inside a row template is the exception: it has no target until a record view (or a component such as
    `descriptionList`) makes a runtime copy of the template, so it is not applied; the `<-key` stays in the tree as
    written and the component passes the template to `resolveRowLinks`.
-3. The store holds `{ theme, data, locale, app, runtime }`:
+3. The store holds `{ theme, data, locale, app, runtime }`, and for a document with screens `screens` and `route`:
    - `theme` is `{ tokens, active }`: the document's `theme.tokens` over the default tree (every token, so a write patches one custom property) and `active` as `{ mode: "light", brand: "default", motion: "full" }` unless the document gives other names. See Token emission below.
    - `data` is a copy of the document's `data`; the document itself is never changed.
    - `locale` is the document's, `"en"` by default.
    - `runtime` is never read from the document: `nodes` (`{}`), `icons` (`{}`, written by the host's `load` message) and
      `empty` (`{}`, the shared empty record). `$.runtime.empty` is protected, so nothing can write into it.
+   - `screens` holds each screen's resolved root by name, without its `<-` links.
+   - `route` starts as `initialRoute(document)` and is protected: only `navigate` (an `on` entry, the logic,
+     `MountedApp.navigate` or the runtime's `command` message) writes it, through `writeRoute`.
 4. `<sui-node>` gets a resolver (component name to the root component's tag) and options (`reflect(name)` from the shapes'
    `reflect: true` properties). The store is mounted on `host`, the `on` dispatcher is attached and `<ui-app-root>`
    is appended; it holds `<sui-node state="$.app">`. If the library registers its own `ui-app-root` first, that one is used (it then carries no token properties).
+   With screens, `startScreens` shows the screen `$.route.screen` names: on its first visit a container
+   (`<div data-sui-screen="{name}">` holding `<sui-node state="$.screens.{name}">`) is appended to the element of the
+   shell's first `outlet` node (the host when there is none), and a screen that is left gets `hidden`, so its elements
+   and articulation (typed values, open panels) are there on the way back. The shell is never re-rendered.
+   `visibleScreen()` says which screen shows and `navigate(screen, params?)` moves the route (it returns why it cannot).
+   `writeNode` and `removeNode` take paths below a screen's root as well as below `$.app`.
 5. `dispose()` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and clears the resolver and
    options (only if no later `mountApp` replaced them). It is safe to call twice. The resolver and options are global to
    StateUI, so run one app per page at a time.
@@ -544,7 +558,7 @@ Code is in `src/runtime/`. `protocol` holds the closed set of messages and the v
 - `write` sets or removes the paths and merges `icons`. A value that is a whole node (an object with a `component`) below `$.app` is mounted as a load would mount it (`MountedApp.writeNode`): component defaults and composed components resolved, its `<-` links applied with `^name` references resolved against the whole app, and the links of the node it replaces removed; removing a node removes its links (`removeNode`). To swap a component or change a link, write the node whole: a `component` or `<-` key written on its own is a plain store write. Writes are sync writes (`SYNC_ORIGIN` of `@punyts/state-sync`): they post no `change`. A write the store refuses posts `SUI-RUN-WRITE`. The host's sync client writes the server's changes and the sync status this way.
 - `event` raises an app event (`sync.rejected`, from the sync client's `onRejected`) with `MountedApp.raise`: the root node's `on` entry for it runs with the payload as `context.payload`, so `{ command: 'emit', target: 'rejected' }` passes `{ path, reason }` on. `validateOn` accepts the app events on the root node only.
 - `ping` is answered with `pong`.
-- `command` (`target`, `command`, `value?`) runs a component command with the command runner the dispatcher uses for `on`. `target` is the `$.app` state path of a node; its component must declare `command` and its element must handle it (`element.commands`). An unknown target posts `SUI-RUN-ON-TARGET`, an undeclared or unhandled command `SUI-RUN-ON-COMMAND`, and nothing changes. The system commands `set`, `toggle` and `emit` are refused with `SUI-RUN-ON-COMMAND`: a write goes through `write`, and `emit` would send the minion's own event back to it.
+- `command` (`target`, `command`, `value?`) runs a component command with the command runner the dispatcher uses for `on`. `target` is the state path of a node (`$.app…`, or `$.screens.{name}…` for a node of a screen); its component must declare `command` and its element must handle it (`element.commands`). An unknown target posts `SUI-RUN-ON-TARGET`, an undeclared or unhandled command `SUI-RUN-ON-COMMAND`, and nothing changes. `navigate` takes a screen name as `target` and the params as `value` and runs `MountedApp.navigate`; a refusal posts `SUI-RUN-ON-COMMAND` with the reason. The system commands `set`, `toggle` and `emit` are refused with `SUI-RUN-ON-COMMAND`: a write goes through `write`, and `emit` would send the minion's own event back to it. `$.route` and `$.screens` are not synced branches yet: their changes are posted but the host drops them, and `write` cannot reach them.
 - `locale` (`locale`) applies the language overlay with `switchLocale`: the text content of `$.app` changes and `$.data` does not. The overlays come from the document's `locales` and from `startRuntime`'s `componentOverlays` option (the library's `<name>.locale.<code>.json` files, as `ComponentOverlays`); a library overlay replaces only content that still holds the component's default. A language with no overlay posts `SUI-LOCALE-UNKNOWN`. The base language of the document is also a valid code.
 - `theme` (`kind`, `name`) applies the overlay `name` of `kind` (`mode`, `brand` or `motion`) with `applyOverlay`: the shipped overlays and the document's `themes`. An unknown kind or name posts `SUI-THEME-OVERLAY`. Going back is applying the other overlay of the kind (`light`).
 - `command`, `locale`, `theme`, `write` and `event` need a mounted application; before `load` they are counted as `unhandled`. A `load` mounts again from the document, so the host sends `locale` and `theme` again after it.

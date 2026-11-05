@@ -61,6 +61,8 @@ export interface DispatcherOptions {
     instances?: Readonly<Record<string, string[]>>;
     /** The state path of the root node; `$.app` when absent */
     rootPath?: string;
+    /** More roots whose nodes raise events, such as the screens (`$.screens.home`); app events still run on `rootPath` */
+    roots?: readonly string[];
     hooks?: DispatchHooks;
     /** Runs the `navigate` command: moves `$.route` to a screen, or returns why it cannot. Absent in an app without screens */
     navigate?(screen: string, params: JsonValue | undefined): string | undefined;

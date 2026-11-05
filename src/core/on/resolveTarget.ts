@@ -3,6 +3,7 @@ import type { JsonValue } from '../types.js';
 import type { Frame, Located, ParsedTarget, TreeNode } from './types.js';
 
 const APP_STEP = 'app';
+const SCREENS_STEP = 'screens';
 
 /**
  * Walks `segments` down from a node. A step is a slot (a node-typed property), the `children` map or a child key;
@@ -94,7 +95,9 @@ export function resolveTarget(
     }
 
     const path = `$.${target.segments.join('.')}`;
-    if (target.segments[0] !== APP_STEP) return { kind: 'state', path };
+    // In a screen, a path below its root `$.screens.{name}` names nodes as `$.app` paths do
+    const inScreen = target.segments[0] === SCREENS_STEP && (path === rootPath || path.startsWith(`${rootPath}.`));
+    if (target.segments[0] !== APP_STEP && !inScreen) return { kind: 'state', path };
     if (path === rootPath) return walk(root.node, rootPath, []);
     if (!path.startsWith(`${rootPath}.`)) return { kind: 'outside', path };
     return walk(root.node, rootPath, path.slice(rootPath.length + 1).split('.'));

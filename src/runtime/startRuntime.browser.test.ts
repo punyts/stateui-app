@@ -575,6 +575,37 @@ describe('startRuntime in Chromium', () => {
             expect(textOf(host)).toContain('label:Ada');
         });
 
+        it('should navigate with a navigate command message and run a component command on a node of a screen', () => {
+            // Arrange
+            const document = {
+                app: panel({ greeting: { component: 'heading' } }),
+                screens: {
+                    home: { title: 'Home', root: panel({ who: { component: 'label', text: 'home' } }) },
+                    detail: { title: 'Detail', params: { id: { type: 'string', required: true } }, root: panel({ dlg: { component: 'modal' } }) }
+                },
+                start: 'home'
+            } as unknown as AppDocument;
+            send(message('load', { document }));
+            const visible = (): string[] =>
+                Array.from(host.querySelectorAll('[data-sui-screen]'))
+                    .filter((element) => !(element as HTMLElement).hidden)
+                    .map((element) => element.getAttribute('data-sui-screen') as string);
+
+            // Act
+            send(message('command', { target: 'detail', command: 'navigate', value: { id: 'd1' } }));
+            const modal = find(host, 'x-rt-modal') as Commanded;
+            const open = vi.fn();
+            modal.commands = { open };
+            send(message('command', { target: '$.screens.detail.children.dlg', command: 'open' }));
+            send(message('command', { target: 'nowhere', command: 'navigate' }));
+            send(message('command', { target: 'detail', command: 'navigate', value: {} }));
+
+            // Assert
+            expect(visible()).toEqual(['detail']);
+            expect(open).toHaveBeenCalledTimes(1);
+            expect(errorCodes()).toEqual(['SUI-RUN-ON-COMMAND', 'SUI-RUN-ON-COMMAND']);
+        });
+
         it('should change the text content with a locale overlay and leave $.data unchanged', async () => {
             // Arrange
             send(message('load', { document: modalDoc() }));

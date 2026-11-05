@@ -202,6 +202,14 @@ describe('the document check of navigate', () => {
         expect(codesAndPaths(validateDocument(single, LIBRARY).errors)).toEqual(['SUI-ROUTE-SCREEN $.app.children.go.on.press']);
     });
 
+    it('should read a $.screens path as a node path in its own screen and as a state path in the shell', () => {
+        const inScreen = documentWith('screens.home.root.children.go.on', { press: { command: 'set', target: '$.screens.home.children.go.nope', value: 1 } });
+        const inShell = documentWith('app.children.go', { component: 'button', on: { press: { command: 'set', target: '$.screens.home.children.go.nope', value: 1 } } });
+
+        expect(codesAndPaths(validateDocument(inScreen, LIBRARY).errors)).toEqual(['SUI-ON-TARGET $.screens.home.children.go.on.press']);
+        expect(codesAndPaths(validateDocument(inShell, LIBRARY).errors)).toEqual([]);
+    });
+
     it('should report a navigate without target as a malformed on entry', () => {
         const document = documentWith('screens.home.root.children.go.on', { press: { command: 'navigate' } });
 
