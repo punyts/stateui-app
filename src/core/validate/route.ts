@@ -1,7 +1,8 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
-import { NAVIGATE_COMMAND, checkNavigate } from '../route/index.js';
+import { NAVIGATE_COMMAND, OUTLET_COMPONENT, checkNavigate } from '../route/index.js';
+import { RESERVED_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 import type { DocumentValidationContext } from './types.js';
 
@@ -31,5 +32,40 @@ export function validateRoutes(context: DocumentValidationContext): BuildError[]
     findNavigates(context.tree.node, '$.app', visit);
     for (const [name, tree] of Object.entries(context.screens ?? {})) findNavigates(tree.node, `$.screens.${name}`, visit);
     findNavigates(context.document.logic as JsonValue | undefined, '$.logic', visit);
+    return errors;
+}
+
+/** The paths of every `outlet` node below `value`, depth first in key order, not looking inside `on` entries */
+function findOutlets(value: JsonValue | undefined, path: string, found: string[] = []): string[] {
+    if (Array.isArray(value)) {
+        value.forEach((item, index) => findOutlets(item, `${path}.${index}`, found));
+        return found;
+    }
+    if (!isObject(value)) return found;
+    if (value[RESERVED_KEYS.component] === OUTLET_COMPONENT) found.push(path);
+    for (const [key, item] of Object.entries(value)) {
+        if (key !== RESERVED_KEYS.on) findOutlets(item, `${path}.${key}`, found);
+    }
+    return found;
+}
+
+function outletError(path: string, reason: string): BuildError {
+    return buildError('SUI-SHELL-OUTLET', { path, statePath: path, reason });
+}
+
+/**
+ * Checks where the screens show (`SUI-SHELL-OUTLET`): in an app with screens the resolved shell holds exactly one
+ * `outlet` node (one a composed component brings counts), and no screen holds one. An app without screens is not
+ * checked, so an `outlet` there is an ordinary empty node
+ */
+export function validateOutlets(context: DocumentValidationContext): BuildError[] {
+    if (!isObject(context.document.screens as JsonValue | undefined)) return [];
+    const errors: BuildError[] = [];
+    const inShell = findOutlets(context.tree.node, '$.app');
+    if (inShell.length === 0) errors.push(outletError('$.app', 'the shell of an app with screens needs one outlet node to show them in'));
+    for (const extra of inShell.slice(1)) errors.push(outletError(extra, `the shell has more than one outlet; the screens show in ${inShell[0]}`));
+    for (const [name, tree] of Object.entries(context.screens ?? {})) {
+        for (const path of findOutlets(tree.node, `$.screens.${name}`)) errors.push(outletError(path, 'only the shell holds an outlet; a screen cannot'));
+    }
     return errors;
 }

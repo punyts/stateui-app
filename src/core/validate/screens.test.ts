@@ -93,6 +93,25 @@ describe('validateDocument with screens', () => {
         expect(codesAndPaths(validateDocument(documentWith('screens.home.locales', []), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.screens.home']);
     });
 
+    it('should need exactly one outlet in the shell and none in a screen', () => {
+        // Arrange
+        const none = documentWith('app.children', { header: { component: 'panel' } });
+        const two = documentWith('app.children', { main: { component: 'outlet' }, side: { component: 'outlet' } });
+        const inScreen = documentWith('screens.home.root.children', { go: { component: 'button' }, inner: { component: 'outlet' } });
+        const withoutScreens = { app: { component: 'page', children: { main: { component: 'outlet' } } } } as unknown as JsonObject;
+
+        // Act
+        const outletErrors = (document: JsonObject): string[] =>
+            codesAndPaths(validateDocument(document, LIBRARY).errors.filter((error) => error.code === 'SUI-SHELL-OUTLET'));
+
+        // Assert
+        expect(outletErrors(none)).toEqual(['SUI-SHELL-OUTLET $.app']);
+        expect(outletErrors(two)).toEqual(['SUI-SHELL-OUTLET $.app.children.side']);
+        expect(outletErrors(inScreen)).toEqual(['SUI-SHELL-OUTLET $.screens.home.children.inner']);
+        expect(outletErrors(withoutScreens)).toEqual([]);
+        expect(outletErrors(DOCUMENT)).toEqual([]);
+    });
+
     it('should need start with screens, naming one of them, and screens with start', () => {
         expect(codesAndPaths(validateDocument(documentWith('start', undefined), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.start']);
         expect(codesAndPaths(validateDocument(documentWith('start', 'cart'), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.start']);

@@ -1,7 +1,7 @@
 import { validateLayouts, validatePlacements } from '../layout/index.js';
 import { createLogicIndex, readLogic } from '../logic/index.js';
 import { validateOn } from '../on/index.js';
-import { validateRoutes } from './route.js';
+import { validateOutlets, validateRoutes } from './route.js';
 import { validateSteps } from './steps.js';
 import type { DocumentValidator } from './types.js';
 
@@ -38,3 +38,4 @@ registerDocumentValidator('logic', (context) => {
     return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain }).errors;
 });
 registerDocumentValidator('route', validateRoutes);
+registerDocumentValidator('outlet', validateOutlets);

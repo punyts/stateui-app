@@ -300,6 +300,9 @@ which `mountApp` sets for a document with screens; logic hosts give `screens()`.
 every `navigate` of the shell, the screens and the logic with `checkNavigate`: `SUI-ROUTE-SCREEN` for a target that
 names no screen, `SUI-ROUTE-PARAMS` for literal params that do not fit (a `$`, `^` or `{{ }}` value is checked by name
 only; a command with `from` by screen only). A component command named `navigate` is shadowed by the system command.
+The `outlet` validator checks where the screens show (`SUI-SHELL-OUTLET`): in an app with screens the resolved shell
+holds exactly one `outlet` node (one a composed component brings counts; each extra one is an error at its path, none is
+an error at `$.app`), and no screen holds one. An app without screens is not checked.
 
 ## Dispatching `on` in the browser
 
