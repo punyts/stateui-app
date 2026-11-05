@@ -42,6 +42,9 @@ function indent(text: string): string {
         .join('\n');
 }
 
+/** The gap of a container whose layout names none, and of a layout host with no layout: siblings never touch unless asked */
+export const DEFAULT_GAP = 'var(--ui-space-gap-md)';
+
 /** `gap` maps to the `space.gap` tokens; `none` is no gap */
 function gapRules(type: LayoutType): string[] {
     return GAPS.map((gap) => block(container(type, 'gap', gap), [`gap: ${gap === 'none' ? '0' : `var(--ui-space-gap-${gap})`}`]));
@@ -112,7 +115,10 @@ function collapseRules(type: LayoutType): string[] {
 export function generateLayoutBase(): string {
     return [
         block(':host', ['display: block', 'container-type: inline-size']),
-        block('[layout-host]', ['display: block', 'container-type: inline-size'])
+        block('[layout-host]', ['display: block', 'container-type: inline-size']),
+        // A layout host whose node sets no layout stacks its children as a column with the default gap. :where keeps
+        // the rule at the specificity of [layout-host], so a component's own rule (an empty body hidden) still wins
+        block('[layout-host]:where(:not([layout]))', ['display: flex', 'flex-direction: column', `gap: ${DEFAULT_GAP}`])
     ].join('\n');
 }
 
@@ -124,11 +130,11 @@ export function generateLayoutSheet(type: LayoutType): string {
     const rules: string[] = [];
     switch (type) {
         case 'column':
-            rules.push(block(container(type), ['display: flex', 'flex-direction: column']), ...alignRules(type), ...gapRules(type), ...growRules(type));
+            rules.push(block(container(type), ['display: flex', 'flex-direction: column', `gap: ${DEFAULT_GAP}`]), ...alignRules(type), ...gapRules(type), ...growRules(type));
             break;
         case 'row':
             rules.push(
-                block(container(type), ['display: flex', 'flex-direction: row']),
+                block(container(type), ['display: flex', 'flex-direction: row', `gap: ${DEFAULT_GAP}`]),
                 block(container(type, 'wrap'), ['flex-wrap: wrap']),
                 ...alignRules(type),
                 ...gapRules(type),
@@ -141,7 +147,8 @@ export function generateLayoutSheet(type: LayoutType): string {
                 block(container(type), [
                     'display: grid',
                     'grid-template-columns: repeat(var(--layout-cols, 1), minmax(0, 1fr))',
-                    'grid-template-rows: repeat(var(--layout-rows), auto)'
+                    'grid-template-rows: repeat(var(--layout-rows), auto)',
+                    `gap: ${DEFAULT_GAP}`
                 ]),
                 ...gapRules(type),
                 ...gridPlacementRules()
@@ -153,7 +160,8 @@ export function generateLayoutSheet(type: LayoutType): string {
                     'display: grid',
                     'grid-template-columns: auto minmax(0, 1fr) auto',
                     'grid-template-rows: auto minmax(0, 1fr) auto',
-                    `grid-template-areas: ${REGION_ROWS.map((row) => `"${row.join(' ')}"`).join(' ')}`
+                    `grid-template-areas: ${REGION_ROWS.map((row) => `"${row.join(' ')}"`).join(' ')}`,
+                    `gap: ${DEFAULT_GAP}`
                 ]),
                 ...gapRules(type),
                 ...REGIONS.map((region) => block(item(type, `region=${region}`), [`grid-area: ${region}`]))

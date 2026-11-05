@@ -23,6 +23,14 @@ describe('generateLayoutBase', () => {
         expect(base).toContain(':host {\n    display: block;\n    container-type: inline-size;\n}');
         expect(base).toContain('[layout-host] {\n    display: block;\n    container-type: inline-size;\n}');
     });
+
+    it('should stack the children of a layout host without a layout as a column with the default gap, at low specificity', () => {
+        // Arrange and Act
+        const base = generateLayoutBase();
+
+        // Assert
+        expect(base).toContain('[layout-host]:where(:not([layout])) {\n    display: flex;\n    flex-direction: column;\n    gap: var(--ui-space-gap-md);\n}');
+    });
 });
 
 describe('generateLayoutSheet', () => {
@@ -32,6 +40,14 @@ describe('generateLayoutSheet', () => {
 
         // Assert
         expect(sheet).toContain(`[layout-host][layout=column][layout-gap="${gap}"] {\n    gap: var(--ui-space-gap-${gap});\n}`);
+    });
+
+    it.each(['column', 'row', 'grid', 'region'] as const)('should give a %s container the md gap when its layout names no gap', (type) => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet(type);
+
+        // Assert
+        expect(sheet).toMatch(new RegExp(`\\[layout-host\\]\\[layout=${type}\\] \\{[^}]*gap: var\\(--ui-space-gap-md\\);`));
     });
 
     it('should map layout-gap=none to no gap', () => {
