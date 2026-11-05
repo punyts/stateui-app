@@ -93,7 +93,7 @@ The sheet also draws focus: `:host(:focus-visible)` and `:focus-visible` inside 
 | `region` | `gap`, `collapseBelow` | `region` (`n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`, `center`) |
 | `adhoc` | none | `x`, `y`, `width`, `height` |
 
-Allowed values: `gap` is `none`, `sm`, `md` or `lg` (default `md`; a container with no `layout` stacks its children as a column with the `md` gap); `align` is `start`, `center`, `end` or `stretch`; `wrap` is boolean; `cols`, `rows`, `col`, `row`, `span` and `rowSpan` are integers 1 to 12; `grow` is a number 0 to 12; `collapseBelow` is `sm`, `md`, `lg` or `xl`; `x`, `y`, `width` and `height` are literal dimensions (`4px`, `1.5rem`, `50%`, `0`), never `calc()` or a token reference.
+Allowed values: `gap` is `none`, `sm`, `md` or `lg` (default `md`; a container with no `layout` stacks its children as a column with the `md` gap); `align` is `start`, `center`, `end` or `stretch`; `wrap` is boolean (below the `sm` breakpoint every row wraps, and no row item is wider than its row); `cols`, `rows`, `col`, `row`, `span` and `rowSpan` are integers 1 to 12; `grow` is a number 0 to 12; `collapseBelow` is `sm`, `md`, `lg` or `xl`; `x`, `y`, `width` and `height` are literal dimensions (`4px`, `1.5rem`, `50%`, `0`), never `calc()` or a token reference.
 
 A component that has no `layout` can declare the placement its children carry with a `placement` key in its `*.state.json`: a table of properties like `properties`, where `_` properties are content (tabs: `_tab`, `icon`, `badge`). A shape cannot have both `"layout": true` and `placement`.
 

@@ -91,6 +91,16 @@ function gridPlacementRules(): string[] {
 }
 
 /**
+ * Below the `sm` breakpoint a row wraps, whether or not it names `wrap`: a phone has no room for a header of a
+ * brand, links and a cart on one line, and an item that keeps its width (beside a growing one) would be cut at the
+ * edge. An item is never wider than its row. A row that names `collapseBelow` stacks instead, and that rule wins
+ */
+function rowNarrowRules(): string {
+    const rules = [block(container('row'), ['flex-wrap: wrap']), block(item('row'), ['max-inline-size: 100%'])];
+    return `@container (width < ${BREAKPOINTS.sm}px) {\n${rules.map(indent).join('\n')}\n}`;
+}
+
+/**
  * The container query that stacks a container as one flex column below a breakpoint. Items keep their key order
  * and the grid placement on them stops applying, because flex items ignore it. It restyles the layout host, whose
  * nearest ancestor container is the component host
@@ -139,7 +149,8 @@ export function generateLayoutSheet(type: LayoutType): string {
                 ...alignRules(type),
                 ...gapRules(type),
                 ...growRules(type),
-                ...rowShrinkRules()
+                ...rowShrinkRules(),
+                rowNarrowRules()
             );
             break;
         case 'grid':

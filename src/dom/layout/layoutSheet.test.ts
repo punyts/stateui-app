@@ -70,6 +70,18 @@ describe('generateLayoutSheet', () => {
         expect(generateLayoutSheet('column')).not.toContain('flex-shrink');
     });
 
+    it('should wrap a row and cap its items at the row width below the sm breakpoint', () => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet('row');
+
+        // Assert
+        expect(sheet).toContain(
+            '@container (width < 480px) {\n    [layout-host][layout=row] {\n        flex-wrap: wrap;\n    }\n    [layout=row] > sui-node > * {\n        max-inline-size: 100%;\n    }\n}'
+        );
+        expect(sheet.indexOf('flex-wrap: wrap;\n    }\n    [layout=row]')).toBeLessThan(sheet.indexOf('[layout-collapse-below="sm"]'));
+        expect(generateLayoutSheet('column')).not.toContain('max-inline-size');
+    });
+
     it('should draw grid columns from --layout-cols', () => {
         // Arrange and Act
         const sheet = generateLayoutSheet('grid');
@@ -132,7 +144,8 @@ describe('generateLayoutSheet', () => {
         const tokens = [...sheet.matchAll(/var\((--ui-[a-z0-9-]+)/g)].map((match) => match[1]);
 
         // Assert
-        expect(conditions.length).toBe(12);
+        // Twelve collapse queries (three types, four breakpoints) and the narrow row
+        expect(conditions.length).toBe(13);
         expect(conditions.some((condition) => condition.includes('var('))).toBe(false);
         expect(tokens.length).toBeGreaterThan(0);
         expect(tokens.every((token) => /^--ui-space-gap-(sm|md|lg)$/.test(token ?? ''))).toBe(true);
