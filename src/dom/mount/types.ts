@@ -79,6 +79,11 @@ export interface MountedApp {
     store: Store<AppState> | undefined;
     /** The content of the application as mounted, as an overlay of every unlinked `_` property; undefined with `store` */
     baseOverlay: JsonObject | undefined;
+    /**
+     * The content of each screen as mounted, by screen name, relative to `$.screens.{name}`: the base-language entries
+     * of `switchLocale`'s `screens`. Undefined without screens or without `store`
+     */
+    screenBaseOverlays: Record<string, JsonObject> | undefined;
     /** The language of `baseOverlay`: the document's `locale`, `"en"` when it gives none; undefined with `store` */
     baseLocale: string | undefined;
     /** Validation warnings, or the errors that stopped the run; empty for a clean document */

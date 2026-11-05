@@ -9,7 +9,7 @@ import type { AppBlueprint } from './types.js';
 
 const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'shell', 'screens', 'logic', 'locales'];
 const USES_KEYS = ['themes', 'data', 'logic'];
-const SCREEN_KEYS = ['title', 'params', 'root'];
+const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
 const DECLARATION_KEYS = ['type', 'default', 'required', 'validators'];
 const LOGIC_KEYS = ['machines', 'rules', 'tables'];
@@ -140,6 +140,7 @@ class Reader {
             if (screen['params'] !== undefined) this.declarations(screen['params'], `${at}.params`);
             if (screen['root'] === undefined) this.shape(`${at}.root`, 'a screen needs a root node');
             else this.node(screen['root'], `${at}.root`);
+            if (screen['locales'] !== undefined) this.locales(screen['locales'], `${at}.locales`);
         }
         return value;
     }

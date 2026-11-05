@@ -145,6 +145,11 @@ describe('readBlueprint', () => {
         expect(errorsOf(storeWith('shell', undefined))).toEqual(['SUI-BLUEPRINT-SHAPE $.shell']);
     });
 
+    it('should accept screen locales and refuse ones that are not overlays by language', () => {
+        expect(errorsOf(storeWith('screens.home.locales', { de: { children: {} } }))).toEqual([]);
+        expect(errorsOf(storeWith('screens.home.locales', { de: 'Start' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens.home.locales.de']);
+    });
+
     it('should refuse missing or empty screens and screen names that are not part names', () => {
         expect(errorsOf(storeWith('screens', {}))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens', 'SUI-BLUEPRINT-SHAPE $.start']);
         expect(errorsOf(storeWith('screens.Cart', { root: { component: 'panel' } }))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens.Cart']);

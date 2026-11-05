@@ -75,7 +75,7 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     return errors;
 }
 
-const SCREEN_KEYS = ['title', 'params', 'root'];
+const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const DECLARATION_KEYS = ['type', 'default', 'required', 'validators'];
 
 function screenError(path: string, reason: string): BuildError {
@@ -95,7 +95,7 @@ function paramsProblem(params: JsonValue): string | undefined {
 }
 
 /**
- * The `screens` and `start` keys: `screens` maps part names to `{ title?, params?, root }` with a node as `root`, and
+ * The `screens` and `start` keys: `screens` maps part names to `{ title?, params?, root, locales? }` with a node as `root`, and
  * `start` names one of them; one without the other is an error. Each problem is `SUI-DOC-SCREEN` at the screen's path
  */
 function checkScreens(document: Record<string, JsonValue>): BuildError[] {
@@ -109,7 +109,7 @@ function checkScreens(document: Record<string, JsonValue>): BuildError[] {
             const path = `$.screens.${name}`;
             if (!isPartName(name)) errors.push(screenError(path, `"${name}" is not a screen name (lower-case letters, digits and -)`));
             if (!isObject(screen)) {
-                errors.push(screenError(path, 'a screen is { title?, params?, root }'));
+                errors.push(screenError(path, 'a screen is { title?, params?, root, locales? }'));
                 continue;
             }
             const unknown = Object.keys(screen).filter((key) => !SCREEN_KEYS.includes(key));
@@ -118,6 +118,10 @@ function checkScreens(document: Record<string, JsonValue>): BuildError[] {
             if (!isNodeValue(screen['root'])) errors.push(screenError(path, 'a screen needs a "root" node'));
             const problem = screen['params'] === undefined ? undefined : paramsProblem(screen['params']);
             if (problem !== undefined) errors.push(screenError(path, problem));
+            const locales = screen['locales'];
+            if (locales !== undefined && (!isObject(locales) || Object.values(locales).some((overlay) => !isObject(overlay)))) {
+                errors.push(screenError(path, '"locales" must map language codes to overlays'));
+            }
         }
     }
 

@@ -131,6 +131,7 @@ function failed(errors: BuildError[]): MountedApp {
     return {
         store: undefined,
         baseOverlay: undefined,
+        screenBaseOverlays: undefined,
         baseLocale: undefined,
         errors,
         raise: () => undefined,
@@ -196,6 +197,7 @@ export function mountApp(
     // screen resolves within that screen, as the validator checks it
     const screens = document.screens;
     let screenTrees: Record<string, Node> | undefined;
+    let screenBaseOverlays: Record<string, JsonObject> | undefined;
     for (const [name, screen] of Object.entries(screens ?? {})) {
         const path = screenPath(name);
         const one = resolveNode(cloneJson(screen.root as unknown as JsonObject) as Node, library, document.composed, { path });
@@ -205,6 +207,7 @@ export function mountApp(
         const rows = links.links.filter((link) => ROW_LINK_TARGET.test(link.target));
         appLinks.push(...links.links.filter((link) => !ROW_LINK_TARGET.test(link.target)));
         removeLinked(links.tree, links.links, path);
+        screenBaseOverlays = { ...screenBaseOverlays, [name]: extractBaseOverlay(links.tree, links.linkedPaths, path) };
         restoreRowLinks(links.tree, rows, path);
         screenTrees = { ...screenTrees, [name]: links.tree };
     }
@@ -322,6 +325,7 @@ export function mountApp(
     return {
         store,
         baseOverlay,
+        screenBaseOverlays,
         baseLocale: context.state.locale,
         errors,
         raise(name, payload): void {

@@ -89,6 +89,8 @@ describe('validateDocument with screens', () => {
         expect(codesAndPaths(validateDocument(documentWith('screens.product.params.id', { type: 'date' }), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.screens.product']);
         expect(codesAndPaths(validateDocument(documentWith('screens.Cart', { root: { component: 'panel' } }), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.screens.Cart']);
         expect(codesAndPaths(validateDocument(documentWith('screens', []), LIBRARY).errors)).toContain('SUI-DOC-TYPE $.screens');
+        expect(codesAndPaths(validateDocument(documentWith('screens.home.locales', { de: 'Start' }), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.screens.home']);
+        expect(codesAndPaths(validateDocument(documentWith('screens.home.locales', []), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.screens.home']);
     });
 
     it('should need start with screens, naming one of them, and screens with start', () => {

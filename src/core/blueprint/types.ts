@@ -66,6 +66,8 @@ export interface BlueprintScreen {
     title?: string;
     params?: Record<string, ParamDeclaration>;
     root: Node;
+    /** Overlays of the screen's content by language code, relative to the screen's root */
+    locales?: Record<string, JsonObject>;
 }
 
 /** An app definition: its own nodes and logic plus references to the owner's parts */

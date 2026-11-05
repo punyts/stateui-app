@@ -606,6 +606,34 @@ describe('startRuntime in Chromium', () => {
             expect(errorCodes()).toEqual(['SUI-RUN-ON-COMMAND', 'SUI-RUN-ON-COMMAND']);
         });
 
+        it('should switch the language of every screen with a locale message, a hidden one and one mounted later included', async () => {
+            // Arrange
+            const document = {
+                app: panel({ greeting: { component: 'heading' } }),
+                screens: {
+                    home: { root: panel({ title: { component: 'heading' } }) },
+                    detail: { root: panel({ name: { component: 'heading', _text: 'Detail' } }), locales: { de: { children: { name: { _text: 'Einzelheit' } } } } }
+                },
+                start: 'home'
+            } as unknown as AppDocument;
+            send(message('load', { document }));
+
+            // Act
+            send(message('locale', { locale: 'de' }));
+            send(message('command', { target: 'detail', command: 'navigate' }));
+            await tick();
+            const german = textOf(host);
+            send(message('locale', { locale: 'en' }));
+            await tick();
+
+            // Assert
+            expect(german.match(/Ueberschrift/g)).toHaveLength(2);
+            expect(german).toContain('Einzelheit');
+            expect(textOf(host)).not.toContain('Ueberschrift');
+            expect(textOf(host)).toContain('Detail');
+            expect(ofType('error')).toHaveLength(0);
+        });
+
         it('should change the text content with a locale overlay and leave $.data unchanged', async () => {
             // Arrange
             send(message('load', { document: modalDoc() }));

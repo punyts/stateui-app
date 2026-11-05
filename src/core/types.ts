@@ -27,6 +27,8 @@ export interface DocumentScreen {
     /** Typed param declarations by name */
     params?: JsonObject;
     root: Node;
+    /** Overlays of the screen's content by language code, relative to the screen's root (`$.screens.{name}`) */
+    locales?: Record<string, JsonObject>;
 }
 
 /** An application is one document */

@@ -6,7 +6,7 @@ import { isNodeValue, isObject } from '../../core/resolve/merge.js';
 import type { JsonObject, JsonValue } from '../../core/types.js';
 import type { LocaleStore } from './switchLocale.js';
 
-const ROOT_PATH = '$.app';
+const APP_PATH = '$.app';
 const LOCALE_PATH = '$.locale';
 
 /** What a store listener receives */
@@ -37,6 +37,11 @@ export interface NodeLocaleOptions {
     composed?: DocumentComposed;
     /** `ResolveResult.instances` of the mounted application */
     instances?: Readonly<Record<string, readonly string[]>>;
+    /**
+     * The state path of the root this localizer keeps: `$.app` when absent, `$.screens.{name}` for a screen. `overlays`
+     * and `appOverrides` are relative to it
+     */
+    root?: string;
 }
 
 /** What a node written later gets, and the control over listening for such writes */
@@ -49,7 +54,7 @@ export interface NodeLocale {
      * absolute (`resolveNode(node, library, composed, { path })`). Nothing is written to the store
      */
     prepare(path: string, value: JsonObject, instances?: Readonly<Record<string, readonly string[]>>): JsonObject;
-    /** Starts listening for nodes written to `$.app`; returns a function that stops. Calling it twice listens once */
+    /** Starts listening for nodes written below the root; returns a function that stops. Calling it twice listens once */
     watch(): () => void;
     /** Forgets what is known about a path and below it: removes it from every overlay. `watch` calls it for a delete */
     forget(path: string): void;
@@ -139,6 +144,7 @@ function removeFrom(target: JsonObject, segments: readonly string[]): void {
  */
 export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
     const { store, overlays, baseLocale, componentOverlays, library, composed } = options;
+    const rootPath = options.root ?? APP_PATH;
     const instances: Record<string, readonly string[]> = { ...(options.instances ?? {}) };
     const prepared = new Set<string>();
     let applying = false;
@@ -165,7 +171,7 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
     /** The nearest ancestor of `path` in the store that is a node, with the path below it */
     const ownerOf = (segments: readonly string[]): { path: string; node: JsonObject; below: string[] } | undefined => {
         for (let depth = segments.length - 1; depth >= 0; depth--) {
-            const path = [ROOT_PATH, ...segments.slice(0, depth)].join('.');
+            const path = [rootPath, ...segments.slice(0, depth)].join('.');
             const value = store.get(path);
             if (isNodeValue(value)) return { path, node: cloneJson(value as JsonObject), below: segments.slice(depth) };
         }
@@ -186,7 +192,7 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
     };
 
     const record = (path: string, value: JsonObject, extra?: Readonly<Record<string, readonly string[]>>): JsonObject | undefined => {
-        const segments = segmentsBelow(path, ROOT_PATH);
+        const segments = segmentsBelow(path, rootPath);
         if (segments === undefined || segments.length === 0) return undefined;
         if (extra !== undefined) Object.assign(instances, extra);
         const base = extractBaseOverlay(value, [], path);
@@ -203,7 +209,7 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
     };
 
     const forget = (path: string): void => {
-        const segments = segmentsBelow(path, ROOT_PATH);
+        const segments = segmentsBelow(path, rootPath);
         if (segments === undefined || segments.length === 0) return;
         for (const overlay of Object.values(overlays)) removeFrom(overlay, segments);
         for (const key of Object.keys(instances)) {
@@ -233,10 +239,10 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
         if (action !== 'insert' || !isObject(value) || skipPrepared(path)) return;
         const layer = record(path, value as JsonObject);
         if (layer === undefined) return;
-        const segments = segmentsBelow(path, ROOT_PATH) ?? [];
+        const segments = segmentsBelow(path, rootPath) ?? [];
         applying = true;
         try {
-            store.apply(ROOT_PATH, wrap(segments, layer));
+            store.apply(rootPath, wrap(segments, layer));
         } finally {
             applying = false;
         }
@@ -250,7 +256,7 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
         },
         watch() {
             if (stop !== undefined) return stop;
-            const pattern = `${ROOT_PATH}.$all`;
+            const pattern = `${rootPath}.$all`;
             store.on(pattern, listener);
             const stopper = (): void => {
                 store.off(pattern, listener);
