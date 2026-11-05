@@ -31,8 +31,8 @@ function partOf(path: string, document: AppDocument, blueprint: AppBlueprint, ap
 /**
  * Assembles an app and checks the result with `validateDocument`, which checks the shell at `$.app` and each screen's
  * root at `$.screens.{screen}`. Each error names the part that holds it: an owner component (`$.composed.{name}`), the
- * first theme (`$.theme`, `$.themes`), a dataset (`$.data.{binding}`), or the app itself. The `SUI-USES-MISSING`
- * errors of assembling come first
+ * first theme (`$.theme`, `$.themes`), a dataset (`$.data.{binding}`), a logic module (its binding and param errors),
+ * or the app itself. The errors of assembling come first
  */
 export function validateApp(
     blueprint: AppBlueprint,
@@ -53,6 +53,9 @@ export function validateApp(
 
     const found: BuildError[] = [...assembled.errors, ...validateDocument(assembled.document, library, documentOptions).errors.filter(reported)];
 
-    const errors: AppValidationError[] = found.map((error) => ({ ...error, part: partOf(error.statePath ?? '$', assembled.document, blueprint, app) }));
+    const errors: AppValidationError[] = found.map((error) => {
+        const part = (error as AppValidationError).part ?? partOf(error.statePath ?? '$', assembled.document, blueprint, app);
+        return { ...error, part };
+    });
     return { valid: isValid(errors), errors, document: assembled.document, uses: assembled.uses };
 }

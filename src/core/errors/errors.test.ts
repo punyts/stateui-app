@@ -62,6 +62,9 @@ describe('error catalog', () => {
             'SUI-DOC-SERVER',
             'SUI-BLUEPRINT-SHAPE',
             'SUI-USES-MISSING',
+            'SUI-USES-MODEL',
+            'SUI-USES-NEEDS',
+            'SUI-MODULE-PARAM',
             'SUI-DOC-SCREEN',
             'SUI-ROUTE-SCREEN',
             'SUI-ROUTE-PARAMS'

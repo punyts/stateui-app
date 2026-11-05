@@ -164,6 +164,8 @@ export function readModule(json: JsonValue): ReadModuleResult {
 export interface InstantiateModuleOptions {
     /** The module's part name: the prefix of its unit names and `as` results (`cart:totals`) */
     name: string;
+    /** The path param errors are reported under (`$.uses.logic.cart.params` in an app); `params` by default */
+    paramsPath?: string;
 }
 
 export interface InstantiateModuleResult {
@@ -182,22 +184,24 @@ function misfit(declaration: ParamDeclaration, value: JsonValue): string | undef
 }
 
 /** The values of the params: each given value checked, the defaults filled in, a missing required param reported */
-function paramValues(module: LogicModule, given: Readonly<JsonObject>, errors: BuildError[]): JsonObject {
+function paramValues(module: LogicModule, given: Readonly<JsonObject>, at: string, errors: BuildError[]): JsonObject {
     const values: JsonObject = {};
+    const problem = (name: string, reason: string): void => {
+        const path = `${at}.${name}`;
+        errors.push(buildError('SUI-MODULE-PARAM', { name, path, reason, ...(at.startsWith('$') ? { statePath: path } : {}) }));
+    };
     for (const name of Object.keys(given)) {
-        if (!Object.hasOwn(module.params, name)) {
-            errors.push(buildError('SUI-MODULE-PARAM', { name, path: `params.${name}`, reason: 'the module declares no such param' }));
-        }
+        if (!Object.hasOwn(module.params, name)) problem(name, 'the module declares no such param');
     }
     for (const [name, declaration] of Object.entries(module.params)) {
         const value = given[name];
         if (value !== undefined) {
             const reason = misfit(declaration, value);
-            if (reason !== undefined) errors.push(buildError('SUI-MODULE-PARAM', { name, path: `params.${name}`, reason }));
+            if (reason !== undefined) problem(name, reason);
             values[name] = cloneJson(value);
         } else if (declaration.default !== undefined) values[name] = cloneJson(declaration.default);
         else {
-            if (declaration.required === true) errors.push(buildError('SUI-MODULE-PARAM', { name, path: `params.${name}`, reason: 'it is required and has no value' }));
+            if (declaration.required === true) problem(name, 'it is required and has no value');
             values[name] = null;
         }
     }
@@ -261,7 +265,7 @@ function fill(value: JsonValue, values: Readonly<JsonObject>, prefix: string, pa
  */
 export function instantiateModule(module: LogicModule, given: Readonly<JsonObject>, options: InstantiateModuleOptions): InstantiateModuleResult {
     const errors: BuildError[] = [];
-    const values = paramValues(module, given, errors);
+    const values = paramValues(module, given, options.paramsPath ?? 'params', errors);
     const prefix = `${options.name}${MODULE_UNIT_SEPARATOR}`;
     const logic: Record<string, Record<string, JsonValue>> = {};
     for (const kind of UNIT_KINDS) {

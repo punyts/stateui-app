@@ -20,12 +20,23 @@ export interface AssembleOptions {
     library?: ComponentLibrary;
 }
 
+/** An error of assembling; `part` is set when the error belongs to a part other than the app (a logic module) */
+export interface AssembleError extends BuildError {
+    part?: PartRef;
+}
+
 export interface AssembleResult {
     /** The document the runtime mounts: `app` is the shell, `screens` the screens */
     document: AppDocument;
-    /** `SUI-USES-MISSING` for each part named in `uses` (or a component in a node) that the owner does not have */
-    errors: BuildError[];
-    /** Every owner part the app reads, once each, in the order found: themes, data, modules, components */
+    /**
+     * `SUI-USES-MISSING` for each part named in `uses` (or a component in a node) that the owner does not have, and the
+     * binding errors of the logic modules: `SUI-USES-NEEDS`, `SUI-USES-MODEL` and `SUI-MODULE-PARAM`
+     */
+    errors: AssembleError[];
+    /**
+     * Every owner part the app reads, once each, in the order found: themes, data with the model of each binding, logic
+     * modules with the models they need, components
+     */
     uses: PartRef[];
 }
 

@@ -1,12 +1,15 @@
-import type { AppBlueprint, PartKind, PartRef } from '../blueprint/types.js';
+import type { AppBlueprint, DataBinding, PartKind, PartRef } from '../blueprint/types.js';
 import { EXPOSES_KEY } from '../convention/index.js';
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { cloneJson } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
+import { instantiateModule } from '../logic/modules.js';
+import type { LogicDocument } from '../logic/types.js';
+import { applyDefaults } from '../models/model.js';
 import type { AppDocument, DocumentScreen, JsonObject, JsonValue, Node } from '../types.js';
 import { nearestNames } from './nearest.js';
-import type { AssembleOptions, AssembleResult, PartSource } from './types.js';
+import type { AssembleError, AssembleOptions, AssembleResult, PartSource } from './types.js';
 
 /** How a missing part is named in its error */
 const KIND_WORDS: Readonly<Record<PartKind, string>> = {
@@ -19,8 +22,11 @@ const KIND_WORDS: Readonly<Record<PartKind, string>> = {
     patterns: 'pattern'
 };
 
+/** The unit kinds of a logic document, in the order the assembled `logic` lists them */
+const UNIT_KINDS = ['machines', 'rules', 'tables'] as const;
+
 class Assembler {
-    readonly errors: BuildError[] = [];
+    readonly errors: AssembleError[] = [];
     readonly uses: PartRef[] = [];
     readonly composed: Record<string, Node> = {};
     private readonly seen = new Set<string>();
@@ -91,13 +97,76 @@ class Assembler {
     }
 }
 
+/** How a binding's records are described in a `SUI-USES-MODEL` error */
+function modelWords(model: string | null): string {
+    return model === null ? 'holds records of no model' : `holds records of the model "${model}"`;
+}
+
+/**
+ * The app's own units followed by the units of each logic module it uses. Each module's needs must be bound under
+ * their own names to data of the model they name, two modules that need one name must name one model, and the params
+ * of `uses.logic` must fit their declarations. A module with errors adds no units
+ */
+function bindModules(blueprint: AppBlueprint, parts: PartSource, assembler: Assembler, bound: ReadonlyMap<string, string | null>): LogicDocument {
+    const logic = (blueprint.logic === undefined ? {} : cloneJson(blueprint.logic as unknown as JsonValue)) as Record<string, Record<string, JsonValue>>;
+    const bindings: Readonly<Record<string, DataBinding>> = blueprint.uses?.data ?? {};
+    /** The first module that needs each name, with the model it names */
+    const needed = new Map<string, { module: string; model: string }>();
+
+    for (const [name, use] of Object.entries(blueprint.uses?.logic ?? {})) {
+        const at = `$.uses.logic.${name}`;
+        if (!assembler.require('logic', name, at, parts.modules)) continue;
+        const module = parts.modules?.[name];
+        if (module === undefined) continue;
+        const part: PartRef = { kind: 'logic', name };
+        const before = assembler.errors.length;
+
+        for (const [need, { model }] of Object.entries(module.needs)) {
+            if (Object.hasOwn(parts.models ?? {}, model)) assembler.use('models', model);
+            const path = `$.uses.data.${need}`;
+            const first = needed.get(need);
+            if (first !== undefined) {
+                if (first.model !== model) {
+                    const reason = `is needed by the logic modules "${first.module}" (model "${first.model}") and "${name}" (model "${model}"), which must name one model`;
+                    assembler.errors.push({ ...buildError('SUI-USES-MODEL', { name: need, path, reason, statePath: path }), part });
+                }
+                continue;
+            }
+            needed.set(need, { module: name, model });
+            if (!Object.hasOwn(bindings, need)) {
+                assembler.errors.push({ ...buildError('SUI-USES-NEEDS', { target: name, name: need, path, statePath: path }), part });
+                continue;
+            }
+            const actual = bound.get(need);
+            if (actual === undefined || actual === model) continue;
+            const reason = `${modelWords(actual)}, and the logic module "${name}" needs the model "${model}"`;
+            assembler.errors.push({ ...buildError('SUI-USES-MODEL', { name: need, path, reason, statePath: path }), part });
+        }
+
+        const instance = instantiateModule(module, use.params ?? {}, { name, paramsPath: `${at}.params` });
+        for (const error of instance.errors) assembler.errors.push({ ...error, part });
+        if (assembler.errors.length > before) continue;
+        const units = instance.logic as unknown as Record<string, Record<string, JsonValue> | undefined>;
+        for (const kind of UNIT_KINDS) {
+            const own = units[kind];
+            if (own === undefined) continue;
+            logic[kind] = { ...(logic[kind] ?? {}), ...own };
+        }
+    }
+    return logic as unknown as LogicDocument;
+}
+
 /**
  * Builds the document the runtime mounts from a blueprint and the owner's parts. The first theme of `uses.themes`
  * gives `theme.tokens` and `themes` (its overlays); every listed theme must exist. Each `uses.data` binding becomes
  * `data.{binding}`: the dataset's records, or an empty map for a persona binding. Owner components named by a node of
  * the shell, a screen or another used owner component go into `composed` as their trees with `exposes`, without the
- * search keys; an owner component wins over a library component of the same name, as `composed` does. `logic` is the
- * app's own units and `app` is the shell. Modules and models named in `uses` must exist; binding them is a later step.
+ * search keys; an owner component wins over a library component of the same name, as `composed` does. `app` is the
+ * shell. A persona binding starts as the model's defaults over an empty map (`applyDefaults(model, {})`), so a model
+ * without defaults gives `{}`. `logic` is the app's own units followed by each module of `uses.logic`, instantiated
+ * with its params (`instantiateModule`, units named `{module}:{unit}`); a module whose needs are not bound under their
+ * names to data of their models (`SUI-USES-NEEDS`, `SUI-USES-MODEL`) or whose params do not fit (`SUI-MODULE-PARAM`)
+ * adds no units, and its errors carry the module as `part`.
  *
  * Pure: the blueprint and the parts are never changed and the document shares nothing with them
  */
@@ -114,20 +183,26 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     }
 
     const data: JsonObject = {};
+    /** The model of each binding whose target exists; null for a dataset without a model */
+    const bound = new Map<string, string | null>();
     for (const [binding, target] of Object.entries(blueprint.uses?.data ?? {})) {
         const at = `$.uses.data.${binding}`;
         if ('dataset' in target) {
             if (assembler.require('data', target.dataset, `${at}.dataset`, parts.datasets)) {
-                data[binding] = cloneJson((parts.datasets?.[target.dataset]?.records ?? {}) as JsonObject);
+                const dataset = parts.datasets?.[target.dataset];
+                data[binding] = cloneJson((dataset?.records ?? {}) as JsonObject);
+                bound.set(binding, dataset?.model ?? null);
+                if (dataset?.model !== undefined && Object.hasOwn(parts.models ?? {}, dataset.model)) assembler.use('models', dataset.model);
             }
-        } else {
-            assembler.require('models', target.model, `${at}.model`, parts.models);
-            data[binding] = {};
-        }
+        } else if (assembler.require('models', target.model, `${at}.model`, parts.models)) {
+            const model = parts.models?.[target.model];
+            data[binding] = model === undefined ? {} : applyDefaults(model, {});
+            bound.set(binding, target.model);
+        } else data[binding] = {};
     }
     if (Object.keys(data).length > 0) document.data = data;
 
-    for (const name of Object.keys(blueprint.uses?.logic ?? {})) assembler.require('logic', name, `$.uses.logic.${name}`, parts.modules);
+    const logic = bindModules(blueprint, parts, assembler, bound);
 
     assembler.components(blueprint.shell as unknown as JsonValue, '$.shell');
     const screens: Record<string, DocumentScreen> = {};
@@ -138,7 +213,7 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     document.screens = screens;
     document.start = blueprint.start;
     if (Object.keys(assembler.composed).length > 0) document.composed = assembler.composed;
-    if (blueprint.logic !== undefined) document.logic = cloneJson(blueprint.logic as unknown as JsonValue) as JsonObject;
+    if (Object.keys(logic).length > 0) document.logic = logic as unknown as JsonObject;
     if (blueprint.locales !== undefined) document.locales = cloneJson(blueprint.locales as unknown as JsonValue) as AppDocument['locales'];
 
     return { document, errors: assembler.errors, uses: assembler.uses };

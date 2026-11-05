@@ -450,17 +450,25 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
 - **Assembling.** `assembleApp(blueprint, parts, { library? })` takes a `PartSource` (plain maps of `themes`, `modules`,
   `models`, `datasets` and `components` by name; no IO) and returns `{ document, errors, uses }`. The document is today's
   `AppDocument` plus `screens`: `app` is the shell, `theme.tokens` and `themes` (the overlays) come from the first of
-  `uses.themes`, `data.{binding}` holds the bound dataset's records (an empty map for a persona binding), `composed` holds
+  `uses.themes`, `data.{binding}` holds the bound dataset's records (for a persona binding, the model's defaults over an
+  empty map: `applyDefaults(model, {})`), `composed` holds
   the owner components that a node of the shell, a screen or another used component names (their trees with `exposes`,
-  without the search keys; an owner component wins over a library component of the same name), and `logic` and
-  `locales` are the app's own. A part named in `uses` that the owner does not have is `SUI-USES-MISSING` with up to
+  without the search keys; an owner component wins over a library component of the same name), and `locales` are the
+  app's own. `logic` is the app's own units followed by each module of `uses.logic`, instantiated with its params
+  (`instantiateModule`, units named `{module}:{unit}`). Each need of a module must be bound under its own name
+  (`SUI-USES-NEEDS`) to data of the model it names: a dataset's `model` or a persona binding's (`SUI-USES-MODEL`, also
+  for a dataset with no model). Two modules that need one name must name one model (`SUI-USES-MODEL`, naming both) and
+  then share the binding. A param that does not fit is `SUI-MODULE-PARAM` at `$.uses.logic.{module}.params.{name}`. A
+  module with any of these errors adds no units, and its errors carry `part` (the module). A part named in `uses` that the owner does not have is `SUI-USES-MISSING` with up to
   three nearest names (`nearestNames`); with a `library`, so is a component name in neither. `uses` lists each part the
-  app reads (`{ kind, name }`) once. Pure: the result shares nothing with the inputs, so changing one theme part shows
+  app reads (`{ kind, name }`) once: themes, data with each binding's model, modules with the models they need, and
+  components. Pure: the result shares nothing with the inputs, so changing one theme part shows
   in every app assembled from it.
 - **Validating.** `validateApp(blueprint, parts, catalog, { name?, ...ValidateDocumentOptions })` assembles and runs
   `validateDocument` on the assembled document, which checks the shell at `$.app` and each screen at
   `$.screens.{screen}`. Each error gains `part`: the owner component (`$.composed.{name}`), the first theme
-  (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`) or the app. A component already reported
+  (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`), the logic module of a binding or param error
+  (the `part` assembling gave it) or the app. A component already reported
   `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. The assembled document carries `start`.
 - **Models** (`src/core/models/`). A model part is `{ fields }`, typed declarations by field name in order (`date` and
   `enum` are not types: a date is a `string` with a `pattern`, an enum a `oneOf`). `readModel(json)` returns

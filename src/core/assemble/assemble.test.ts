@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AppBlueprint } from '../blueprint/types.js';
 import type { BuildError } from '../errors/index.js';
-import type { JsonObject } from '../types.js';
+import { createLogicEngine } from '../logic/engine.js';
+import type { LogicDocument, LogicHost, LogicWrite } from '../logic/types.js';
+import { cloneJson, isObject } from '../resolve/merge.js';
+import type { AppDocument, JsonObject, JsonValue } from '../types.js';
 import { validateDocument } from '../validate/index.js';
 import { STORE_APP, STORE_LIBRARY, STORE_PARTS } from './fixtures/storeApp.js';
 import { assembleApp, nearestNames, validateApp } from './index.js';
@@ -15,6 +18,36 @@ function codesAndPaths(errors: readonly BuildError[]): string[] {
     return errors.map((error) => `${error.code} ${error.statePath ?? ''}`);
 }
 
+function walk(state: JsonValue, path: string): JsonValue | undefined {
+    let current: JsonValue | undefined = state;
+    for (const step of path.slice(2).split('.')) {
+        if (!isObject(current)) return undefined;
+        current = current[step];
+    }
+    return current;
+}
+
+/** Runs an assembled document's logic over its own state and writes the bag, as a person adding lines would */
+function fillBag(document: AppDocument, bag: JsonObject): JsonObject {
+    const state = cloneJson({ app: document.app, data: document.data ?? {} } as unknown as JsonValue) as JsonObject;
+    const apply = (write: LogicWrite): void => {
+        const steps = write.path.slice(2).split('.');
+        let current = state;
+        for (const step of steps.slice(0, -1)) {
+            if (!isObject(current[step])) current[step] = {};
+            current = current[step] as JsonObject;
+        }
+        current[steps[steps.length - 1] as string] = cloneJson(write.value as JsonValue);
+    };
+    const host: LogicHost = { get: (path) => walk(state, path), commit: (writes) => writes.forEach(apply), failed: () => undefined };
+    const engine = createLogicEngine(document.logic as unknown as LogicDocument, host);
+    apply({ path: '$.data.bag', value: bag });
+    engine.changes([{ path: '$.data.bag', value: bag, previous: {} }]);
+    return walk(state, '$.data.totals') as JsonObject;
+}
+
+const LINES = Object.freeze({ l1: Object.freeze({ product: 'p1', qty: 2, line: 60 }), l2: Object.freeze({ product: 'p2', qty: 1, line: 90 }) }) as unknown as JsonObject;
+
 describe('assembleApp', () => {
     it('should build the store document from its parts with no errors', () => {
         const { document, errors } = assembleApp(STORE_APP, STORE_PARTS);
@@ -26,8 +59,13 @@ describe('assembleApp', () => {
         expect(document.screens?.['product']?.params).toEqual({ id: { type: 'string', required: true } });
         expect(document.theme).toEqual({ tokens: { color: { brand: '#204080' } } });
         expect(document.themes).toEqual({ dark: { kind: 'mode', tokens: { color: { brand: '#8090c0' } } } });
-        expect(document.data).toEqual({ products: { p1: { name: 'Lamp', price: 30 }, p2: { name: 'Chair', price: 90 } } });
-        expect(document.logic).toEqual(STORE_APP.logic);
+        expect(document.data).toEqual({
+            products: { p1: { name: 'Lamp', price: 30 }, p2: { name: 'Chair', price: 90 } },
+            bag: {},
+            totals: { net: 0, gross: 0, currency: 'USD' }
+        });
+        expect(Object.keys(document.logic?.['rules'] as JsonObject)).toEqual(['opened', 'cart:totals']);
+        expect((document.logic?.['rules'] as JsonObject)['opened']).toEqual(STORE_APP.logic?.rules?.['opened']);
         expect(document.locales).toEqual(STORE_APP.locales);
     });
 
@@ -45,20 +83,101 @@ describe('assembleApp', () => {
         expect(uses).toEqual([
             { kind: 'themes', name: 'store' },
             { kind: 'data', name: 'catalog' },
+            { kind: 'models', name: 'product' },
+            { kind: 'models', name: 'bag-line' },
+            { kind: 'models', name: 'cart-totals' },
+            { kind: 'logic', name: 'cart' },
             { kind: 'components', name: 'brand-mark' },
             { kind: 'components', name: 'product-card' }
         ]);
     });
 
-    it('should start a persona binding as an empty map and list its model', () => {
+    it('should start a persona binding as an empty map plus the model defaults and list its model', () => {
         const blueprint = copy(STORE_APP);
-        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, bag: { model: 'product', scope: 'persona' } } };
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, draft: { model: 'product', scope: 'persona' } } };
 
         const { document, uses, errors } = assembleApp(blueprint, STORE_PARTS);
 
         expect(errors).toEqual([]);
         expect(document.data?.['bag']).toEqual({});
+        expect(document.data?.['draft']).toEqual({ price: 0 });
         expect(uses).toContainEqual({ kind: 'models', name: 'product' });
+        expect(uses).not.toContainEqual({ kind: 'models', name: 'unused' });
+    });
+
+    it('should give two apps that use cart with different tax rates different derived totals', () => {
+        const other = copy(STORE_APP);
+        other.uses = { ...other.uses, logic: { cart: { params: { taxRate: 0.05, currency: 'USD' } } } };
+
+        const eu = assembleApp(STORE_APP, STORE_PARTS);
+        const us = assembleApp(other, STORE_PARTS);
+
+        expect([...eu.errors, ...us.errors]).toEqual([]);
+        expect(fillBag(eu.document, LINES)).toEqual({ net: 150, gross: 180, currency: 'EUR' });
+        expect(fillBag(us.document, LINES)).toEqual({ net: 150, gross: 157.5, currency: 'USD' });
+    });
+
+    it('should report a need the app does not bind and a binding of another model, naming the module', () => {
+        const blueprint = copy(STORE_APP);
+        blueprint.uses = { ...blueprint.uses, data: { products: { dataset: 'catalog' }, bag: { dataset: 'catalog' } } };
+
+        const { document, errors } = assembleApp(blueprint, STORE_PARTS);
+
+        expect(codesAndPaths(errors)).toEqual(['SUI-USES-MODEL $.uses.data.bag', 'SUI-USES-NEEDS $.uses.data.totals']);
+        expect(errors[0]?.message).toBe('The data binding "bag" at $.uses.data.bag holds records of the model "product", and the logic module "cart" needs the model "bag-line"');
+        expect(errors[1]?.message).toBe('The logic module "cart" needs the data binding "totals", and the app binds none at $.uses.data.totals');
+        expect(errors.map((error) => error.part)).toEqual([{ kind: 'logic', name: 'cart' }, { kind: 'logic', name: 'cart' }]);
+        expect(Object.keys(document.logic?.['rules'] as JsonObject)).toEqual(['opened']);
+    });
+
+    it('should report a binding of a dataset with no model', () => {
+        const blueprint = copy(STORE_APP);
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, bag: { dataset: 'orders' } } };
+
+        const { errors } = assembleApp(blueprint, STORE_PARTS);
+
+        expect(errors.map((error) => error.message)).toEqual([
+            'The data binding "bag" at $.uses.data.bag holds records of no model, and the logic module "cart" needs the model "bag-line"'
+        ]);
+    });
+
+    it('should report a param that fails its declaration with the module and param in its path', () => {
+        const blueprint = copy(STORE_APP);
+        blueprint.uses = { ...blueprint.uses, logic: { cart: { params: { taxRate: 2, currency: 'euro', tip: 1 } } } };
+
+        const { document, errors } = assembleApp(blueprint, STORE_PARTS);
+
+        expect(codesAndPaths(errors)).toEqual([
+            'SUI-MODULE-PARAM $.uses.logic.cart.params.tip',
+            'SUI-MODULE-PARAM $.uses.logic.cart.params.taxRate',
+            'SUI-MODULE-PARAM $.uses.logic.cart.params.currency'
+        ]);
+        expect(errors[1]?.message).toBe('Param "taxRate" of the logic module at $.uses.logic.cart.params.taxRate: the value fails its validators');
+        expect(document.logic?.['rules']).not.toHaveProperty('cart:totals');
+    });
+
+    it('should report two modules that need one name with different models, naming both', () => {
+        const blueprint = copy(STORE_APP);
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, wishes: { model: 'product', scope: 'persona' } }, logic: { ...blueprint.uses?.logic, wishlist: {} } };
+        const parts = copy(STORE_PARTS);
+        (parts.modules as Record<string, unknown>)['wishlist'] = { needs: { bag: { model: 'product' } }, params: {} };
+
+        const { errors } = assembleApp(blueprint, parts);
+
+        expect(codesAndPaths(errors)).toEqual(['SUI-USES-MODEL $.uses.data.bag']);
+        expect(errors[0]?.message).toBe(
+            'The data binding "bag" at $.uses.data.bag is needed by the logic modules "cart" (model "bag-line") and "wishlist" (model "product"), which must name one model'
+        );
+        expect(errors[0]?.part).toEqual({ kind: 'logic', name: 'wishlist' });
+    });
+
+    it('should let two modules that need one name with one model share the binding', () => {
+        const blueprint = copy(STORE_APP);
+        blueprint.uses = { ...blueprint.uses, logic: { ...blueprint.uses?.logic, wishlist: {} } };
+        const parts = copy(STORE_PARTS);
+        (parts.modules as Record<string, unknown>)['wishlist'] = { needs: { bag: { model: 'bag-line' } }, params: {} };
+
+        expect(assembleApp(blueprint, parts).errors).toEqual([]);
     });
 
     it('should report a missing theme with the nearest names', () => {
@@ -75,13 +194,13 @@ describe('assembleApp', () => {
 
     it('should report a missing dataset and leave its binding out of data', () => {
         const blueprint = copy(STORE_APP);
-        blueprint.uses = { ...blueprint.uses, data: { products: { dataset: 'catalogue' } } };
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, products: { dataset: 'catalogue' } } };
 
         const { document, errors } = assembleApp(blueprint, STORE_PARTS);
 
         expect(codesAndPaths(errors)).toEqual(['SUI-USES-MISSING $.uses.data.products.dataset']);
         expect(errors[0]?.message).toContain('nearest names: catalog');
-        expect(document.data).toBeUndefined();
+        expect(Object.keys(document.data ?? {})).toEqual(['bag', 'totals']);
     });
 
     it('should report a component in no owner part and not in the library, once, at its first use', () => {
@@ -104,11 +223,11 @@ describe('assembleApp', () => {
 
     it('should report a missing module and a missing persona model', () => {
         const blueprint = copy(STORE_APP);
-        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, bag: { model: 'bag-line', scope: 'persona' } }, logic: { cart: {} } };
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, draft: { model: 'draft-line', scope: 'persona' } }, logic: { coupons: {} } };
 
         const { errors } = assembleApp(blueprint, STORE_PARTS);
 
-        expect(codesAndPaths(errors)).toEqual(['SUI-USES-MISSING $.uses.data.bag.model', 'SUI-USES-MISSING $.uses.logic.cart']);
+        expect(codesAndPaths(errors)).toEqual(['SUI-USES-MISSING $.uses.data.draft.model', 'SUI-USES-MISSING $.uses.logic.coupons']);
         expect(errors[1]?.message).toContain('nearest names: (none)');
     });
 
@@ -189,6 +308,21 @@ describe('validateApp', () => {
         expect(inComponent.length).toBeGreaterThan(0);
         expect(inComponent.every((error) => error.part.kind === 'components' && error.part.name === 'product-card')).toBe(true);
         expect(atInstance.every((error) => error.part.kind === 'apps')).toBe(true);
+    });
+
+    it('should name the logic module as the part of its binding and param errors', () => {
+        const blueprint = copy(STORE_APP);
+        blueprint.uses = { ...blueprint.uses, data: { products: { dataset: 'catalog' }, bag: { model: 'product', scope: 'persona' } }, logic: { cart: { params: { taxRate: -1 } } } };
+
+        const result = validateApp(blueprint, STORE_PARTS, STORE_LIBRARY, { name: 'store' });
+
+        expect(codesAndPaths(result.errors)).toEqual(['SUI-USES-MODEL $.uses.data.bag', 'SUI-USES-NEEDS $.uses.data.totals', 'SUI-MODULE-PARAM $.uses.logic.cart.params.taxRate']);
+        expect(result.errors.map((error) => error.part)).toEqual([
+            { kind: 'logic', name: 'cart' },
+            { kind: 'logic', name: 'cart' },
+            { kind: 'logic', name: 'cart' }
+        ]);
+        expect(result.valid).toBe(false);
     });
 
     it('should report a missing component once, as SUI-USES-MISSING, not again for each node', () => {

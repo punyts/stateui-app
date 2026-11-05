@@ -27,12 +27,17 @@ export const STORE_LIBRARY: ComponentLibrary = deepFreeze({
     banner: { tier: 'composed', tree: { component: 'panel', title: 'Library banner' } }
 }) as ComponentLibrary;
 
-/** A store: a shell with a header and an outlet, a home and a product screen, one theme and a catalog dataset */
+/** A store: a shell with a header and an outlet, a home and a product screen, one theme, a catalog dataset, a persona bag and the cart module */
 export const STORE_APP: AppBlueprint = deepFreeze({
     title: 'Store',
     uses: {
         themes: ['store'],
-        data: { products: { dataset: 'catalog' } }
+        data: {
+            products: { dataset: 'catalog' },
+            bag: { model: 'bag-line', scope: 'persona' },
+            totals: { model: 'cart-totals', scope: 'persona' }
+        },
+        logic: { cart: { params: { taxRate: 0.2, currency: 'EUR' } } }
     },
     start: 'home',
     shell: {
@@ -72,7 +77,32 @@ export const STORE_PARTS: PartSource = deepFreeze({
         catalog: { model: 'product', records: { p1: { name: 'Lamp', price: 30 }, p2: { name: 'Chair', price: 90 } } },
         orders: { records: {} }
     },
-    models: { product: { fields: { name: { type: 'string', required: true }, price: { type: 'number', default: 0 } } } },
+    models: {
+        product: { fields: { name: { type: 'string', required: true }, price: { type: 'number', default: 0 } } },
+        'bag-line': { fields: { product: { type: 'string', required: true }, qty: { type: 'integer', required: true }, line: { type: 'number' } } },
+        'cart-totals': { fields: { net: { type: 'number', default: 0 }, gross: { type: 'number', default: 0 }, currency: { type: 'string', default: 'USD' } } },
+        unused: { fields: {} }
+    },
+    modules: {
+        cart: {
+            needs: { bag: { model: 'bag-line' }, totals: { model: 'cart-totals' } },
+            params: {
+                taxRate: { type: 'number', default: 0, validators: { range: { min: 0, max: 1 } } },
+                currency: { type: 'string', default: 'USD', validators: { pattern: '^[A-Z]{3}$' } }
+            },
+            rules: {
+                totals: {
+                    when: { path: '$.data.bag' },
+                    do: [
+                        { command: 'set', target: '$.data.totals.net', value: "{{ sum($.data.bag, 'line') }}" },
+                        { command: 'set', target: '$.data.totals.gross', value: "{{ round(sum($.data.bag, 'line') * (1 + $params.taxRate) * 100) / 100 }}" },
+                        { command: 'set', target: '$.data.totals.currency', value: '$params.currency' }
+                    ]
+                }
+            }
+        },
+        wishlist: { needs: { wishes: { model: 'product' } }, params: {} }
+    },
     components: {
         'brand-mark': {
             tree: { component: 'text', _value: 'Store' },

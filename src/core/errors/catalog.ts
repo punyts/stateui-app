@@ -173,6 +173,8 @@ export const ERROR_CATALOG = {
         severity: 'warning'
     },
     'SUI-USES-MISSING': { template: 'The app uses the {target} "{name}" at {path}, and the owner has no such part; nearest names: {other}' },
+    'SUI-USES-MODEL': { template: 'The data binding "{name}" at {path} {reason}' },
+    'SUI-USES-NEEDS': { template: 'The logic module "{target}" needs the data binding "{name}", and the app binds none at {path}' },
     'SUI-ROUTE-SCREEN': { template: 'navigate at {path} names no screen: {reason}' },
     'SUI-ROUTE-PARAMS': { template: 'The params of navigate at {path} do not fit: {reason}' },
     'SUI-SHELL-OUTLET': { template: 'The outlet at {path} is not valid: {reason}' },
