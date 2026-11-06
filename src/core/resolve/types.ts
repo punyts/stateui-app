@@ -16,7 +16,16 @@ export interface ComposedEntry {
     tree: Node;
 }
 
-export type LibraryEntry = RootEntry | ComposedEntry;
+/**
+ * A shape component (graphics): a shape and no tag. It is never mounted as an element; only a drawing or a scene
+ * draws it, from a slot whose `childComponents` names it
+ */
+export interface ShapeEntry {
+    tier: 'shape';
+    shape: Shape;
+}
+
+export type LibraryEntry = RootEntry | ComposedEntry | ShapeEntry;
 
 /** The components a resolver may look up, by name */
 export type ComponentLibrary = Readonly<Record<string, LibraryEntry>>;

@@ -1,3 +1,4 @@
+import { entryShape } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
 
 const APP_ROOT = '$.app';
@@ -25,8 +26,7 @@ export function isRuntimeProperty(store: StoreReader, library: ComponentLibrary,
         if (!isRecord(node)) return false;
         const component = node['component'];
         if (typeof component === 'string') {
-            const entry = library[component];
-            if (entry?.tier === 'root' && entry.shape.properties[step]?.runtime === true) return true;
+            if (entryShape(library[component])?.properties[step]?.runtime === true) return true;
         }
         at = `${at}.${step}`;
     }

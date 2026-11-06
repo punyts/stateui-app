@@ -1,6 +1,7 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { extractLinks } from '../links/index.js';
+import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { nodeChildren, validateNode } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
@@ -13,7 +14,49 @@ const DATA_TARGET = /^\$\.data(\.|$)/;
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
+}
+
+/** True when the library names `component` as a shape component (graphics), which only a drawing or a scene draws */
+export function isShapeComponent(library: ComponentLibrary, component: string): boolean {
+    return Object.hasOwn(library, component) && library[component]?.tier === 'shape';
+}
+
+/**
+ * Why a slot refuses a node of `component`, as a `SUI-NODE-CHILD` error for a state path, or undefined when it takes
+ * it. `accepts` is the slot's `childComponents`. A slot that lists them takes only those; a slot that lists none
+ * takes any root or composed component but no shape component, since nothing there would draw it
+ */
+export function childRefusal(
+    library: ComponentLibrary,
+    component: string,
+    accepts: readonly string[] | undefined
+): ((path: string) => BuildError) | undefined {
+    if (accepts === undefined ? !isShapeComponent(library, component) : accepts.includes(component)) return undefined;
+    const other = accepts === undefined ? 'no shapes' : accepts.join(', ');
+    return (path) => buildError('SUI-NODE-CHILD', { component, path, statePath: path, other });
+}
+
+/**
+ * The `SUI-NODE-CHILD` errors of a resolved subtree written at `path` into a slot that takes `accepts` (its
+ * `childComponents`; undefined for a slot that lists none): the node itself and every node below it that its slot
+ * refuses. A shape component outside a drawing or a scene is one of them
+ */
+export function refusedChildren(
+    node: Node,
+    path: string,
+    library: ComponentLibrary,
+    accepts: readonly string[] | undefined
+): BuildError[] {
+    const errors: BuildError[] = [];
+    const visit = (current: Node, at: string, slot: readonly string[] | undefined): void => {
+        const refused = childRefusal(library, current.component, slot);
+        if (refused !== undefined) errors.push(refused(at));
+        const shape = Object.hasOwn(library, current.component) ? entryShape(library[current.component]) : undefined;
+        for (const child of nodeChildren(current, at, shape)) visit(child.node as Node, child.path, child.accepts);
+    };
+    visit(node, path, accepts);
+    return errors;
 }
 
 /**
@@ -58,16 +101,8 @@ class TreeChecker {
         const shape = shapeOf(this.library, node.component);
         if (shape) this.addNodeErrors(validateNode(shape, withoutRuntimeDefaults(shape, node), path, { ...this.options, insideRow }));
         for (const child of nodeChildren(node, path, shape)) {
-            if (child.accepts !== undefined && !child.accepts.includes(child.node.component)) {
-                this.errors.push(
-                    buildError('SUI-NODE-CHILD', {
-                        component: child.node.component,
-                        path: child.path,
-                        statePath: child.path,
-                        other: child.accepts.join(', ')
-                    })
-                );
-            }
+            const refused = childRefusal(this.library, child.node.component, child.accepts);
+            if (refused !== undefined) this.errors.push(refused(child.path));
             this.visit(child.node as Node, child.path, insideRow || child.row);
         }
     }

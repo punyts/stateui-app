@@ -1,5 +1,5 @@
 import type { BuildError } from '../errors/index.js';
-import { resolveNode } from '../resolve/index.js';
+import { entryShape, resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
 import { fitsProperty, nodeChildren } from '../shape/index.js';
@@ -18,7 +18,7 @@ const EXPOSES = 'exposes';
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 /** The node a child sits under: its layout and its component's declared placement shape decide what the child may place */

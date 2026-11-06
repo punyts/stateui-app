@@ -25,8 +25,11 @@ function eventNames(library: ComponentLibrary): Set<string> {
     return names;
 }
 
-/** The tags of the library's root components */
-function tags(library: ComponentLibrary): Set<string> {
+/**
+ * The tags of the library's root components: the elements the dispatcher hears events from. A composed component has
+ * no element of its own and a shape component is drawn, never mounted, so neither has a tag
+ */
+export function componentTags(library: ComponentLibrary): Set<string> {
     const result = new Set<string>();
     for (const entry of Object.values(library)) if (entry.tier === 'root') result.add(entry.tag);
     return result;
@@ -64,7 +67,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     const rootPath = options.rootPath ?? DEFAULT_ROOT;
     const roots = [rootPath, ...(options.roots ?? [])];
     const instances = options.instances ?? {};
-    const componentTags = tags(library);
+    const tags = componentTags(library);
     const names = eventNames(library);
 
     /** The root (`rootPath` or one of `roots`) that `path` is at or below */
@@ -153,7 +156,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     }
 
     function handle(event: Event): void {
-        const raised = raisedBy(event, componentTags);
+        const raised = raisedBy(event, tags);
         if (!raised) return;
         const path = raised.path.startsWith(RUNTIME_NODES) ? raised.path : (runtimeTwin(raised.path) ?? raised.path);
         const inRuntime = path.startsWith(RUNTIME_NODES);

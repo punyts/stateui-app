@@ -4,6 +4,7 @@ import { LOGIC_ORIGIN } from '../core/logic/index.js';
 import type { Capture, Change } from '@punyts/state-sync';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
+import { entryShape } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
 import { isNodeValue } from '../core/resolve/merge.js';
 import type { ComponentOverlays } from '../core/locale/index.js';
@@ -248,8 +249,8 @@ export function startRuntime(
         if (inChildren) return false;
         const component = parent['component'];
         if (typeof component !== 'string') return true;
-        const entry = library[component];
-        const property = entry?.tier === 'root' && Object.hasOwn(entry.shape.properties, key) ? entry.shape.properties[key] : undefined;
+        const shape = entryShape(library[component]);
+        const property = shape !== undefined && Object.hasOwn(shape.properties, key) ? shape.properties[key] : undefined;
         if (property === undefined) return false;
         const types = Array.isArray(property.type) ? property.type : [property.type];
         return !types.includes('node');
@@ -264,8 +265,8 @@ export function startRuntime(
         if (key !== 'records' && key !== 'items') return false;
         const component = parent['component'];
         if (typeof component !== 'string') return false;
-        const entry = library[component];
-        return entry?.tier === 'root' && Object.hasOwn(entry.shape.properties, key);
+        const shape = entryShape(library[component]);
+        return shape !== undefined && Object.hasOwn(shape.properties, key);
     }
 
     /** Writes the articulation values of a snapshot over the mounted app; a value for a vanished node or a runtime property is skipped */

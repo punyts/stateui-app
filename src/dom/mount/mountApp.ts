@@ -7,15 +7,15 @@ import type { BuildError } from '../../core/errors/index.js';
 import type { Link } from '../../core/links/index.js';
 import { extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
-import { cloneJson, resolveNode } from '../../core/resolve/index.js';
+import { cloneJson, entryShape, resolveNode } from '../../core/resolve/index.js';
 import { OUTLET_COMPONENT, ROUTE_PATH, findOutlet, initialRoute, isRouteRefusal, routeTo, screenPath } from '../../core/route/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
-import { collectComponentTokens, reflectedProperties } from '../../core/shape/index.js';
+import { collectComponentTokens, nodeChildren, reflectedProperties } from '../../core/shape/index.js';
 import { layInstance } from '../../core/snapshot/index.js';
 import { PREFIXES } from '../../core/types.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
-import { validateDocument } from '../../core/validate/index.js';
+import { refusedChildren, validateDocument } from '../../core/validate/index.js';
 import type { AppMode } from '../../core/validate/index.js';
 import { createDispatcher } from '../on/index.js';
 import type { DispatchHooks } from '../on/index.js';
@@ -81,6 +81,13 @@ function removeLinked(tree: Node, links: readonly Link[], treePath = APP_PATH): 
 }
 
 const ROW_LINK_TARGET = /^\$row(\.|$)/;
+
+/** The `childComponents` of the slot of `parent` that holds the node at `path`; undefined when the slot lists none */
+function slotAccepts(library: ComponentLibrary, parent: { node: Node; path: string } | undefined, path: string): readonly string[] | undefined {
+    if (parent === undefined) return undefined;
+    const shape = Object.hasOwn(library, parent.node.component) ? entryShape(library[parent.node.component]) : undefined;
+    return nodeChildren(parent.node, parent.path, shape).find((child) => child.path === path)?.accepts;
+}
 
 /** True when `path` is `base` or below it */
 function atOrBelow(path: string, base: string): boolean {
@@ -363,6 +370,9 @@ export function mountApp(
             if (!isValid(one.errors)) return one.errors;
             const ancestors = ancestorsOf(JSON.parse(JSON.stringify(store.get(base))) as JsonObject, path, one.node, base);
             if (ancestors.length === 0) return refused;
+            // A shape component renders only in a drawing or a scene: one that `<sui-node>` would render is refused
+            const misplaced = refusedChildren(one.node, path, library, slotAccepts(library, ancestors[ancestors.length - 1], path));
+            if (misplaced.length > 0) return misplaced;
             for (const key of Object.keys(instances)) if (atOrBelow(key, path)) delete instances[key];
             Object.assign(instances, one.instances);
             const extracted = extractLinks(one.node, { library, instances, path, ancestors });

@@ -1,6 +1,7 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
+import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary, ResolveResult } from '../resolve/index.js';
 import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
@@ -23,7 +24,7 @@ export type ResolvedTree = Pick<ResolveResult, 'node' | 'instances'>;
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 /** The chain of the node holding an `on` entry and, inside a row template, the index of the owning frame */

@@ -2,7 +2,7 @@ import { PATTERN_KINDS, PATTERN_PARAM_TYPES } from '../blueprint/types.js';
 import type { PatternKind, PatternParam, PatternParamType, PatternPart, PatternSlot } from '../blueprint/types.js';
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
-import { resolveNode } from '../resolve/index.js';
+import { entryShape, resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { MAX_SUMMARY_LENGTH, checkPurposes, nodeChildren, normalizePurpose, validateNode } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
@@ -194,7 +194,7 @@ export function readPattern(json: unknown, file: string, kind: PatternKind): Rea
 
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     const entry = Object.hasOwn(library, component) ? library[component] : undefined;
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 /**

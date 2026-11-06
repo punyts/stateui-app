@@ -1,6 +1,6 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
-import { resolveNode } from '../resolve/index.js';
+import { entryShape, resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary, DocumentComposed } from '../resolve/index.js';
 import { MAX_SUMMARY_LENGTH, categoryError, checkPurposes, isComponentCategory, purposesError } from '../shape/index.js';
 import type { ComponentCategory, Shape } from '../shape/index.js';
@@ -65,7 +65,7 @@ function isObject(value: unknown): value is JsonObject {
 function shapeOf(library: ComponentLibrary, component: unknown): Shape | undefined {
     if (typeof component !== 'string' || !Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 /** True when the path names a property, slot, `children` key or `on` event the node's own shape declares but the node does not hold */

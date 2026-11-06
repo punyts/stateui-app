@@ -5,8 +5,29 @@ export { PROPERTY_KEYS, SHAPE_KEYS, categoryError, purposesError } from './table
 export { COMPONENT_CATEGORIES, MAX_PURPOSES, MAX_PURPOSE_LENGTH, MIN_PURPOSES, checkPurposes, isComponentCategory, normalizePurpose } from './categories.js';
 export type { ComponentCategory } from './categories.js';
 export type { KeyRule, RuleContext } from './table.js';
-export { MAX_PATTERN_INPUT, MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.js';
-export type { Bounds, PropertyShape, PropertyType, RequiredWhen, Shape, ValidatorOptions } from './types.js';
+export {
+    MAX_COLOR_LENGTH,
+    MAX_PATH_COMMANDS,
+    MAX_PATH_DATA_LENGTH,
+    MAX_PATTERN_INPUT,
+    MAX_PATTERN_LENGTH,
+    MAX_POINTS,
+    MAX_SUMMARY_LENGTH,
+    OBJECT_FIELD_TYPES,
+    PROPERTY_TYPES
+} from './types.js';
+export type {
+    Bounds,
+    FieldValidators,
+    FileRefOptions,
+    ObjectField,
+    ObjectFieldType,
+    PropertyShape,
+    PropertyType,
+    RequiredWhen,
+    Shape,
+    ValidatorOptions
+} from './types.js';
 export { isSafeUrl } from './url.js';
 export { VALIDATORS } from './validators.js';
 export { validateNode } from './validate.js';

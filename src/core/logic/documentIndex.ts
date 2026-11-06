@@ -1,5 +1,6 @@
 import { parseTarget, resolveTarget } from '../on/index.js';
 import type { Frame, ResolvedTree, TreeNode } from '../on/index.js';
+import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { cloneJson, isNodeValue, isObject } from '../resolve/merge.js';
 import { nodeChildren } from '../shape/index.js';
@@ -39,7 +40,7 @@ const RECORD_PROPERTIES = ['records', 'items'];
 
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 function walkValue(value: JsonValue | undefined, steps: readonly string[]): JsonValue | undefined {

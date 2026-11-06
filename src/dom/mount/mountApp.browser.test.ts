@@ -439,3 +439,84 @@ describe('mountApp in Chromium', () => {
         });
     });
 });
+
+describe('mountApp with a shape component in Chromium', () => {
+    // A fixture shape and a fixture slot that names it: no drawing component exists in this library
+    const shapes: ComponentLibrary = {
+        ...library,
+        dot: { tier: 'shape', shape: shapeOf({ r: { type: 'number', default: 4 } }) },
+        sketch: {
+            tier: 'root',
+            tag: 'x-mount-sketch',
+            shape: (() => {
+                const result = parseShape({ summary: 'Fixture', properties: { mark: { type: 'node', childComponents: ['dot'] } } }, 'fixture.state.json');
+                if (!result.shape) throw new Error(JSON.stringify(result.errors));
+                return result.shape;
+            })()
+        }
+    };
+    defineComponent({ tag: 'x-mount-sketch', template: '<s>sketch</s>' });
+    const apps: MountedApp[] = [];
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        errorSpy = vi.spyOn(report, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+        for (const app of apps.splice(0)) app.dispose();
+        errorSpy.mockRestore();
+        document.body.replaceChildren();
+    });
+
+    it('should report a shape under panel once as SUI-NODE-CHILD and render no element', () => {
+        // Arrange
+        const host = freshHost();
+        const doc: AppDocument = { app: panel({ hello: { component: 'label', text: 'Hi' }, spot: { component: 'dot' } }) };
+
+        // Act
+        const app = mountApp(host, doc, shapes);
+        apps.push(app);
+
+        // Assert
+        expect(app.store).toBeUndefined();
+        expect(app.errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.spot' }
+        ]);
+        expect(host.querySelectorAll('*')).toHaveLength(0);
+    });
+
+    it('should mount a shape in a slot that names it without an element for the shape', () => {
+        // Arrange
+        const host = freshHost();
+        const doc: AppDocument = { app: { component: 'sketch', mark: { component: 'dot', r: 2 } } as AppDocument['app'] };
+
+        // Act
+        const app = mountApp(host, doc, shapes);
+        apps.push(app);
+
+        // Assert
+        expect(app.errors).toEqual([]);
+        expect(app.store?.get('$.app.mark' as never)).toEqual({ component: 'dot', r: 2 });
+        expect(find(host, 'x-mount-sketch')).toBeDefined();
+        expect(textOf(host)).toContain('sketch');
+    });
+
+    it('should refuse a written shape node that <sui-node> would render', async () => {
+        // Arrange
+        const host = freshHost();
+        const app = mountApp(host, { app: panel({ hello: { component: 'label', text: 'Hi' } }) }, shapes);
+        apps.push(app);
+
+        // Act
+        const errors = app.writeNode('$.app.children.spot', { component: 'dot' } as never);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+        // Assert
+        expect(errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.spot' }
+        ]);
+        expect(app.store?.get('$.app.children.spot' as never)).toBeUndefined();
+        expect(errorSpy).not.toHaveBeenCalled();
+    });
+});

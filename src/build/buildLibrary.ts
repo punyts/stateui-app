@@ -237,9 +237,12 @@ interface PendingComposed {
 function libraryOf(entries: readonly ComponentCatalogEntry[]): ComponentLibrary {
     const library: Record<string, ComponentLibrary[string]> = {};
     for (const entry of entries) {
-        // A shape component is not resolved or mounted yet (G1.1b of the graphics epic 1)
-        if (entry.tier === 'shape') continue;
-        library[entry.name] = entry.tier === 'root' ? { tier: 'root', tag: entry.tag, shape: entry.shape } : { tier: 'composed', tree: entry.tree };
+        library[entry.name] =
+            entry.tier === 'root'
+                ? { tier: 'root', tag: entry.tag, shape: entry.shape }
+                : entry.tier === 'shape'
+                  ? { tier: 'shape', shape: entry.shape }
+                  : { tier: 'composed', tree: entry.tree };
     }
     return library;
 }

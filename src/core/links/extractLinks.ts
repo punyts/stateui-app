@@ -2,6 +2,7 @@ import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { parseTarget, resolveTarget } from '../on/index.js';
 import type { Frame, TreeNode } from '../on/index.js';
+import { entryShape } from '../resolve/index.js';
 import { isNodeValue, isObject } from '../resolve/merge.js';
 import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
@@ -30,7 +31,7 @@ function shapeOf(options: ExtractOptions, component: string): Shape | undefined 
     const library = options.library;
     if (library === undefined || !Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 class Extractor {

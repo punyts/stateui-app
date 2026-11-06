@@ -10,7 +10,7 @@ import { checkOrderedKeys, checkRoot, checkServerUse, screenRoots } from './docu
 import type { ResolvedTree } from '../on/index.js';
 import { documentValidators } from './registry.js';
 import type { CatalogSource, DocumentValidation, ValidateDocumentOptions } from './types.js';
-import { checkTree } from './tree.js';
+import { checkTree, childRefusal } from './tree.js';
 
 const APP_PATH = '$.app';
 
@@ -18,33 +18,40 @@ function isCatalog(source: ComponentLibrary | CatalogSource): source is CatalogS
     return Array.isArray((source as { components?: unknown }).components);
 }
 
+/** One catalog entry as the resolver reads it */
+function libraryEntry(component: CatalogSource['components'][number]): LibraryEntry {
+    if (component.tier === 'shape') return { tier: 'shape', shape: component.shape };
+    if (component.tier === 'composed') return { tier: 'composed', tree: component.tree };
+    return {
+        tier: 'root',
+        tag: component.tag,
+        shape: component.placement === undefined ? component.shape : { ...component.shape, placement: component.placement }
+    };
+}
+
 /**
- * The library the resolver and validators read, from the entries of `catalog.json`. The catalog keeps a declared
- * `placement` beside `shape`; it goes back into the shape, where the layout validator reads it
+ * The library the resolver and validators read, from the entries of `catalog.json`, each with its tier. The catalog
+ * keeps a declared `placement` beside `shape`; it goes back into the shape, where the layout validator reads it. A
+ * shape component keeps its shape and has no tag
  */
 export function libraryFromCatalog(catalog: CatalogSource): ComponentLibrary {
     const library: Record<string, LibraryEntry> = {};
-    for (const component of catalog.components) {
-        // A shape component is not resolved or validated yet (G1.1b of the graphics epic 1)
-        if (component.tier === 'shape') continue;
-        library[component.name] =
-            component.tier === 'root'
-                ? {
-                      tier: 'root',
-                      tag: component.tag,
-                      shape:
-                          component.placement === undefined
-                              ? component.shape
-                              : { ...component.shape, placement: component.placement }
-                  }
-                : { tier: 'composed', tree: component.tree };
-    }
+    for (const component of catalog.components) library[component.name] = libraryEntry(component);
     return library;
 }
 
 /** Every error carries a state path; one without a location points at the document */
 function located(errors: readonly BuildError[]): BuildError[] {
     return errors.map((error) => (error.statePath === undefined ? { ...error, statePath: '$' } : error));
+}
+
+/**
+ * The root of the app or of a screen renders as an element, so it takes no shape component. A composed tree may have
+ * a shape at its root: where it is used, its slot decides
+ */
+function rootRefusal(root: Node, path: string, library: ComponentLibrary): BuildError[] {
+    const refused = typeof root.component === 'string' ? childRefusal(library, root.component, undefined) : undefined;
+    return refused === undefined ? [] : [refused(path)];
 }
 
 function runChecks(
@@ -61,11 +68,13 @@ function runChecks(
     const data = document['data'];
 
     const resolved = resolveNode(app as Node, library, composed);
+    errors.push(...rootRefusal(resolved.node, APP_PATH, library));
     errors.push(...resolved.errors, ...checkTree(resolved.node, resolved.instances, APP_PATH, library, data, options));
 
     const screens: Record<string, ResolvedTree> = {};
     for (const screen of screenRoots(document)) {
         const result = resolveNode(screen.root as Node, library, composed, { path: screen.path });
+        errors.push(...rootRefusal(result.node, screen.path, library));
         errors.push(...result.errors, ...checkTree(result.node, result.instances, screen.path, library, data, options));
         screens[screen.name] = { node: result.node, instances: result.instances };
     }

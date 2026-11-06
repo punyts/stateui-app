@@ -1,4 +1,5 @@
 import type { BuildError } from '../errors/index.js';
+import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { isNodeValue, isObject } from '../resolve/merge.js';
 import type { PropertyShape } from '../shape/index.js';
@@ -28,8 +29,8 @@ class Checker {
     scopeOf(app: JsonObject): Scope {
         const name = app.component;
         if (this.library === undefined || typeof name !== 'string' || !Object.hasOwn(this.library, name)) return undefined;
-        const entry = this.library[name];
-        return entry?.tier === 'root' ? { properties: entry.shape.properties } : undefined;
+        const shape = entryShape(this.library[name]);
+        return shape === undefined ? undefined : { properties: shape.properties };
     }
 
     /** The scope below `key`: a node has its own, a map property gives its item properties, then each entry uses them */

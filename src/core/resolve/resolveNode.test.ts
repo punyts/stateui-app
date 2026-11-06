@@ -220,6 +220,29 @@ describe('resolveNode', () => {
     });
 });
 
+describe('resolveNode shape components', () => {
+    const SHAPES: ComponentLibrary = {
+        ...LIBRARY,
+        dot: { tier: 'shape', shape: shapeOf({ r: { type: 'number', default: 4 }, fill: { type: 'string', default: 'ink' } }) },
+        group: { tier: 'shape', shape: shapeOf({ clip: { type: 'boolean', default: false } }, { childComponents: ['dot'] }) },
+        marker: { tier: 'composed', tree: { component: 'dot', r: 9 } }
+    };
+
+    it('should merge a shape node over its shape defaults, with its children resolved', () => {
+        const node: Node = { component: 'group', children: { a: { component: 'dot', r: 2 }, b: { component: 'marker' } } };
+
+        const result = resolveNode(node, SHAPES);
+
+        expect(result.errors).toEqual([]);
+        expect(result.node).toEqual({
+            component: 'group',
+            clip: false,
+            children: { a: { component: 'dot', r: 2, fill: 'ink' }, b: { component: 'dot', r: 9, fill: 'ink' } }
+        });
+        expect(result.instances).toEqual({ '$.app.children.b': ['marker'] });
+    });
+});
+
 describe('null in a map property', () => {
     it('should remove an entry of a map property of a nested node in a composed override', () => {
         const result = resolve({ component: 'gridPage', children: { table: { columns: { actions: null } } } });

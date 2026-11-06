@@ -224,6 +224,75 @@ describe('shapeEntry', () => {
         });
         expect(validateNode(entry.shape, entry.example, '$.app')).toEqual([]);
     });
+
+    it('should list the options of the graphics validators, with the field list of fields, in the catalog text', () => {
+        const viewBox = {
+            x: { type: 'number', required: true },
+            y: { type: 'number', required: true },
+            width: { type: 'number', required: true, validators: { range: { min: 0 } } },
+            height: { type: 'number', required: true, validators: { range: { min: 0 } } }
+        };
+        const shape = parsed({
+            summary: 'A shape with every graphics validator',
+            properties: {
+                fill: { type: 'string', validators: { color: true } },
+                d: { type: 'string', validators: { pathData: true } },
+                points: { type: 'array', validators: { points: true } },
+                origin: { type: 'array', validators: { vector: 2 } },
+                viewBox: { type: 'object', validators: { fields: viewBox } },
+                src: { type: ['string', 'object'], validators: { fileRef: { types: ['image/png'], dataUrl: true } } }
+            }
+        });
+        const { tag: _tag, ...component } = scanned('figure');
+
+        const entry = shapeEntry({ ...component, tier: 'shape' }, shape, 'atom');
+        const text = emitCatalog([entry], THEME).text;
+        const written = (JSON.parse(text) as { components: { shape: Shape }[] }).components[0]?.shape.properties;
+
+        expect(written?.viewBox?.validators).toEqual({ fields: viewBox });
+        expect(written?.fill?.validators).toEqual({ color: true });
+        expect(written?.d?.validators).toEqual({ pathData: true });
+        expect(written?.points?.validators).toEqual({ points: true });
+        expect(written?.origin?.validators).toEqual({ vector: 2 });
+        expect(written?.src?.validators).toEqual({ fileRef: { types: ['image/png'], dataUrl: true } });
+    });
+
+    it('should give an example that passes the graphics validators of its required properties', () => {
+        const shape = parsed({
+            summary: 'A shape whose required properties all carry graphics validators',
+            properties: {
+                fill: { type: 'string', required: true, validators: { color: true } },
+                d: { type: 'string', required: true, validators: { pathData: true } },
+                points: { type: 'array', required: true, validators: { points: true, length: { min: 2, max: 2 } } },
+                origin: { type: 'array', required: true, validators: { vector: 3 } },
+                src: { type: ['object', 'string'], required: true, validators: { fileRef: { types: ['image/png'] } } },
+                image: { type: 'string', required: true, validators: { fileRef: { types: ['model/gltf-binary', 'image/webp'], dataUrl: true } } },
+                material: {
+                    type: 'object',
+                    required: true,
+                    validators: {
+                        fields: {
+                            color: { type: 'string', required: true, validators: { color: true } },
+                            opacity: { type: 'number', required: true, validators: { range: { min: 0.5, max: 1 } } },
+                            side: { type: 'string', required: true, values: ['front', 'back'] },
+                            blend: { type: 'string', required: true, validators: { oneOf: ['normal', 'add'] } },
+                            map: { type: 'object', required: true, validators: { fileRef: { types: ['image/jpeg'] } } },
+                            offset: { type: 'array', required: true, validators: { vector: 2 } },
+                            flat: { type: 'boolean', required: true },
+                            note: { type: 'string', required: true },
+                            optional: { type: 'number' }
+                        }
+                    }
+                }
+            }
+        });
+
+        const example = exampleNode('figure', shape);
+
+        expect(example).toMatchObject({ fill: '#000000', d: 'M0 0', points: [[0, 0], [0, 0]], origin: [0, 0, 0], image: 'data:image/webp;base64,' });
+        expect(example.material).not.toHaveProperty('optional');
+        expect(validateNode(shape, example, '$.app')).toEqual([]);
+    });
 });
 
 describe('emitCatalog', () => {

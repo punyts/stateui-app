@@ -48,7 +48,8 @@ function splitTopLevel(text: string, separator: (char: string) => boolean): stri
     return parts;
 }
 
-function isColor(text: string): boolean {
+/** True when the text is a literal colour: `transparent`, hex, or `rgb()`, `rgba()`, `hsl()` or `hsla()` of numbers */
+export function isColor(text: string): boolean {
     return text === 'transparent' || HEX_COLOR.test(text) || FUNCTION_COLOR.test(text);
 }
 

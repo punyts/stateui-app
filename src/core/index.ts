@@ -6,12 +6,17 @@ export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES,
 export type { AppDocument, AppEventName, AppTheme, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {
     COMPONENT_CATEGORIES,
+    MAX_COLOR_LENGTH,
+    MAX_PATH_COMMANDS,
+    MAX_PATH_DATA_LENGTH,
     MAX_PATTERN_INPUT,
     MAX_PATTERN_LENGTH,
+    MAX_POINTS,
     MAX_PURPOSES,
     MAX_PURPOSE_LENGTH,
     MAX_SUMMARY_LENGTH,
     MIN_PURPOSES,
+    OBJECT_FIELD_TYPES,
     checkPurposes,
     isComponentCategory,
     normalizePurpose,
@@ -32,8 +37,12 @@ export type {
     Bounds,
     CollectedTokens,
     ComponentCategory,
+    FieldValidators,
+    FileRefOptions,
     KeyRule,
     NodeChild,
+    ObjectField,
+    ObjectFieldType,
     PropertyShape,
     PropertyType,
     RequiredWhen,
@@ -63,7 +72,7 @@ export type { AppliedSlot, ApplyPatternResult, ExposedPath, ExposesIssue, Parsed
 export type { ComponentFiles, ComponentTier, FileMap, ScanResult, ScannedComponent } from './convention/index.js';
 export { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks, resolveRowLinks, runtimePath } from './links/index.js';
 export type { ExtractOptions, ExtractResult, Link, LinkStore, ReferenceOptions, RowLinkOptions } from './links/index.js';
-export { checkComposedNames, cloneJson, mergeValues, resolveNode } from './resolve/index.js';
+export { checkComposedNames, cloneJson, entryShape, mergeValues, resolveNode } from './resolve/index.js';
 export type {
     ComponentLibrary,
     ComposedEntry,
@@ -71,7 +80,8 @@ export type {
     LibraryEntry,
     ResolveOptions,
     ResolveResult,
-    RootEntry
+    RootEntry,
+    ShapeEntry
 } from './resolve/index.js';
 export { diffInstance, layInstance, snapshotState } from './snapshot/index.js';
 export type { AppInstance, InstanceBase, LaidInstance, SnapshotOptions, SnapshotStore, StateSnapshot } from './snapshot/index.js';

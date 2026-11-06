@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMPONENT_CATEGORIES, MAX_PATTERN_LENGTH, MAX_PURPOSE_LENGTH, MAX_SUMMARY_LENGTH, buildDefaults, checkPurposes, normalizePurpose, isSafeUrl, parseShape, validateNode } from './index.js';
+import { COMPONENT_CATEGORIES, MAX_PATTERN_LENGTH, MAX_PURPOSE_LENGTH, MAX_SUMMARY_LENGTH, VALIDATORS, buildDefaults, checkPurposes, normalizePurpose, isSafeUrl, parseShape, validateNode } from './index.js';
 import type { Shape } from './index.js';
 import type { Node } from '../types.js';
 
@@ -251,6 +251,89 @@ describe('parseShape', () => {
             const pattern = 'a'.repeat(MAX_PATTERN_LENGTH);
 
             expect(parseCodes({ summary: 'x', properties: { a: { type: 'string', validators: { pattern } } } })).toEqual([]);
+        });
+
+        it('should hold exactly the closed set of validator names', () => {
+            expect(Object.keys(VALIDATORS)).toEqual(['oneOf', 'pattern', 'regex', 'range', 'length', 'color', 'pathData', 'points', 'vector', 'fields', 'fileRef']);
+        });
+
+        it.each([
+            ['color', 'string', true],
+            ['pathData', 'string', true],
+            ['points', 'array', true],
+            ['vector', 'array', 3],
+            ['fields', 'object', { x: { type: 'number' } }],
+            ['fileRef', 'string', { types: ['image/png'], dataUrl: true }],
+            ['fileRef', 'object', { types: ['image/png'] }]
+        ])('should accept the %s validator on type %s and keep its options', (name, type, options) => {
+            const shape = propertyShape({ type, validators: { [name]: options } });
+
+            expect(shape.properties.value?.validators).toEqual({ [name]: options });
+        });
+
+        it('should accept fileRef on a property that is a string or an object', () => {
+            const shape = propertyShape({ type: ['string', 'object'], validators: { fileRef: { types: ['image/png'] } } });
+
+            expect(shape.properties.value?.validators.fileRef).toEqual({ types: ['image/png'] });
+        });
+
+        it.each([
+            ['color', 'number'],
+            ['pathData', 'array'],
+            ['points', 'string'],
+            ['vector', 'object'],
+            ['fields', 'array'],
+            ['fileRef', 'number']
+        ])('should reject the %s validator on type %s', (name, type) => {
+            const options = { vector: 2, fields: { x: { type: 'number' } }, fileRef: { types: ['image/png'] } }[name] ?? true;
+
+            expect(parseCodes({ summary: 'x', properties: { a: { type, validators: { [name]: options } } } })).toEqual(['SUI-BUILD-SHAPE']);
+        });
+
+        it.each([
+            ['color', false],
+            ['color', {}],
+            ['pathData', 1],
+            ['points', { max: 2 }],
+            ['vector', 4],
+            ['vector', 1],
+            ['vector', '2'],
+            ['fields', {}],
+            ['fields', []],
+            ['fields', { x: { type: 'date' } }],
+            ['fields', { x: { type: 'number', min: 0 } }],
+            ['fields', { x: { type: 'number', required: 'yes' } }],
+            ['fields', { x: { type: 'number', values: [] } }],
+            ['fields', { x: { type: 'number', values: ['a'] } }],
+            ['fields', { x: { type: 'number', validators: { pattern: 'a' } } }],
+            ['fields', { x: { type: 'number', validators: { length: { max: 2 } } } }],
+            ['fields', { x: { type: 'number', validators: { color: true } } }],
+            ['fields', { x: { type: 'string', validators: { range: { min: 0 } } } }],
+            ['fields', { x: { type: 'string', validators: { color: false } } }],
+            ['fileRef', {}],
+            ['fileRef', { types: [] }],
+            ['fileRef', { types: ['png'] }],
+            ['fileRef', { types: ['image/png', 'image/png'] }],
+            ['fileRef', { types: ['image/png'], dataUrl: 'yes' }],
+            ['fileRef', { types: ['application/pdf'], dataUrl: true }],
+            ['fileRef', { types: ['image/png'], maxSize: 10 }]
+        ])('should reject malformed %s options %j', (name, options) => {
+            const type = { color: 'string', pathData: 'string', points: 'array', vector: 'array', fields: 'object', fileRef: 'object' }[name];
+
+            expect(parseCodes({ summary: 'x', properties: { a: { type, validators: { [name]: options } } } })).toEqual(['SUI-BUILD-SHAPE']);
+        });
+
+        it('should keep the field list of fields, with nested validators, on the shape', () => {
+            const fields = {
+                color: { type: 'string', required: true, validators: { color: true } },
+                map: { type: 'object', validators: { fileRef: { types: ['image/png'] } } },
+                opacity: { type: 'number', validators: { range: { min: 0, max: 1 } } },
+                side: { type: 'string', values: ['front', 'back'] },
+                kind: { type: 'string', validators: { oneOf: ['a', 'b'] } }
+            };
+            const shape = propertyShape({ type: 'object', validators: { fields } });
+
+            expect(shape.properties.value?.validators.fields).toEqual(fields);
         });
     });
 

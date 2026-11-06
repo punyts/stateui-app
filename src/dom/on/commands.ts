@@ -1,6 +1,6 @@
 import type { Frame, Located, OnCommand, TreeNode } from '../../core/on/index.js';
 import { findProvider, findRowProvider, parseTarget, resolveTarget } from '../../core/on/index.js';
-import { cloneJson } from '../../core/resolve/index.js';
+import { cloneJson, entryShape } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { Shape } from '../../core/shape/index.js';
 import type { JsonValue } from '../../core/types.js';
@@ -42,7 +42,7 @@ export interface CommandContext {
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 /** The root that holds an absolute node path: `$.screens.{name}` for a screen's nodes, else `$.app` */

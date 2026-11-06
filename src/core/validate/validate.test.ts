@@ -763,6 +763,89 @@ describe('validateDocument child components', () => {
     });
 });
 
+describe('validateDocument shape components', () => {
+    function parsed(json: Record<string, unknown>): Shape {
+        const result = parseShape({ summary: 'Test', ...json }, 'test.state.json');
+        expect(result.errors).toEqual([]);
+        return result.shape as Shape;
+    }
+
+    // Fixture shapes and a fixture slot: no drawing component exists in this library
+    const SHAPES: ComponentLibrary = {
+        ...LIBRARY,
+        dot: { tier: 'shape', shape: parsed({ properties: { r: { type: 'number', default: 4 } } }) },
+        bar: { tier: 'shape', shape: parsed({ properties: { width: { type: 'number', default: 1 } } }) },
+        sketch: {
+            tier: 'root',
+            tag: 'ui-sketch',
+            shape: parsed({ properties: { shapes: { type: 'node', childComponents: ['dot'] }, plain: { type: 'node' } }, childComponents: ['dot'] })
+        },
+        marker: { tier: 'composed', tree: { component: 'dot', r: 9 } }
+    };
+
+    function found(document: unknown, library: ComponentLibrary | Parameters<typeof libraryFromCatalog>[0] = SHAPES): { code: string; statePath?: string }[] {
+        return validateDocument(document, library).errors.map((error) => ({ code: error.code, statePath: error.statePath }));
+    }
+
+    it('should accept a shape under a slot that names it, with its properties merged and checked', () => {
+        const document = doc({ component: 'sketch', shapes: { component: 'dot', r: 2 }, children: { a: { component: 'dot' } } });
+
+        expect(found(document)).toEqual([]);
+    });
+
+    it('should check the properties of a shape node against its shape', () => {
+        const document = doc({ component: 'sketch', shapes: { component: 'dot', r: 'big' } });
+
+        expect(found(document)).toEqual([{ code: 'SUI-STATE-INVALID', statePath: '$.app.shapes.r' }]);
+    });
+
+    it('should accept a composed component that resolves to a named shape', () => {
+        expect(found(doc({ component: 'sketch', shapes: { component: 'marker' } }))).toEqual([]);
+    });
+
+    it('should refuse a shape under panel', () => {
+        const result = validateDocument(doc({ component: 'panel', children: { a: { component: 'dot' } } }), SHAPES);
+
+        expect(result.errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.a' }
+        ]);
+        expect(result.errors[0]?.message).toBe('Component "dot" at $.app.children.a is not accepted by its parent slot; it takes no shapes');
+    });
+
+    it('should refuse a shape in a node slot with no childComponents', () => {
+        expect(found(doc({ component: 'sketch', plain: { component: 'dot' } }))).toEqual([{ code: 'SUI-NODE-CHILD', statePath: '$.app.plain' }]);
+    });
+
+    it('should refuse a shape that the slot does not name', () => {
+        const result = validateDocument(doc({ component: 'sketch', shapes: { component: 'bar' } }), SHAPES);
+
+        expect(result.errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.shapes' }
+        ]);
+        expect(result.errors[0]?.message).toContain('it takes dot');
+    });
+
+    it('should refuse a shape at the root of the app or a screen, and accept one at the root of a composed tree', () => {
+        expect(found(doc({ component: 'dot' }))).toEqual([{ code: 'SUI-NODE-CHILD', statePath: '$.app' }]);
+        expect(found(doc({ component: 'panel' }, { composed: { spot: { component: 'dot' } } }))).toEqual([]);
+    });
+
+    it('should read a shape entry of a catalog with its tier and shape', () => {
+        const dot = (SHAPES['dot'] as { shape: Shape }).shape;
+        const catalog = {
+            components: [
+                { name: 'panel', tier: 'root' as const, tag: 'ui-panel', shape: (LIBRARY['panel'] as { shape: Shape }).shape },
+                { name: 'dot', tier: 'shape' as const, shape: dot }
+            ]
+        };
+
+        expect(libraryFromCatalog(catalog)['dot']).toEqual({ tier: 'shape', shape: dot });
+        expect(found(doc({ component: 'panel', children: { a: { component: 'dot' } } }), catalog)).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.a' }
+        ]);
+    });
+});
+
 describe('validateDocument $.server', () => {
     const usesServer = doc({
         component: 'panel',

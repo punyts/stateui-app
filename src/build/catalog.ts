@@ -3,7 +3,7 @@ import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import type { ComponentToken } from '../core/theme/index.js';
 import { typesOf } from '../core/shape/index.js';
-import type { ComponentCategory, PropertyShape, Shape } from '../core/shape/index.js';
+import type { ComponentCategory, ObjectField, PropertyShape, Shape, ValidatorOptions } from '../core/shape/index.js';
 import type { ExposedPath, ScannedComponent } from '../core/convention/index.js';
 import type { JsonObject, JsonValue, Node } from '../core/types.js';
 import type { PatternCatalogEntry } from './patterns.js';
@@ -172,12 +172,62 @@ function slotsOf(properties: Record<string, PropertyShape>): CatalogSlot[] {
     return slots;
 }
 
+/** A UUID that the `fileRef` validator accepts, for samples */
+const SAMPLE_FILE_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * A value of the type that passes the graphics validators (`color`, `pathData`, `points`, `vector`, `fields`,
+ * `fileRef`) set on it; undefined when none of them is set for the type
+ */
+function graphicsSample(type: string, validators: ValidatorOptions): JsonValue | undefined {
+    const { color, pathData, points, vector, fields, fileRef, length } = validators;
+    if (type === 'string') {
+        if (color !== undefined) return '#000000';
+        if (pathData !== undefined) return 'M0 0';
+        const image = fileRef?.dataUrl === true ? fileRef.types.find((name) => name.startsWith('image/')) : undefined;
+        if (image !== undefined) return `data:${image};base64,`;
+    }
+    if (type === 'array') {
+        if (vector !== undefined) return new Array<number>(vector).fill(0);
+        if (points !== undefined) return Array.from({ length: length?.min ?? 0 }, () => [0, 0]);
+    }
+    if (type === 'object') {
+        if (fileRef !== undefined) return { id: SAMPLE_FILE_ID, name: 'file', size: 0, type: fileRef.types[0] as string };
+        if (fields !== undefined) {
+            const sample: JsonObject = {};
+            for (const [name, field] of Object.entries(fields)) {
+                if (field.required === true) sample[name] = fieldSample(field);
+            }
+            return sample;
+        }
+    }
+    return undefined;
+}
+
+/** A value that passes one field of the `fields` validator */
+function fieldSample(field: ObjectField): JsonValue {
+    const validators = field.validators ?? {};
+    if (field.values !== undefined) return field.values[0] as JsonValue;
+    if (validators.oneOf !== undefined) return validators.oneOf[0] as JsonValue;
+    const graphics = graphicsSample(field.type, validators);
+    if (graphics !== undefined) return graphics;
+    const type = field.type;
+    if (type === 'number') return validators.range?.min ?? validators.range?.max ?? 0;
+    if (type === 'string') return '';
+    if (type === 'boolean') return false;
+    if (type === 'array') return [];
+    return {};
+}
+
 /** A value of the first allowed type; undefined for a `node`, which has no stand-alone value */
 function sampleValue(property: PropertyShape): JsonValue | undefined {
     if (property.default !== undefined) return property.default;
     if (property.values !== undefined) return property.values[0];
     const { range, length } = property.validators;
-    switch (typesOf(property)[0]) {
+    const type = typesOf(property)[0];
+    const graphics = type === undefined ? undefined : graphicsSample(type, property.validators);
+    if (graphics !== undefined) return graphics;
+    switch (type) {
         case 'string':
             return 'x'.repeat(length?.min ?? 1);
         case 'number':
