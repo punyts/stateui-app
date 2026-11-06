@@ -219,6 +219,10 @@ export const ERROR_CATALOG = {
     'SUI-RUN-ICON': { template: 'Icon "{name}" at {path} is in neither the core set nor the icons of the app' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' },
     'SUI-RUN-WRITE': { template: 'The runtime did not apply the write to {path}' },
+    'SUI-RUN-DRAW': { template: 'Shape at {path} cannot be drawn as written: {reason}' },
+    'SUI-RUN-CAP': {
+        template: 'The {component} at {path} has {actual} records, more than the {limit} the {name} renderer draws; only the first {limit} are drawn'
+    },
     'SUI-RUN-CLIPPED': {
         template: 'Rows of "{component}" at {path} are {limit}px tall but a row needs {actual}px, so its content is cut off; set rowHeight, or the recordlist.row token in the node theme',
         severity: 'warning'
