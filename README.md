@@ -735,6 +735,24 @@ Code is in `src/core/search/`, exported from `@punyts/stateui-app/core`. It impo
 - **`SYNONYM_GROUPS`** is the reviewed table (pick/choose/select, sum/total, show/display, remove/delete, change/edit/update, login/sign/signin, money/price/cost, picture/photo/image). A need word is expanded to its group, and a member found in an entry counts as a match of the need word. `synonymExpander(groups)` builds the expansion of another table.
 - **`createSearchIndex(entries, { synonyms? })`** builds the index once from `{ id, fields }`, where `fields` has four lists of strings: `purposes` (weight 3), `name` (2), `summary` (1) and `properties` (property and event names, 0.5). `search(need, limit?)` ranks with BM25 over the weighted fields (k1 1.2, b 0.75: per term the field frequencies are length-normalised per field, weighted and summed, then saturated once and multiplied by the idf over whole entries). A need word scores through the best of its synonyms, never through two. Ties go to the entry that matched more distinct need words, then to the lower id. Each hit is `{ id, score, matched }`: `matched` lists the purpose phrases, verbatim, that hold a matched word, then the need words matched only in other fields. An empty need, a need of stop words only and a need with no match return `[]`; what to show then is the caller's choice.
 
+## Graphics
+
+What this package holds for drawings (graphics epic 1); the `drawing` component, the shapes and the renderers are in
+`@punyts/stateui-components` (its README, "Graphics"), and the agent tools in `stateui-mcp`.
+
+- **Shape components** (`tier: "shape"`): a `state.json` with no view, accepted only by a slot whose `childComponents`
+  names it (see Shape format and Convention scan; `SUI-BUILD-TIER-SHAPE`). Shared property groups come from
+  `includes` partials (see Building a component library).
+- **Graphics validators** for shape properties: `color`, `pathData`, `points`, `vector`, `fields` and `fileRef` (see
+  Shape format), and the document checks `validatePaints` (`SUI-STATE-PAINT`, `SUI-STATE-TOKEN`) and
+  `validateShapeLabels` (warning `SUI-STATE-LABEL`) (see Document validation).
+- **Run-time reports**: `SUI-RUN-DRAW` (a shape or value that cannot be drawn, or a shape event outside the element's
+  subtree) and
+  `SUI-RUN-CAP` (a `drawRepeat` cut at the renderer's cap) (see Error catalog).
+- **Shape events**: the dispatcher runs a shape's `on` entry, or a `drawRepeat` row template's with `$row` at the
+  record, from the `detail.shape` of the event (see Dispatching `on` in the browser); `recordKeys` names the copies.
+- **Path geometry** (below), and **file reads** into the frame (see Preview runtime and message protocol).
+
 ## Path geometry
 
 Code is in `src/core/geometry/`, exported from `@punyts/stateui-app/core`. It touches no DOM, so the SVG and canvas renderers, hit testing and the `pathData` validator share it. Path data is only ever parsed, never inserted as markup.
