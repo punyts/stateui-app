@@ -1,0 +1,9 @@
+{
+    "summary": "A box that lays out its children",
+    "category": "layout",
+    "purposes": ["stack children in a column", "lay out a group of parts", "frame a section of a page"],
+    "layout": true,
+    "properties": {
+        "_title": { "type": "string", "kind": "content", "default": "" }
+    }
+}

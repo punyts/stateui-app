@@ -159,6 +159,7 @@
             }
         }
     ],
+    "patterns": [],
     "locales": [],
     "theme": {
         "tokens": [

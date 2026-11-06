@@ -240,6 +240,22 @@ export function checkPattern(pattern: PatternPart, library: ComponentLibrary, fi
 }
 
 /**
+ * The names of the components a pattern's tree uses, sorted. A composed node counts as its own name and is not opened;
+ * a node of a component the library does not hold counts too, and its children are not walked
+ */
+export function patternComponents(pattern: Pick<PatternPart, 'tree'>, library: ComponentLibrary): string[] {
+    const names = new Set<string>();
+    const visit = (node: Node, path: string): void => {
+        names.add(node.component);
+        const shape = shapeOf(library, node.component);
+        if (shape === undefined) return;
+        for (const child of nodeChildren(node, path, shape)) visit(child.node as Node, child.path);
+    };
+    visit(pattern.tree, '$.tree');
+    return [...names].sort();
+}
+
+/**
  * `SUI-BUILD-PURPOSE-DUPLICATE` for each purpose that repeats one of an earlier pattern (in name order), compared
  * lowercased, trimmed and with inner spaces collapsed, as for components
  */

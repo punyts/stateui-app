@@ -1,0 +1,9 @@
+{
+    "summary": "A line of text",
+    "category": "content",
+    "purposes": ["show a line of text", "title a section", "caption an image"],
+    "properties": {
+        "_text": { "type": "string", "kind": "content", "default": "Text" },
+        "items": { "type": "string", "default": "" }
+    }
+}

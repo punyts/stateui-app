@@ -6,6 +6,7 @@ import { typesOf } from '../core/shape/index.js';
 import type { ComponentCategory, PropertyShape, Shape } from '../core/shape/index.js';
 import type { ExposedPath, ScannedComponent } from '../core/convention/index.js';
 import type { JsonObject, JsonValue, Node } from '../core/types.js';
+import type { PatternCatalogEntry } from './patterns.js';
 import type { ThemeSection } from './theme.js';
 
 /** The size of a component, from the group folder it sits in */
@@ -89,6 +90,8 @@ export type ComponentCatalogEntry = RootCatalogEntry | ComposedCatalogEntry;
 export interface Catalog {
     /** Every component that built, sorted by name */
     components: ComponentCatalogEntry[];
+    /** Every pattern that passed its checks, sorted by kind then name; empty without `patternsDir` */
+    patterns: PatternCatalogEntry[];
     /** Every language that a component that built has an overlay for, sorted */
     locales: string[];
     /** The theme tokens a node override may set and the shipped overlays; see `buildThemeSection` */
@@ -271,10 +274,14 @@ export function composedEntry(
     };
 }
 
-/** The catalog and the text of `catalog.json`: entries sorted by name, the list of languages sorted, the theme section, four-space indent, LF newline at the end */
-export function emitCatalog(entries: readonly ComponentCatalogEntry[], theme: ThemeSection): { catalog: Catalog; text: string } {
+/** The catalog and the text of `catalog.json`: entries sorted by name, the patterns as given, the list of languages sorted, the theme section, four-space indent, LF newline at the end */
+export function emitCatalog(
+    entries: readonly ComponentCatalogEntry[],
+    theme: ThemeSection,
+    patterns: readonly PatternCatalogEntry[] = []
+): { catalog: Catalog; text: string } {
     const components = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     const locales = [...new Set(components.flatMap((entry) => entry.locales))].sort();
-    const catalog: Catalog = { components, locales, theme };
+    const catalog: Catalog = { components, patterns: [...patterns], locales, theme };
     return { catalog, text: `${JSON.stringify(catalog, null, 4)}\n` };
 }

@@ -54,6 +54,7 @@ export {
     EXPOSES_KEY,
     fitsParamType,
     parseComposed,
+    patternComponents,
     readPattern,
     scanLibrary,
     withoutExposes

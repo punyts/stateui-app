@@ -1,0 +1,15 @@
+{
+    "kind": "screen",
+    "summary": "A heading over a list of items",
+    "purposes": ["list the items of a dataset", "show records under a heading", "browse a collection"],
+    "tree": {
+        "component": "stack",
+        "_title": "Items",
+        "children": { "list": { "component": "caption", "<-items": "$.data.items" } }
+    },
+    "slots": { "list": { "path": "children.list", "description": "The list of items" } },
+    "params": {
+        "title": { "type": "string", "default": "Items", "paths": ["_title"], "description": "The heading" },
+        "items": { "type": "path", "required": true, "paths": ["children.list.<-items"], "description": "The dataset of items" }
+    }
+}

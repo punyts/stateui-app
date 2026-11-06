@@ -42,6 +42,12 @@ export interface BuildOptions {
      * purpose phrase that repeats another component's are errors either way
      */
     requireSearchKeys?: boolean;
+    /**
+     * A folder of patterns, `<kind>/<name>/<name>.pattern.json` with the kind `shell` or `screen`. They are read after
+     * the components are built and checked against them; each one that passes is in the catalog's `patterns`, and each
+     * problem is a build error. Without it the catalog's `patterns` is empty
+     */
+    patternsDir?: string;
 }
 
 /** A root component that built: its scan record and the files written for it, relative to the out folder */
@@ -57,6 +63,6 @@ export interface BuildResult {
     errors: BuildError[];
     /** Every file written, relative to the out folder, sorted */
     files: string[];
-    /** The content of `catalog.json`: every component that built, sorted by name */
+    /** The content of `catalog.json`: every component that built, sorted by name, and the patterns that passed */
     catalog: Catalog;
 }
