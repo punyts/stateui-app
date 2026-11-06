@@ -29,6 +29,22 @@ describe('emitted component modules in Chromium', () => {
         expect(element.shadowRoot?.querySelector('p')?.textContent).toBe('Hello');
     });
 
+    it('should mount the root component of a library that also has a shape component, and register no element for the shape', () => {
+        // Arrange
+        const store = createStore<{ label: { text: string; color: string } }>({ label: { text: 'Beside a shape', color: 'black' } });
+        const host = document.body.appendChild(document.createElement('div'));
+        mount(host, store);
+
+        // Act
+        const element = host.appendChild(document.createElement('ui-text-label'));
+        element.setAttribute('state', '$.label');
+
+        // Assert
+        expect(components.map((component) => component.tag)).toEqual(['ui-field-row', 'ui-text-label']);
+        expect(customElements.get('ui-dot-marker')).toBeUndefined();
+        expect(element.shadowRoot?.querySelector('p')?.textContent).toBe('Beside a shape');
+    });
+
     it('should update the rendered text when the state is written', () => {
         // Arrange
         const store = createStore<{ label: { text: string; color: string } }>({ label: { text: 'Before', color: 'black' } });

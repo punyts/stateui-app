@@ -126,13 +126,17 @@ and no DOM.
 
 - The folder name is the component name, camel-cased for state (`text-field` gives `textField`); the tag is `ui-` plus
   the folder name. Folder names are lower-case kebab. Parent folders are grouping only and become `group`.
-- A folder is root (`view.html` and `state.json`) or composed (`composed.json`), never both.
-- Result: `{ components, errors }`. Each component is `{ name, tier, tag, group, files, locales }`, sorted by name. A
+- A folder is root (`view.html` and `state.json`), composed (`composed.json`) or shape (`state.json` and locale files
+  only), never a mix. A shape component is a mark a graphics renderer draws (a chart bar, a diagram node): it has no
+  tag, module or CSS, only a catalog entry with `tier: "shape"`.
+- Result: `{ components, errors }`. Each component is `{ name, tier, tag, group, files, locales }` (a shape component
+  has no `tag`), sorted by name. A
   component with any problem is left out and its errors are reported; the others are still returned.
 - Errors: `SUI-BUILD-FILE` (a file outside a component folder), `SUI-BUILD-ROLE` (an unknown role or a file name
   different from its folder), `SUI-BUILD-NAME` (a folder name that is not lower-case kebab), `SUI-BUILD-DUPLICATE` (two
   components with the same name, including a root and a composed one; both files named), `SUI-BUILD-TIER` (root and
-  composed files in one folder) and `SUI-BUILD-MISSING` (a root component without its view or state file).
+  composed files in one folder), `SUI-BUILD-TIER-SHAPE` (a state file with a stylesheet or controller but no view) and
+  `SUI-BUILD-MISSING` (a root component without its view or state file).
 
 ## Exposed paths of a composed component
 
@@ -721,7 +725,7 @@ The build scans the folder, compiles each root component's template and styleshe
 | `<name>.js` | `name`, `tag`, `defaultState` (the shape's defaults), `options` (the `defineComponent` options) and `register()` |
 | `<name>.controller.js` | The compiled `controller.ts`, when the component has one |
 | `<name>.d.ts` | Types for the module |
-| `catalog.json` | Every component that built, root and composed, sorted by name (and the patterns of `patternsDir` and theme presets of `presetsDir`, see below): `name`, `tier`, `tag`, `size`, `summary`, `category`, `purposes`, `shape`, `content`, `slots`, `events`, `commands`, `layout`, `locales`, `example` (composed entries have `tree` instead of the shape fields) |
+| `catalog.json` | Every component that built, root, composed and shape, sorted by name (and the patterns of `patternsDir` and theme presets of `presetsDir`, see below): `name`, `tier`, `tag`, `size`, `summary`, `category`, `purposes`, `shape`, `content`, `slots`, `events`, `commands`, `layout`, `locales`, `example` (composed entries have `tree` instead of the shape fields; shape entries have no `tag`, `shared`, `slots`, `commands` or `layout`, and carry `own` and `tokens`) |
 | `<name>.locale.<code>.json` | The validated overlay of a root or composed component, one file per language |
 | `index.js` | `components` (every module in name order), `componentTokens` (the library's component tokens: `path`, `group`, `type`, `default`) and `registerAll()` |
 

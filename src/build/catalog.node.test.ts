@@ -20,7 +20,16 @@ describe('catalog.json under plain node', () => {
         const catalog = await load();
 
         expect(typeof document).toBe('undefined');
-        expect(catalog.components.map((entry) => entry.name)).toEqual(['fieldRow', 'loginForm', 'textLabel']);
+        expect(catalog.components.map((entry) => entry.name)).toEqual(['dotMarker', 'fieldRow', 'loginForm', 'textLabel']);
+    });
+
+    it('should show a shape component as tier shape without a tag', async () => {
+        const catalog = await load();
+
+        const entry = catalog.components.find((component) => component.name === 'dotMarker');
+
+        expect(entry?.tier).toBe('shape');
+        expect(entry).not.toHaveProperty('tag');
     });
 
     it('should accept a document that follows the catalog', async () => {
@@ -43,7 +52,7 @@ describe('catalog.json under plain node', () => {
         const catalog = await load();
 
         for (const entry of catalog.components) {
-            if (entry.tier === 'root') expect(validateNode(entry.shape, entry.example, '$.app')).toEqual([]);
+            if (entry.tier !== 'composed') expect(validateNode(entry.shape, entry.example, '$.app')).toEqual([]);
         }
     });
 });

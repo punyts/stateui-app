@@ -1,6 +1,91 @@
 {
     "components": [
         {
+            "name": "dotMarker",
+            "tier": "shape",
+            "size": "atom",
+            "summary": "A dot on a chart or map",
+            "category": "graphics",
+            "purposes": [
+                "mark a point on a chart",
+                "pin a place on a map",
+                "show one value as a dot"
+            ],
+            "shape": {
+                "summary": "A dot on a chart or map",
+                "properties": {
+                    "_label": {
+                        "type": "string",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": false,
+                        "row": false,
+                        "exposed": false,
+                        "default": "Point",
+                        "kind": "content"
+                    },
+                    "radius": {
+                        "type": "number",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": false,
+                        "row": false,
+                        "exposed": false,
+                        "default": 4
+                    },
+                    "hidden": {
+                        "type": "boolean",
+                        "required": false,
+                        "validators": {},
+                        "runtime": false,
+                        "reflect": true,
+                        "row": false,
+                        "exposed": false
+                    }
+                },
+                "shared": [],
+                "events": [
+                    "press"
+                ],
+                "commands": [],
+                "layout": false,
+                "tokens": [
+                    {
+                        "path": "marker.fill",
+                        "group": "marker",
+                        "type": "color",
+                        "default": "{color.accent.base}"
+                    }
+                ]
+            },
+            "own": [
+                "_label",
+                "radius"
+            ],
+            "content": [
+                "_label"
+            ],
+            "events": [
+                "press"
+            ],
+            "locales": [
+                "de"
+            ],
+            "example": {
+                "component": "dotMarker"
+            },
+            "tokens": [
+                {
+                    "path": "marker.fill",
+                    "group": "marker",
+                    "type": "color",
+                    "default": "{color.accent.base}"
+                }
+            ]
+        },
+        {
             "name": "fieldRow",
             "tier": "root",
             "tag": "ui-field-row",
@@ -161,7 +246,9 @@
     ],
     "patterns": [],
     "themePresets": [],
-    "locales": [],
+    "locales": [
+        "de"
+    ],
     "theme": {
         "tokens": [
             {

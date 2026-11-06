@@ -147,6 +147,9 @@ export const ERROR_CATALOG = {
     'SUI-BUILD-ROLE': { template: 'File {file} must be named "{name}.<role>" with a known role' },
     'SUI-BUILD-DUPLICATE': { template: 'Component "{component}" is defined by both {file} and {other}' },
     'SUI-BUILD-TIER': { template: 'Component "{component}" in {file} mixes root and composed files' },
+    'SUI-BUILD-TIER-SHAPE': {
+        template: 'Shape component "{component}" in {file} has a stylesheet or controller but no view; a shape component has only its state file and locale overlays'
+    },
     'SUI-BUILD-MISSING': { template: 'Root component "{component}" in {file} needs {name}' },
     'SUI-BUILD-TEMPLATE': { template: 'Template {file} does not compile: {name}' },
     'SUI-BUILD-STYLE': { template: 'Styles in {file} do not compile: {name}' },

@@ -42,7 +42,6 @@ export interface CatalogSlot {
 
 interface EntryBase {
     name: string;
-    tag: string;
     size: CatalogSize;
     /** The language codes that have a locale overlay, in code order */
     locales: string[];
@@ -59,6 +58,7 @@ export interface SearchKeys {
 /** The catalog entry of a root component */
 export interface RootCatalogEntry extends EntryBase, ShapeExtras, SearchKeys {
     tier: 'root';
+    tag: string;
     summary: string;
     /** What `validateNode` needs; the server validates a node against it without a DOM */
     shape: Shape;
@@ -78,6 +78,7 @@ export interface RootCatalogEntry extends EntryBase, ShapeExtras, SearchKeys {
 /** The catalog entry of a composed component: its default tree, without the `exposes` key, and the exposed paths */
 export interface ComposedCatalogEntry extends EntryBase, SearchKeys {
     tier: 'composed';
+    tag: string;
     /** One line from the composed file; absent when the file has none */
     summary?: string;
     tree: Node;
@@ -85,7 +86,25 @@ export interface ComposedCatalogEntry extends EntryBase, SearchKeys {
     exposes?: ExposedPath[];
 }
 
-export type ComponentCatalogEntry = RootCatalogEntry | ComposedCatalogEntry;
+/**
+ * The catalog entry of a shape component: a state file only, drawn by a graphics renderer. It has no tag, slots,
+ * commands or layout, since nothing mounts it as an element
+ */
+export interface ShapeCatalogEntry extends EntryBase, SearchKeys {
+    tier: 'shape';
+    summary: string;
+    /** What `validateNode` needs */
+    shape: Shape;
+    /** The component's own properties */
+    own: string[];
+    /** The content (`_`) properties, with `map.field` for fields inside map items */
+    content: string[];
+    events: string[];
+    /** The component tokens the shape declares; absent when it declares none */
+    tokens?: ComponentToken[];
+}
+
+export type ComponentCatalogEntry = RootCatalogEntry | ComposedCatalogEntry | ShapeCatalogEntry;
 
 /** The content of `catalog.json` */
 export interface Catalog {
@@ -227,7 +246,7 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
     return {
         name: component.name,
         tier: 'root',
-        tag: component.tag,
+        tag: component.tag as string,
         size,
         summary: shape.summary,
         ...searchKeysOf(shape),
@@ -255,6 +274,32 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
     };
 }
 
+/** The entry of a shape component that built: its summary, search keys, shape, own and content properties, events and tokens */
+export function shapeEntry(component: ScannedComponent, shape: CatalogShape, size: CatalogSize): ShapeCatalogEntry {
+    return {
+        name: component.name,
+        tier: 'shape',
+        size,
+        summary: shape.summary,
+        ...searchKeysOf(shape),
+        shape: {
+            summary: shape.summary,
+            properties: shape.properties,
+            shared: shape.shared,
+            events: shape.events,
+            commands: shape.commands,
+            layout: shape.layout,
+            ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
+        },
+        own: Object.keys(shape.properties).filter((name) => !isArticulationName(name)),
+        content: contentNames(shape.properties),
+        events: shape.events,
+        locales: Object.keys(component.locales),
+        example: exampleNode(component.name, shape),
+        ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
+    };
+}
+
 /** The entry of a composed component: the default tree (no `exposes` or search keys), the exposed paths and the search keys from `parseComposed` */
 export function composedEntry(
     component: ScannedComponent,
@@ -266,7 +311,7 @@ export function composedEntry(
     return {
         name: component.name,
         tier: 'composed',
-        tag: component.tag,
+        tag: component.tag as string,
         size,
         ...(search.summary === undefined ? {} : { summary: search.summary }),
         ...searchKeysOf(search),

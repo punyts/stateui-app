@@ -141,12 +141,29 @@ describe('scanLibrary', () => {
         expect(result.errors[0]?.message).toContain('state.json');
     });
 
-    it('rejects a root component without view.html', () => {
-        const result = scanLibrary(files('g/card/card.state.json'));
+    it('reads a folder with only a state file and locale overlays as a shape component without a tag', () => {
+        const result = scanLibrary(files('charts/dot/dot.state.json', 'charts/dot/dot.locale.de.json'));
 
-        expect(result.components).toEqual([]);
-        expect(result.errors[0]?.code).toBe('SUI-BUILD-MISSING');
-        expect(result.errors[0]?.message).toContain('view.html');
+        expect(result.errors).toEqual([]);
+        expect(result.components).toEqual([
+            {
+                name: 'dot',
+                tier: 'shape',
+                group: 'charts',
+                files: { state: 'charts/dot/dot.state.json' },
+                locales: { de: 'charts/dot/dot.locale.de.json' }
+            }
+        ]);
+    });
+
+    it('rejects a state file with a stylesheet or controller and no view as SUI-BUILD-TIER-SHAPE', () => {
+        for (const extra of ['g/card/card.view.css', 'g/card/card.controller.ts']) {
+            const result = scanLibrary(files('g/card/card.state.json', extra));
+
+            expect(result.components).toEqual([]);
+            expect(result.errors.map((error) => error.code)).toEqual(['SUI-BUILD-TIER-SHAPE']);
+            expect(result.errors[0]?.message).toContain('Shape component "card"');
+        }
     });
 
     it('rejects a composed component with a view file', () => {

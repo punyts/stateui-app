@@ -120,7 +120,8 @@ describe('layout sheets in Chromium', () => {
         it('should squeeze the growing items of a narrow row and keep the others at their width', () => {
             // Arrange
             const label = { component: 'word', text: '#1234' };
-            const name = { component: 'word', text: 'A customer name that is far too long for the row', placement: { grow: 1 } };
+            // Rows narrower than the sm breakpoint (480px) wrap, so the narrow row here is 500px and the name longer than it
+            const name = { component: 'word', text: 'A customer name that is far too long for the row, and longer still, so that it is wider than five hundred pixels', placement: { grow: 1 } };
             const wide = start(panel({ type: 'row' }, { label }), 600);
             const labelWidth = rect(findAll(host, 'x-lay-word')[0] as Element).width;
             wide.app.dispose();
@@ -128,28 +129,30 @@ describe('layout sheets in Chromium', () => {
             host = document.body.appendChild(document.createElement('div'));
 
             // Act
-            start(panel({ type: 'row' }, { label, name, end: box() }), 160);
+            start(panel({ type: 'row' }, { label, name, end: box() }), 500);
             const [labelRect, nameRect] = findAll(host, 'x-lay-word').map(rect);
 
             // Assert
             expect(labelRect?.width).toBeCloseTo(labelWidth, 0);
-            expect(nameRect?.width).toBeLessThan(160 - labelWidth - 40 + 1);
+            expect(nameRect?.width).toBeLessThan(500 - labelWidth - 40 + 1);
             expect(rect(findAll(host, 'x-lay-box')[0] as Element).width).toBe(40);
         });
 
         it('should still shrink every item of a row with no growing item', () => {
             // Arrange and Act
-            const text = 'A sentence that is much wider than the row';
-            start(panel({ type: 'row' }, { a: { component: 'word', text }, b: { component: 'word', text } }), 160);
+            const text = 'A sentence that is much wider than the row, which is 500px so that it does not wrap below the sm breakpoint';
+            start(panel({ type: 'row' }, { a: { component: 'word', text }, b: { component: 'word', text } }), 500);
             const rects = findAll(host, 'x-lay-word').map(rect);
 
             // Assert
-            expect((rects[0]?.width ?? 0) + (rects[1]?.width ?? 0)).toBeLessThanOrEqual(160);
+            expect((rects[0]?.width ?? 0) + (rects[1]?.width ?? 0)).toBeLessThanOrEqual(500);
         });
 
         it('should wrap a row only when wrap is set', () => {
             // Arrange
-            const { app, boxes } = start(panel({ type: 'row' }, four()), 100);
+            // Twelve boxes of at least 40px overflow a 500px row, which is wider than the sm breakpoint where rows always wrap
+            const twelve = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`b${index}`, box()]));
+            const { app, boxes } = start(panel({ type: 'row' }, twelve), 500);
             const before = new Set(boxes().map((element) => rect(element).top)).size;
 
             // Act

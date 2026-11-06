@@ -15,7 +15,7 @@ import { generateSharedSheet } from '../dom/articulation/index.js';
 import { checkTokens, lintCss } from './lint/index.js';
 import { applyTokenFallbacks } from './tokenFallbacks.js';
 import type { JsonObject, Node } from '../core/types.js';
-import { composedEntry, emitCatalog, rootEntry, sizeError, sizeOf } from './catalog.js';
+import { composedEntry, emitCatalog, rootEntry, shapeEntry, sizeError, sizeOf } from './catalog.js';
 import { buildPatterns } from './patterns.js';
 import { buildPresets } from './presets.js';
 import type { ThemePresetCatalogEntry } from './presets.js';
@@ -152,7 +152,7 @@ async function compileComponent(
         `${component.name}.js`,
         emitModule({
             name: component.name,
-            tag: component.tag,
+            tag: component.tag as string,
             template: view,
             ...(css === undefined ? {} : { styles: css }),
             defaultState,
@@ -160,6 +160,39 @@ async function compileComponent(
         })
     );
     files.set(`${component.name}.d.ts`, emitModuleTypes());
+    return { files, errors, ...(shape === undefined ? {} : { shape }) };
+}
+
+/**
+ * Reads a shape component: its state file and locale overlays, checked as a root component's are. It gives no module,
+ * register entry or CSS, only the shape for its catalog entry and the overlay files
+ */
+async function compileShape(sourceDir: string, component: ScannedComponent, options: BuildOptions): Promise<Compiled> {
+    const errors: BuildError[] = [];
+    const files = new Map<string, string>();
+    const stateFile = component.files.state as string;
+    let stateText: string | undefined;
+    try {
+        stateText = (await readFile(join(sourceDir, stateFile), 'utf8')).replace(/\r\n?/g, '\n');
+    } catch {
+        errors.push(buildFailure('file', stateFile, 'could not be read'));
+    }
+    let shape: Shape | undefined;
+    if (stateText !== undefined) {
+        const result = parseShape(stateText, stateFile);
+        errors.push(...result.errors);
+        shape = result.shape;
+        if (shape !== undefined && options.requireSearchKeys === true) errors.push(...missingSearchKeys(shape, stateFile, false));
+    }
+    if (sizeOf(component.group) === undefined) errors.push(sizeError(component.name, stateFile));
+    for (const [code, file] of Object.entries(component.locales)) {
+        const read = await readOverlay(sourceDir, code, file, errors);
+        if (read === undefined || shape === undefined) continue;
+        const problems = inFile(validateComponentOverlay(code, read.overlay, shape), file);
+        errors.push(...problems);
+        if (problems.length === 0) files.set(overlayFileName(component.name, code), emitOverlay(read.overlay));
+    }
+    if (errors.length > 0) return { files: new Map(), errors };
     return { files, errors, ...(shape === undefined ? {} : { shape }) };
 }
 
@@ -204,6 +237,8 @@ interface PendingComposed {
 function libraryOf(entries: readonly ComponentCatalogEntry[]): ComponentLibrary {
     const library: Record<string, ComponentLibrary[string]> = {};
     for (const entry of entries) {
+        // A shape component is not resolved or mounted yet (G1.1b of the graphics epic 1)
+        if (entry.tier === 'shape') continue;
         library[entry.name] = entry.tier === 'root' ? { tier: 'root', tag: entry.tag, shape: entry.shape } : { tier: 'composed', tree: entry.tree };
     }
     return library;
@@ -313,6 +348,14 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
                 ...(parsed.purposes === undefined ? {} : { purposes: parsed.purposes })
             };
             pending.push({ component, tree: parsed.tree, exposes: parsed.exposes, search, size, overlays });
+            continue;
+        }
+        if (component.tier === 'shape') {
+            const compiled = await compileShape(sourceDir, component, options);
+            errors.push(...compiled.errors);
+            if (compiled.errors.length > 0 || compiled.shape === undefined) continue;
+            for (const [file, text] of compiled.files) output.set(file, text);
+            entries.push(shapeEntry(component, compiled.shape, sizeOf(component.group) as CatalogSize));
             continue;
         }
         const compiled = await compileComponent(stateui, sourceDir, component, options, library);

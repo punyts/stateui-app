@@ -6,7 +6,7 @@ import { parseShape, validateNode } from '../core/shape/index.js';
 import type { PropertyShape, Shape } from '../core/shape/index.js';
 import type { ScannedComponent } from '../core/convention/index.js';
 import type { Node } from '../core/types.js';
-import { composedEntry, emitCatalog, exampleNode, rootEntry, sizeOf } from './catalog.js';
+import { composedEntry, emitCatalog, exampleNode, rootEntry, shapeEntry, sizeOf } from './catalog.js';
 import type { CatalogShape, ComponentCatalogEntry } from './catalog.js';
 import { buildLibrary } from './index.js';
 import { buildThemeSection } from './theme.js';
@@ -181,6 +181,48 @@ describe('composedEntry', () => {
         expect(entry).toMatchObject({ name: 'panel', tier: 'composed', size: 'composite', tree: { component: 'card', body: { component: 'text' } } });
         expect('exposes' in (entry.tree as Record<string, unknown>)).toBe(false);
         expect(entry.exposes).toEqual([{ path: 'body', description: 'The body' }]);
+    });
+});
+
+describe('shapeEntry', () => {
+    it('should give a shape component its summary, search keys, own and content properties, events and tokens, and no tag', () => {
+        const shape = parsed({
+            summary: 'A bar of a bar chart',
+            category: 'graphics',
+            purposes: ['show one value as a bar', 'compare values side by side', 'draw a bar of a chart'],
+            tokenGroup: 'bar',
+            tokens: { fill: '{color.accent.base}' },
+            events: ['press'],
+            properties: { _label: { type: 'string', kind: 'content' }, value: { type: 'number', required: true } }
+        });
+        const { tag: _tag, ...component } = scanned('bar', 'atoms', { de: 'atoms/bar/bar.locale.de.json' });
+
+        const entry = shapeEntry({ ...component, tier: 'shape' }, shape, 'atom');
+
+        expect(entry).toEqual({
+            name: 'bar',
+            tier: 'shape',
+            size: 'atom',
+            summary: 'A bar of a bar chart',
+            category: 'graphics',
+            purposes: ['show one value as a bar', 'compare values side by side', 'draw a bar of a chart'],
+            shape: {
+                summary: shape.summary,
+                properties: shape.properties,
+                shared: shape.shared,
+                events: ['press'],
+                commands: [],
+                layout: false,
+                tokens: shape.tokens
+            },
+            own: ['_label', 'value'],
+            content: ['_label'],
+            events: ['press'],
+            locales: ['de'],
+            example: { component: 'bar', value: 0 },
+            tokens: [{ path: 'bar.fill', group: 'bar', type: 'color', default: '{color.accent.base}' }]
+        });
+        expect(validateNode(entry.shape, entry.example, '$.app')).toEqual([]);
     });
 });
 

@@ -69,7 +69,8 @@ describe('error catalog', () => {
             'SUI-DOC-SCREEN',
             'SUI-ROUTE-SCREEN',
             'SUI-SYNC-SHARED',
-            'SUI-ROUTE-PARAMS'
+            'SUI-ROUTE-PARAMS',
+            'SUI-BUILD-TIER-SHAPE'
         ]) {
             expect(CODES).toContain(code);
         }

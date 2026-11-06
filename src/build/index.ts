@@ -20,5 +20,6 @@ export type {
     ComponentCatalogEntry,
     ComposedCatalogEntry,
     RootCatalogEntry,
+    ShapeCatalogEntry,
     ShapeExtras
 } from './catalog.js';

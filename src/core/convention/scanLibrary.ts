@@ -131,7 +131,12 @@ export function scanLibrary(fileMap: FileMap): ScanResult {
             errors.push(buildError('SUI-BUILD-TIER', { component: folder.name, file: where }));
             continue;
         }
-        if (files.composed === undefined) {
+        const isShape = files.composed === undefined && files.view === undefined && files.state !== undefined;
+        if (isShape && (files.css !== undefined || files.controller !== undefined)) {
+            errors.push(buildError('SUI-BUILD-TIER-SHAPE', { component: folder.name, file: where }));
+            continue;
+        }
+        if (files.composed === undefined && !isShape) {
             if (files.view === undefined || files.state === undefined) {
                 const missing = files.view === undefined ? 'view.html' : 'state.json';
                 errors.push(buildError('SUI-BUILD-MISSING', { component: folder.name, file: where, name: `${folder.folder}.${missing}` }));
@@ -141,8 +146,8 @@ export function scanLibrary(fileMap: FileMap): ScanResult {
 
         components.push({
             name: folder.name,
-            tier: files.composed === undefined ? 'root' : 'composed',
-            tag: `ui-${folder.folder}`,
+            tier: isShape ? 'shape' : files.composed === undefined ? 'root' : 'composed',
+            ...(isShape ? {} : { tag: `ui-${folder.folder}` }),
             group: folder.group,
             files,
             locales: Object.fromEntries(Object.entries(folder.locales).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))

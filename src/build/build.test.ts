@@ -72,7 +72,62 @@ describe('buildLibrary', () => {
 
         const result = await buildLibrary(FIXTURE, out);
 
-        expect(result.files).toEqual(['catalog.json', 'fieldRow.d.ts', 'fieldRow.js', 'index.d.ts', 'index.js', 'textLabel.d.ts', 'textLabel.js']);
+        expect(result.files).toEqual(['catalog.json', 'dotMarker.locale.de.json', 'fieldRow.d.ts', 'fieldRow.js', 'index.d.ts', 'index.js', 'textLabel.d.ts', 'textLabel.js']);
+    });
+
+    it('should write no module, register entry or CSS for a shape component and give it a catalog entry', async () => {
+        const out = await scratch();
+
+        const result = await buildLibrary(FIXTURE, out);
+
+        expect(result.built.map((entry) => entry.component.name)).not.toContain('dotMarker');
+        expect(result.files.filter((file) => file.startsWith('dotMarker'))).toEqual(['dotMarker.locale.de.json']);
+        expect(await readFile(join(out, 'index.js'), 'utf8')).not.toMatch(/dotMarker|dot-marker/);
+        const entry = result.catalog.components.find((component) => component.name === 'dotMarker');
+        expect(entry).toMatchObject({
+            tier: 'shape',
+            size: 'atom',
+            summary: 'A dot on a chart or map',
+            category: 'graphics',
+            own: ['_label', 'radius'],
+            content: ['_label'],
+            events: ['press'],
+            locales: ['de'],
+            tokens: [{ path: 'marker.fill', group: 'marker', type: 'color', default: '{color.accent.base}' }]
+        });
+        expect(entry).not.toHaveProperty('tag');
+    });
+
+    it('should report a shape component that has a stylesheet and build the rest', async () => {
+        const source = await library({
+            ...simple('label'),
+            'atoms/dot/dot.state.json': SHAPE,
+            'atoms/dot/dot.view.css': ':host { display: block; }'
+        });
+        const out = await scratch();
+
+        const result = await buildLibrary(source, out);
+
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-BUILD-TIER-SHAPE']);
+        expect(result.built.map((entry) => entry.component.name)).toEqual(['label']);
+        expect(result.catalog.components.map((component) => component.name)).toEqual(['label']);
+    });
+
+    it('should check a shape component as a root one: shape errors, search keys and locale overlays', async () => {
+        const source = await library({
+            ...simple('label'),
+            'atoms/dot/dot.state.json': '{ "summary": "A dot", "properties": { "size": { "type": "nope" } } }',
+            'atoms/ring/ring.state.json': SHAPE,
+            'atoms/ring/ring.locale.de.json': '{ "text": "x" }'
+        });
+        const out = await scratch();
+
+        const result = await buildLibrary(source, out);
+
+        expect(result.errors.map((error) => error.file)).toEqual(expect.arrayContaining(['atoms/dot/dot.state.json', 'atoms/ring/ring.locale.de.json']));
+        expect(result.catalog.components.map((component) => component.name)).toEqual(['label']);
+        const keys = await buildLibrary(await library({ 'atoms/dot/dot.state.json': SHAPE }), await scratch(), { requireSearchKeys: true });
+        expect(keys.errors.map((error) => error.code)).toEqual(['SUI-BUILD-CATEGORY', 'SUI-BUILD-PURPOSES']);
     });
 
     it('should produce identical bytes when the same input is built twice', async () => {

@@ -25,6 +25,8 @@ function isCatalog(source: ComponentLibrary | CatalogSource): source is CatalogS
 export function libraryFromCatalog(catalog: CatalogSource): ComponentLibrary {
     const library: Record<string, LibraryEntry> = {};
     for (const component of catalog.components) {
+        // A shape component is not resolved or validated yet (G1.1b of the graphics epic 1)
+        if (component.tier === 'shape') continue;
         library[component.name] =
             component.tier === 'root'
                 ? {

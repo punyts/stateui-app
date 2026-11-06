@@ -1,0 +1,14 @@
+{
+    "summary": "A dot on a chart or map",
+    "category": "graphics",
+    "purposes": ["mark a point on a chart", "pin a place on a map", "show one value as a dot"],
+    "tokenGroup": "marker",
+    "tokens": {
+        "fill": "{color.accent.base}"
+    },
+    "events": ["press"],
+    "properties": {
+        "_label": { "type": "string", "kind": "content", "default": "Point" },
+        "radius": { "type": "number", "default": 4 }
+    }
+}
