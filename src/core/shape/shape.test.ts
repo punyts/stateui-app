@@ -274,7 +274,7 @@ describe('parseShape', () => {
         });
 
         it('should reject an unsafe default URL', () => {
-            expect(parseCodes({ summary: 'x', properties: { a: { type: 'url', default: 'https://example.com' } } })).toEqual([
+            expect(parseCodes({ summary: 'x', properties: { a: { type: 'url', default: 'http://example.com' } } })).toEqual([
                 'SUI-BUILD-DEFAULT'
             ]);
         });
@@ -540,13 +540,14 @@ describe('validateNode', () => {
             'a/b:c',
             'data:image/png;base64,iVBORw0KGgo=',
             'data:image/svg+xml,%3Csvg%3E%3C/svg%3E',
-            'DATA:image/PNG;base64,AAAA'
+            'DATA:image/PNG;base64,AAAA',
+            'https://example.com/a.png'
         ])('should accept %s', (value) => {
             expect(codes(typed, { src: value })).toEqual([]);
         });
 
         it.each([
-            'https://example.com/a.png',
+            'https://user@example.com/a.png',
             'http://example.com',
             'javascript:alert(1)',
             'JavaScript:alert(1)',
@@ -577,6 +578,15 @@ describe('validateNode', () => {
 describe('isSafeUrl', () => {
     it('should accept a relative target with a colon after a slash', () => {
         expect(isSafeUrl('/a:b')).toBe(true);
+    });
+
+    it('should accept an https URL with a host, and refuse http, one with no host or with user info', () => {
+        expect(isSafeUrl('https://example.com/a.png')).toBe(true);
+        expect(isSafeUrl('HTTPS://example.com')).toBe(true);
+        expect(isSafeUrl('http://example.com/a.png')).toBe(false);
+        expect(isSafeUrl('https:///a.png')).toBe(false);
+        expect(isSafeUrl('https://user@example.com/')).toBe(false);
+        expect(isSafeUrl('https://exa mple.com/')).toBe(false);
     });
 
     it('should refuse a control character inside a data URL', () => {
