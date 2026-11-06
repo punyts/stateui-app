@@ -125,13 +125,13 @@ describe('the theme validator with appThemes', () => {
 
     it('should report an overlay of a later theme at its own path', () => {
         // Arrange
-        const appThemes = { ...DOCUMENT.appThemes, sand: { tokens: {}, overlays: { light: { kind: 'mode', tokens: {} } } } } as unknown as JsonObject;
+        const appThemes = { ...DOCUMENT.appThemes, sand: { tokens: {}, overlays: { default: { kind: 'brand', tokens: {} } } } } as unknown as JsonObject;
         const document = { ...DOCUMENT, appThemes } as unknown as AppDocument;
 
         // Act
         const errors = validateDocument(document, library).errors.filter((error) => error.code === 'SUI-THEME-OVERLAY');
 
         // Assert
-        expect(errors.map((error) => error.statePath)).toEqual(['$.appThemes.sand.overlays.light']);
+        expect(errors.map((error) => error.statePath)).toEqual(['$.appThemes.sand.overlays.default']);
     });
 });

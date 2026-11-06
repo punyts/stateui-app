@@ -24,7 +24,9 @@ export function hasOverlay(overlays: ThemeOverlays, kind: string, name: string):
 
 /**
  * The shipped overlays with the document's `themes` map added after the same validation as `validateThemeOverlay`.
- * A name that is already a shipped overlay of the same kind, or `system` for `mode` and `motion`, is
+ * A `mode` overlay named like a shipped mode (`light`, `dark`, `contrast`) refines it: its tokens are merged over the
+ * shipped one's and the result takes its place, so `system` picks the theme's own light and dark. Any other name that
+ * is already a shipped overlay of the same kind, or `system` for `mode` and `motion`, is
  * `SUI-THEME-OVERLAY`. An overlay with an error is left out; warnings do not leave one out. `base` is the state path
  * the overlays are reported under (`$.appThemes.{name}.overlays` for a theme of `appThemes`)
  */
@@ -45,7 +47,8 @@ export function buildOverlayCatalog(themes: Readonly<Record<string, ThemeOverlay
             errors.push(overlayError('shape', name, kind, statePath, `${statePath}.tokens`));
             continue;
         }
-        if (hasOverlay(overlays, kind, name)) {
+        const shipped = (SHIPPED_OVERLAYS[kind] as Record<string, TokenOverlay> | undefined)?.[name];
+        if (hasOverlay(overlays, kind, name) && (kind !== 'mode' || shipped === undefined)) {
             errors.push(overlayError('clash', name, kind, statePath, statePath));
             continue;
         }
@@ -53,9 +56,10 @@ export function buildOverlayCatalog(themes: Readonly<Record<string, ThemeOverlay
             errors.push(overlayError('reserved', name, kind, statePath, statePath));
             continue;
         }
-        const found = validateThemeOverlay(kind, tokens, { name, statePath: `${statePath}.tokens` });
+        const merged = shipped === undefined ? tokens : mergeTokenTrees(shipped.tokens, tokens);
+        const found = validateThemeOverlay(kind, merged, { name, statePath: `${statePath}.tokens` });
         errors.push(...found);
-        if (isValid(found)) overlays[kind] = { ...overlays[kind], [name]: { tokens } };
+        if (isValid(found)) overlays[kind] = { ...overlays[kind], [name]: { tokens: merged } };
     }
     return { overlays, errors };
 }

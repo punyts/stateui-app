@@ -797,8 +797,10 @@ Code is in `src/core/theme/overlays/` (exported from `./core`) and `src/dom/them
   return `SUI-THEME-OVERLAY` and change nothing. `buildOverlayCatalog(document.themes).overlays` is the shipped set plus the document's.
 - **`validateThemeOverlay(kind, tree, { name?, statePath? })`** returns `SUI-THEME-OVERLAY` with the token path for a token outside the
   kind's groups, then the `validateTokens` checks on every value, then (for `mode`) `SUI-THEME-CONTRAST` warnings.
-- **`themes`.** `"themes": { "acme": { "kind": "brand", "tokens": { } } }` adds overlays after the same validation. A name that is
-  already a shipped overlay of the same kind (or `system` for `mode` and `motion`) is `SUI-THEME-OVERLAY`. The `theme` document
+- **`themes`.** `"themes": { "acme": { "kind": "brand", "tokens": { } } }` adds overlays after the same validation. A `mode` overlay
+  named `light`, `dark` or `contrast` refines that shipped mode: its tokens are merged over the shipped ones (and checked
+  merged), and the result takes the shipped one's place, so `system` picks the theme's own light and dark. Any other name
+  that is already a shipped overlay of the same kind (or `system` for `mode` and `motion`) is `SUI-THEME-OVERLAY`. The `theme` document
   validator (`validateTheme`) also checks that every name in `theme.active` is an overlay of its kind or `system`.
 - **At start.** `mountApp` composes the active overlay of each kind over the default tree and puts the document's `theme.tokens` last,
   so the document's own values win at start. While mounted, a change to `$.theme.active.<kind>` (`store.set`, not only

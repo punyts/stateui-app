@@ -139,13 +139,35 @@ describe('buildOverlayCatalog', () => {
         expect(Object.keys(SHIPPED_OVERLAYS.brand ?? {})).toEqual(['default']);
     });
 
-    it('should reject a name that clashes with a shipped overlay of the same kind', () => {
+    it('should reject a name that clashes with a shipped brand or motion overlay', () => {
         // Act
-        const { overlays, errors } = buildOverlayCatalog({ dark: { kind: 'mode', tokens: {} } });
+        const { overlays, errors } = buildOverlayCatalog({ default: { kind: 'brand', tokens: {} }, reduced: { kind: 'motion', tokens: {} } });
 
         // Assert
-        expect(codes(errors)).toEqual(['SUI-THEME-OVERLAY']);
-        expect(overlays.mode?.dark).toBe(SHIPPED_OVERLAYS.mode?.dark);
+        expect(codes(errors)).toEqual(['SUI-THEME-OVERLAY', 'SUI-THEME-OVERLAY']);
+        expect(overlays.brand?.default).toBe(SHIPPED_OVERLAYS.brand?.default);
+        expect(overlays.motion?.reduced).toBe(SHIPPED_OVERLAYS.motion?.reduced);
+    });
+
+    it('should let a mode overlay named like a shipped mode refine it, its tokens over the shipped ones', () => {
+        // Act
+        const { overlays, errors } = buildOverlayCatalog({ dark: { kind: 'mode', tokens: { color: { accent: { base: '{palette.amber.400}', on: '{palette.neutral.950}' } } } } });
+
+        // Assert
+        expect(errors).toEqual([]);
+        const dark = overlays.mode?.dark?.tokens as { color: { accent: { base: string }; surface: unknown } };
+        expect(dark.color.accent.base).toBe('{palette.amber.400}');
+        expect(dark.color.surface).toEqual((SHIPPED_OVERLAYS.mode?.dark?.tokens as { color: { surface: unknown } }).color.surface);
+        expect((SHIPPED_OVERLAYS.mode?.dark?.tokens as { color: { accent: { base: string } } }).color.accent.base).not.toBe('{palette.amber.400}');
+        expect(Object.keys(overlays.mode ?? {})).toEqual(Object.keys(SHIPPED_OVERLAYS.mode ?? {}));
+    });
+
+    it('should check a refined mode with the shipped tokens it keeps, so a light accent passes on the shipped dark accent.on', () => {
+        // Act
+        const { errors } = buildOverlayCatalog({ dark: { kind: 'mode', tokens: { color: { accent: { base: '{palette.amber.400}' } } } } });
+
+        // Assert
+        expect(errors).toEqual([]);
     });
 
     it('should allow a shipped name for another kind', () => {
@@ -221,7 +243,7 @@ describe('the theme document validator', () => {
         // Arrange
         const context = contextOf({
             theme: { active: { mode: 'sepia', size: 'big' } },
-            themes: { light: { kind: 'mode', tokens: {} } }
+            themes: { default: { kind: 'brand', tokens: {} } }
         });
 
         // Act
@@ -229,7 +251,7 @@ describe('the theme document validator', () => {
 
         // Assert
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([
-            ['SUI-THEME-OVERLAY', '$.themes.light'],
+            ['SUI-THEME-OVERLAY', '$.themes.default'],
             ['SUI-THEME-OVERLAY', '$.theme.active.mode'],
             ['SUI-THEME-OVERLAY', '$.theme.active.size']
         ]);
