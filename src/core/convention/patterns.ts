@@ -210,7 +210,7 @@ export function checkPattern(pattern: PatternPart, library: ComponentLibrary, fi
         errors.push(buildError('SUI-PATTERN-SHAPE', { file, path, reason }));
     };
     let outlets = 0;
-    const visit = (node: Node, path: string): void => {
+    const visit = (node: Node, path: string, insideRow: boolean): void => {
         const component = node.component;
         if (component === OUTLET) outlets += 1;
         if (!Object.hasOwn(library, component)) {
@@ -219,10 +219,15 @@ export function checkPattern(pattern: PatternPart, library: ComponentLibrary, fi
         }
         const shape = shapeOf(library, component);
         if (shape === undefined) return;
-        for (const error of validateNode(shape, node, path)) problem(error.statePath ?? path, `${error.code}: ${error.message}`);
-        for (const child of nodeChildren(node, path, shape)) visit(child.node as Node, child.path);
+        for (const error of validateNode(shape, node, path, { insideRow })) problem(error.statePath ?? path, `${error.code}: ${error.message}`);
+        for (const child of nodeChildren(node, path, shape)) {
+            if (child.accepts !== undefined && !child.accepts.includes(child.node.component)) {
+                problem(child.path, `component "${child.node.component}" is not accepted here; this slot takes ${quoted([...child.accepts])}`);
+            }
+            visit(child.node as Node, child.path, insideRow || child.row);
+        }
     };
-    visit(pattern.tree, '$.tree');
+    visit(pattern.tree, '$.tree', false);
 
     if (pattern.kind === 'shell' && outlets !== 1) problem('$.tree', `a shell holds exactly one "${OUTLET}", not ${outlets}`);
     if (pattern.kind === 'screen' && outlets > 0) problem('$.tree', `a screen holds no "${OUTLET}"; the shell has it`);

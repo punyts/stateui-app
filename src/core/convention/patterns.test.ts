@@ -18,6 +18,8 @@ const LIBRARY: ComponentLibrary = Object.freeze({
     button: { tier: 'root', tag: 'ui-button', shape: shapeOf({ properties: { _title: { type: 'string', kind: 'content', default: 'Go' } }, events: ['press'] }) },
     list: { tier: 'root', tag: 'ui-list', shape: shapeOf({ properties: { items: { type: 'object', default: {} }, pageSize: { type: 'number', default: 10 } } }) },
     outlet: { tier: 'root', tag: 'ui-outlet', shape: shapeOf({ properties: {} }) },
+    grid: { tier: 'root', tag: 'ui-grid', shape: shapeOf({ properties: { records: { type: 'object' }, row: { type: 'node', row: true } } }) },
+    menu: { tier: 'root', tag: 'ui-menu', shape: shapeOf({ properties: {}, layout: true, childComponents: ['button'] }) },
     card: { tier: 'composed', tree: { component: 'panel', children: { body: { component: 'text' } } } }
 });
 
@@ -214,6 +216,26 @@ describe('checkPattern', () => {
 
         // Act and Assert
         expect(check(json)).toEqual([`Pattern ${FILE} is not valid at $.tree: a screen holds no "outlet"; the shell has it`]);
+    });
+
+    it('should accept $row inside a row template, also in its children, and refuse it outside', () => {
+        // Arrange
+        const row = { component: 'panel', '<-_title': '$row.title', children: { name: { component: 'text', '<-_text': '$row.name' } } };
+        const inside = { ...screenJson(), slots: {}, params: {}, tree: { component: 'grid', '<-records': '$.data.items', row } };
+        const outside = { ...screenJson(), slots: {}, params: {}, tree: { component: 'panel', children: { name: { component: 'text', '<-_text': '$row.name' } } } };
+
+        // Act and Assert
+        expect(check(inside)).toEqual([]);
+        expect(check(outside)).toHaveLength(1);
+        expect(check(outside)[0]).toMatch(/at \$\.tree\.children\.name\.<-_text: SUI-LINK-ROW: /);
+    });
+
+    it('should refuse a child the slot does not accept, naming the components it takes', () => {
+        // Arrange
+        const json = { ...screenJson(), slots: {}, params: {}, tree: { component: 'menu', children: { go: { component: 'button' }, note: { component: 'text' } } } };
+
+        // Act and Assert
+        expect(check(json)).toEqual([`Pattern ${FILE} is not valid at $.tree.children.note: component "text" is not accepted here; this slot takes "button"`]);
     });
 });
 
