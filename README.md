@@ -310,7 +310,10 @@ that does not fit its type or validators, or a required param left out. In logic
 which `mountApp` sets for a document with screens; logic hosts give `screens()`. The `route` document validator checks
 every `navigate` of the shell, the screens and the logic with `checkNavigate`: `SUI-ROUTE-SCREEN` for a target that
 names no screen, `SUI-ROUTE-PARAMS` for literal params that do not fit (a `$`, `^` or `{{ }}` value is checked by name
-only; a command with `from` by screen only). A component command named `navigate` is shadowed by the system command.
+only; a command with `from` by screen only). A node whose component has a string `screen` property (`link`,
+`menuItem`) is checked the same way, with its `params`: the errors are at the node's `.screen` or `.params`. A
+component command named `navigate` is shadowed by the system command. An `on` command in a screen whose target is
+under `$.app` (a toaster of the shell) is found from the shell's root.
 The `outlet` validator checks where the screens show (`SUI-SHELL-OUTLET`): in an app with screens the resolved shell
 holds exactly one `outlet` node (one a composed component brings counts; each extra one is an error at its path, none is
 an error at `$.app`), and no screen holds one. An app without screens is not checked.
@@ -422,6 +425,13 @@ Save button saves and a count follows its records without an agent in the loop.
   `string`, `slice`, `now`, `today`. `slice(value, start, end?)` cuts a string, or the items of an array or
   map, like JavaScript's `slice` (negative positions count from the end); `now()` is the UTC time as an ISO string and
   `today()` the local date as `YYYY-MM-DD`, for a "due today" comparison.
+- **Deriving at start.** `engine.start()` first runs, once, each rule or table that only derives values: every
+  trigger a `path` without `was` or `after`, every command `set`, `merge`, `copy` or `query`, and no machine.
+  Each fires for every concrete path its trigger matches that has a value (`$.data.products.{id}.price` fires for each
+  product), in chain order, traced with the cause `start`, so a count or a total is right before the first change.
+  Rules that notify, toggle, save, call or navigate, and those with `was`, wait for a change. `start({ derive: false })`
+  skips the pass and `engine.derive()` runs it later (the app server does so once an instance is attached to its
+  shared datasets, so the derived values are written through).
 - **All or nothing.** A transition's commands run on a working copy and commit together. A failing command commits
   nothing and raises `logic.failed` (`{ machine, from?, command?, reason }`) on the root node. A machine or rule fires
   at most once per chain, a chain stops at depth 8, and command results start new chains after the current one.

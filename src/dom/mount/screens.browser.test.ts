@@ -164,6 +164,30 @@ describe('screens in mountApp', () => {
         expect(containers(host)).toEqual({ home: true, product: false });
     });
 
+    it('should run a command from a screen node on a node of the shell, found from the app root', () => {
+        // Arrange
+        const toaster = parseShape({ summary: 'Fixture', properties: {}, events: [], commands: ['show'] }, 'fixture.state.json').shape as Shape;
+        const withToaster: ComponentLibrary = { ...library, toaster: { tier: 'root', tag: 'x-scr-toaster', shape: toaster } };
+        if (customElements.get('x-scr-toaster') === undefined) defineComponent({ tag: 'x-scr-toaster', template: '<i>toasts</i>' });
+        const doc = copy() as unknown as { app: { children: Record<string, unknown> }; screens: { home: { root: { children: Record<string, unknown> } } } };
+        doc.app.children['toasts'] = { component: 'toaster' };
+        doc.screens.home.root.children['open'] = { component: 'button', on: { press: { command: 'show', target: '$.app.children.toasts', value: 'Saved' } } };
+        const host = document.body.appendChild(document.createElement('div'));
+        const app = mountApp(host, doc as unknown as AppDocument, withToaster);
+        apps.push(app);
+        const show = vi.fn();
+        (find(host, 'x-scr-toaster') as Element & { commands?: unknown }).commands = { show };
+
+        // Act
+        (find(host, 'x-scr-button') as Element).dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+
+        // Assert
+        expect(app.errors).toEqual([]);
+        expect(show).toHaveBeenCalledTimes(1);
+        expect(show.mock.calls[0]?.[0]).toBe('Saved');
+        expect(errorSpy).not.toHaveBeenCalled();
+    });
+
     it('should keep what was typed on a screen across navigating away and back', () => {
         // Arrange
         const { app, host } = start();

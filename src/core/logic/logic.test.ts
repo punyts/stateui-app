@@ -845,6 +845,88 @@ function fakeClock() {
     return { schedule, advance, pending: () => timers.length };
 }
 
+describe('createLogicEngine: deriving rules at start', () => {
+    const DATA: JsonObject = Object.freeze({ app: BASE['app'] as JsonValue, data: { bag: { a: { qty: 2 }, b: { qty: 3 } }, count: 0, flag: false } }) as JsonObject;
+
+    it('should run each rule that only derives values once at start, in chain order, from the data already there', () => {
+        // Arrange
+        const logic = {
+            rules: {
+                label: { when: { path: '$.data.count' }, do: [{ command: 'set', target: '$.data.label', value: 'Items: {{ $.data.count }}' }] },
+                count: { when: { path: '$.data.bag.*.qty' }, do: [{ command: 'set', target: '$.data.count', value: '{{ size($.data.bag) }}' }] }
+            }
+        } as unknown as LogicDocument;
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        engine.start();
+
+        // Assert
+        expect(memory.get('$.data.count')).toBe(2);
+        expect(memory.get('$.data.label')).toBe('Items: 2');
+        expect(engine.trace().map((run) => run.cause)).toEqual(['start']);
+        expect(memory.failures).toEqual([]);
+    });
+
+    it('should derive every record a rule with a capture matches, not only the first', () => {
+        // Arrange
+        const logic = {
+            rules: { line: { when: { path: '$.data.bag.{id}.qty' }, do: [{ command: 'set', target: '$.data.bag.{id}.double', value: '{{ $trigger * 2 }}' }] } }
+        } as unknown as LogicDocument;
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        engine.start();
+
+        // Assert
+        expect(memory.get('$.data.bag.a.double')).toBe(4);
+        expect(memory.get('$.data.bag.b.double')).toBe(6);
+        expect(memory.failures).toEqual([]);
+    });
+
+    it('should leave the deriving pass to derive() when start is told not to run it', () => {
+        // Arrange
+        const logic = { rules: { count: { when: { path: '$.data.bag' }, do: [{ command: 'set', target: '$.data.count', value: '{{ size($.data.bag) }}' }] } } } as unknown as LogicDocument;
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        engine.start({ derive: false });
+        const before = memory.get('$.data.count');
+        engine.derive();
+
+        // Assert
+        expect(before).toBe(0);
+        expect(memory.get('$.data.count')).toBe(2);
+    });
+
+    it('should leave rules that act, need a change or have no trigger value until a change', () => {
+        // Arrange
+        const logic = {
+            rules: {
+                announce: { when: { path: '$.data.bag' }, do: [{ command: 'notify', target: 'toast', value: { text: 'Bag changed' } }] },
+                flip: { when: { path: '$.data.bag' }, do: [{ command: 'toggle', target: '$.data.flag' }] },
+                moved: { when: { path: '$.data.count', was: 0 }, do: [{ command: 'set', target: '$.data.moved', value: true }] },
+                missing: { when: { path: '$.data.nothing' }, do: [{ command: 'set', target: '$.data.seen', value: true }] }
+            }
+        } as unknown as LogicDocument;
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        engine.start();
+
+        // Assert
+        expect(memory.notices).toEqual([]);
+        expect(memory.get('$.data.flag')).toBe(false);
+        expect(memory.get('$.data.moved')).toBeUndefined();
+        expect(memory.get('$.data.seen')).toBeUndefined();
+        expect(memory.commits).toEqual([]);
+    });
+});
+
 describe('createLogicEngine: $previous and was', () => {
     const STATUS: LogicDocument = Object.freeze({
         rules: {

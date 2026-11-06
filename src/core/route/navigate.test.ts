@@ -210,6 +210,26 @@ describe('the document check of navigate', () => {
         expect(codesAndPaths(validateDocument(inShell, LIBRARY).errors)).toEqual([]);
     });
 
+    it('should check the screen a link or menu item names, with its params, in the shell and the screens', () => {
+        // Arrange
+        const library: ComponentLibrary = {
+            ...LIBRARY,
+            link: { tier: 'root', tag: 'ui-link', shape: shapeOf({ screen: { type: 'string', default: '' }, params: { type: 'object', default: {} } }, ['press']) }
+        };
+        const shell = documentWith('app.children.banner', { component: 'link', screen: 'prodcut' });
+        const params = documentWith('screens.home.root.children.go', { component: 'link', screen: 'product', params: { qty: 2 } });
+        const good = documentWith('screens.home.root.children.go', { component: 'link', screen: 'product', params: { id: 'p1' } });
+        const empty = documentWith('app.children.banner', { component: 'link', screen: '' });
+
+        // Act / Assert
+        const shellErrors = validateDocument(shell, library).errors;
+        expect(codesAndPaths(shellErrors)).toEqual(['SUI-ROUTE-SCREEN $.app.children.banner.screen']);
+        expect(shellErrors[0]?.message).toContain('product');
+        expect(codesAndPaths(validateDocument(params, library).errors)).toEqual(['SUI-ROUTE-PARAMS $.screens.home.children.go.params']);
+        expect(validateDocument(good, library).errors).toEqual([]);
+        expect(validateDocument(empty, library).errors).toEqual([]);
+    });
+
     it('should report a navigate without target as a malformed on entry', () => {
         const document = documentWith('screens.home.root.children.go.on', { press: { command: 'navigate' } });
 

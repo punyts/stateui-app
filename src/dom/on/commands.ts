@@ -45,9 +45,26 @@ function shapeOf(library: ComponentLibrary, component: string): Shape | undefine
     return entry?.tier === 'root' ? entry.shape : undefined;
 }
 
+/** The root that holds an absolute node path: `$.screens.{name}` for a screen's nodes, else `$.app` */
+function holdingRoot(path: string): string {
+    const SCREENS = '$.screens.';
+    return path.startsWith(SCREENS) ? `${SCREENS}${path.slice(SCREENS.length).split('.')[0] as string}` : '$.app';
+}
+
+/**
+ * Resolves a target against the node's own root; a path under another root (a screen naming `$.app.toasts`, or the
+ * app naming a screen's node) is resolved from the root that holds it, read from the store, as validation accepts it
+ */
 function locate(text: string, context: CommandContext): Located | undefined {
     const parsed = parseTarget(text);
-    return parsed ? resolveTarget(parsed, context.relative, context.rootPath, context.rowPath) : undefined;
+    if (!parsed) return undefined;
+    const located = resolveTarget(parsed, context.relative, context.rootPath, context.rowPath);
+    if (located?.kind !== 'outside') return located;
+    const rootPath = holdingRoot(located.path);
+    const node: unknown = context.store.get(rootPath);
+    if (rootPath === context.rootPath || typeof node !== 'object' || node === null || typeof (node as TreeNode).component !== 'string') return located;
+    const frame: Frame = { path: rootPath, key: rootPath.slice(rootPath.lastIndexOf('.') + 1), node: node as TreeNode, instances: [] };
+    return resolveTarget(parsed, [frame], rootPath);
 }
 
 function isRowValue(value: JsonValue | undefined): value is string {

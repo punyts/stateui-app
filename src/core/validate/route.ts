@@ -17,10 +17,33 @@ function findNavigates(value: JsonValue | undefined, path: string, visit: (comma
     for (const [key, item] of Object.entries(value)) findNavigates(item, `${path}.${key}`, visit);
 }
 
+/** The property a component names a screen to show with, as `link` and `menuItem` do */
+const SCREEN_PROPERTY = 'screen';
+
+/**
+ * Calls `visit` with every node below `value` whose component declares a string `screen` property and sets it to a
+ * literal name, and the node's path; `on` entries are not nodes and are skipped
+ */
+function findScreenProperties(value: JsonValue | undefined, path: string, context: DocumentValidationContext, visit: (node: Record<string, JsonValue>, path: string) => void): void {
+    if (Array.isArray(value)) {
+        value.forEach((item, index) => findScreenProperties(item, `${path}.${index}`, context, visit));
+        return;
+    }
+    if (!isObject(value)) return;
+    const component = value[RESERVED_KEYS.component];
+    const entry = typeof component === 'string' && Object.hasOwn(context.library, component) ? context.library[component] : undefined;
+    const screen = value[SCREEN_PROPERTY];
+    if (entry?.tier === 'root' && entry.shape.properties[SCREEN_PROPERTY]?.type === 'string' && typeof screen === 'string' && screen !== '') visit(value, path);
+    for (const [key, item] of Object.entries(value)) {
+        if (key !== RESERVED_KEYS.on) findScreenProperties(item, `${path}.${key}`, context, visit);
+    }
+}
+
 /**
  * Checks every `navigate` command, in the logic and in the `on` entries of the shell, the screens and the composed
  * components they expand: the target must name a screen (`SUI-ROUTE-SCREEN`) and literal params must be declared and
- * fit (`SUI-ROUTE-PARAMS`). A command that takes its params `from` a path is checked for its screen only
+ * fit (`SUI-ROUTE-PARAMS`). A command that takes its params `from` a path is checked for its screen only. A node whose
+ * component has a string `screen` property (`link`, `menuItem`) is checked the same way, with its `params` property
  */
 export function validateRoutes(context: DocumentValidationContext): BuildError[] {
     const errors: BuildError[] = [];
@@ -29,8 +52,17 @@ export function validateRoutes(context: DocumentValidationContext): BuildError[]
         const problem = checkNavigate(screens, command['target'], Object.hasOwn(command, 'from') ? undefined : command['value']);
         if (problem !== undefined) errors.push(buildError(problem.code, { path, statePath: path, reason: problem.reason }));
     };
+    const visitNode = (node: Record<string, JsonValue>, path: string): void => {
+        const problem = checkNavigate(screens, node[SCREEN_PROPERTY], node['params']);
+        const at = `${path}.${problem?.code === 'SUI-ROUTE-SCREEN' ? SCREEN_PROPERTY : 'params'}`;
+        if (problem !== undefined) errors.push(buildError(problem.code, { path: at, statePath: at, reason: problem.reason }));
+    };
     findNavigates(context.tree.node, '$.app', visit);
-    for (const [name, tree] of Object.entries(context.screens ?? {})) findNavigates(tree.node, `$.screens.${name}`, visit);
+    findScreenProperties(context.tree.node, '$.app', context, visitNode);
+    for (const [name, tree] of Object.entries(context.screens ?? {})) {
+        findNavigates(tree.node, `$.screens.${name}`, visit);
+        findScreenProperties(tree.node, `$.screens.${name}`, context, visitNode);
+    }
     findNavigates(context.document.logic as JsonValue | undefined, '$.logic', visit);
     return errors;
 }

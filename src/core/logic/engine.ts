@@ -71,8 +71,17 @@ type Results = { unit: Unit; name: string; result: LogicResult }[];
 export interface LogicEngine {
     /** The machine, rule, table and guard names, machines first */
     readonly names: readonly string[];
-    /** Writes each machine's `initial` state where its state path has no value, in one commit, and arms `after` timers */
-    start(): void;
+    /**
+     * Writes each machine's `initial` state where its state path has no value, in one commit, then (unless `derive` is
+     * false) runs `derive`, and arms `after` timers
+     */
+    start(options?: { derive?: boolean }): void;
+    /**
+     * Runs each rule and table that only derives values (path triggers without `was`; only `set`, `merge`, `copy` and
+     * `query`) once, in chain order, as if the data at its trigger paths had just arrived, so derived values are right
+     * before the first change. Rules that act (`notify`, `navigate`, data commands, `toggle`...) and machines wait
+     */
+    derive(): void;
     /** Looks up changes the host has applied and runs the transitions they trigger, their chains and results */
     changes(changes: readonly LogicChange[]): void;
     /** The reason a guard rule refuses a proposed change, or undefined when none does */
@@ -236,6 +245,39 @@ function isGuard(commands: readonly LogicCommand[]): boolean {
 }
 
 /** The value at `at` before a change: taken from the change's previous value, laid into the current value when the change was below */
+/** The commands that only compute state from state, and so may run at start without acting on anything */
+const DERIVE_COMMANDS: ReadonlySet<string> = new Set(['set', 'merge', 'copy', 'query']);
+
+/**
+ * True for a rule or table that only derives values: every trigger is a `path` with no `was` (which needs a change),
+ * and every command, of its transitions and its table rows, is `set`, `merge`, `copy` or `query`. A machine never is
+ */
+function derivesOnly(unit: Unit): boolean {
+    if (unit.machine) return false;
+    if (unit.transitions.some((transition) => transition.when.path === undefined || transition.when.was !== undefined || transition.when.after !== undefined)) return false;
+    const commands = [...unit.transitions.flatMap((transition) => transition.do ?? []), ...(unit.table?.rows.flatMap((row) => row.do) ?? [])];
+    return commands.every((command) => DERIVE_COMMANDS.has(command.command));
+}
+
+/**
+ * The changes that make a deriving unit fire at start as if its data had just arrived: for each trigger, a change at
+ * its leading literal steps (`$.data` for `$.data.bag.*.qty`) with no previous value, so every concrete path that has
+ * a value matches and one with none does not
+ */
+function startChanges(unit: Unit): LogicChange[] {
+    const changes: LogicChange[] = [];
+    for (const pattern of unit.patterns) {
+        if (!pattern) continue;
+        const literal: string[] = [];
+        for (const step of pattern.steps) {
+            if (step.kind !== 'literal') break;
+            literal.push(step.text);
+        }
+        if (literal.length > 0) changes.push({ path: `$.${literal.join('.')}` });
+    }
+    return changes;
+}
+
 function previousAt(at: string, change: LogicChange, current: JsonValue | undefined): JsonValue | undefined {
     if (at === change.path) return change.previous;
     if (covers(change.path, at)) return within(change.previous, pathSteps(at).slice(pathSteps(change.path).length));
@@ -645,6 +687,31 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         );
     };
 
+    /** The start pass of `LogicEngine.derive` */
+    const derive = (): void => {
+        const units = ordered.filter(derivesOnly);
+        if (units.length === 0) return;
+        traced(
+            'start',
+            units.map((unit) => unit.name),
+            () => {
+                for (const unit of units) {
+                    // one firing per concrete path, so a rule over `$.data.products.{id}.price` derives every record
+                    const paths = new Set<string>();
+                    for (const change of startChanges(unit)) {
+                        for (const pattern of unit.patterns) {
+                            if (pattern) for (const match of matchPattern(pattern, change.path, host.get(change.path))) paths.add(match.path);
+                        }
+                    }
+                    for (const path of paths) {
+                        const hit = findHit(unit, [{ path }]);
+                        if (hit) fire(unit, hit, []);
+                    }
+                }
+            }
+        );
+    };
+
     const kinds = (test: (unit: Unit) => boolean): string[] => units.filter(test).map((unit) => unit.name);
     return {
         names: [
@@ -653,7 +720,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             ...kinds((unit) => unit.table !== undefined),
             ...guards.map((rule) => rule.name)
         ],
-        start() {
+        start(options = {}) {
             const writes = units.flatMap((unit) =>
                 unit.machine && host.get(unit.machine.state) === undefined ? [{ path: unit.machine.state, value: unit.machine.initial }] : []
             );
@@ -664,8 +731,10 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                     failed({ kind: 'machine', name: kinds((unit) => unit.machine !== undefined).join(', '), reason: (error as Error).message });
                 }
             }
+            if (options.derive !== false) derive();
             arm();
         },
+        derive,
         changes(changes) {
             traced(
                 'change',
