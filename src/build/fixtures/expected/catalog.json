@@ -160,6 +160,7 @@
         }
     ],
     "patterns": [],
+    "themePresets": [],
     "locales": [],
     "theme": {
         "tokens": [

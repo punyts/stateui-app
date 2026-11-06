@@ -5,6 +5,8 @@ export { applyTokenFallbacks } from './tokenFallbacks.js';
 export { checkTokens, lintCss } from './lint/index.js';
 export type { LintContext } from './lint/index.js';
 export { buildPatterns } from './patterns.js';
+export { buildPresets, readPreset } from './presets.js';
+export type { BuiltPresets, ThemePresetCatalogEntry } from './presets.js';
 export type { BuiltPatterns, PatternCatalogEntry } from './patterns.js';
 export { buildThemeSection } from './theme.js';
 export type { ThemeOverlayEntry, ThemeSection, ThemeSources, ThemeTokenEntry } from './theme.js';

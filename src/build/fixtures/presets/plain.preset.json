@@ -1,0 +1,25 @@
+{
+    "summary": "A plain fixture preset: a teal accent, with a dark mode",
+    "tokens": {
+        "color": {
+            "accent": {
+                "base": "{palette.teal.600}"
+            }
+        },
+        "radius": {
+            "md": "6px"
+        }
+    },
+    "overlays": {
+        "dark": {
+            "kind": "mode",
+            "tokens": {
+                "color": {
+                    "accent": {
+                        "base": "{palette.teal.400}"
+                    }
+                }
+            }
+        }
+    }
+}

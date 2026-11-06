@@ -48,6 +48,12 @@ export interface BuildOptions {
      * problem is a build error. Without it the catalog's `patterns` is empty
      */
     patternsDir?: string;
+    /**
+     * A folder of theme presets, `<name>.preset.json`, each a theme part (`tokens`, `overlays`) with a one-line
+     * `summary`. Each one that passes the token and overlay checks is in the catalog's `themePresets`, and each problem
+     * is a build error. Without it the catalog's `themePresets` is empty
+     */
+    presetsDir?: string;
 }
 
 /** A root component that built: its scan record and the files written for it, relative to the out folder */

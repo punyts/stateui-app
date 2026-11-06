@@ -17,6 +17,8 @@ import { applyTokenFallbacks } from './tokenFallbacks.js';
 import type { JsonObject, Node } from '../core/types.js';
 import { composedEntry, emitCatalog, rootEntry, sizeError, sizeOf } from './catalog.js';
 import { buildPatterns } from './patterns.js';
+import { buildPresets } from './presets.js';
+import type { ThemePresetCatalogEntry } from './presets.js';
 import type { PatternCatalogEntry } from './patterns.js';
 import { buildThemeSection } from './theme.js';
 import type { CatalogSize, ComponentCatalogEntry } from './catalog.js';
@@ -266,7 +268,7 @@ async function collectLibraryTokens(sourceDir: string, components: readonly Scan
  * stylesheet with StateUI, and writes one module per root component (plus its compiled controller) and an
  * index to `outDir`. A component with an error gets no module and the others are still built, so one run
  * reports every problem. Composed components have no module. Also writes `catalog.json`, which describes every
- * component that built, root and composed, sorted by name, and the patterns of `patternsDir`. Output depends on the sources only, so two
+ * component that built, root and composed, sorted by name, the patterns of `patternsDir` and the theme presets of `presetsDir`. Output depends on the sources only, so two
  * builds of the same input are byte-identical. Files in `outDir` from earlier builds are not removed
  */
 export async function buildLibrary(sourceDir: string, outDir: string, options: BuildOptions = {}): Promise<BuildResult> {
@@ -338,11 +340,10 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
     const sourceFiles = new Map(scan.components.map((component) => [component.name, component.files.state ?? component.files.composed ?? component.files.view ?? component.name]));
     errors.push(...duplicatePurposes(entries, sourceFiles));
 
+    const componentTokens = collectComponentTokens(entries.flatMap((entry) => (entry.tier === 'root' ? [{ file: entry.name, shape: entry.shape }] : []))).tokens;
     output.set('index.js', emitIndex(
             built.map((entry) => entry.component.name),
-            collectComponentTokens(
-                entries.flatMap((entry) => (entry.tier === 'root' ? [{ file: entry.name, shape: entry.shape }] : []))
-            ).tokens
+            componentTokens
         ));
     output.set('index.d.ts', emitIndexTypes());
     const themeSection = buildThemeSection({ descriptions: options.tokenDescriptions });
@@ -353,7 +354,13 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
         errors.push(...builtPatterns.errors);
         patterns = builtPatterns.patterns;
     }
-    const { catalog, text } = emitCatalog(entries, themeSection.theme, patterns);
+    let themePresets: ThemePresetCatalogEntry[] = [];
+    if (options.presetsDir !== undefined) {
+        const builtPresets = await buildPresets(options.presetsDir, componentTokens);
+        errors.push(...builtPresets.errors);
+        themePresets = builtPresets.themePresets;
+    }
+    const { catalog, text } = emitCatalog(entries, themeSection.theme, patterns, themePresets);
     output.set('catalog.json', text);
 
     const files = [...output.keys()].sort();
