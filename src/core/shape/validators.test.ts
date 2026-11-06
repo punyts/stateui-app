@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_COLOR_LENGTH, MAX_PATH_COMMANDS, MAX_PATH_DATA_LENGTH, MAX_POINTS, VALIDATORS, parseShape, validateNode } from './index.js';
+import { MAX_COLOR_LENGTH, MAX_PATH_COMMANDS, MAX_PATH_DATA_LENGTH, MAX_POINTS, VALIDATORS, colorForm, parseShape, validateNode } from './index.js';
 import type { Shape } from './index.js';
 import type { JsonValue, Node } from '../types.js';
 
@@ -76,6 +76,20 @@ describe('graphics validators', () => {
 
             expect(passes(shape, name)).toBe(true);
             expect(passes(shape, `${name}a`)).toBe(false);
+        });
+
+        it.each([
+            ['#a1b2c3', 'literal'],
+            ['hsl(210, 50%, 40%)', 'literal'],
+            ['transparent', 'literal'],
+            ['{color.accent.base}', 'token'],
+            ['brandFade', 'paint'],
+            ['none', 'paint'],
+            ['var(--ui-x)', undefined],
+            ['', undefined],
+            ['a'.repeat(MAX_COLOR_LENGTH + 1), undefined]
+        ] as const)('should give %j the form %s', (value, form) => {
+            expect(colorForm(value)).toBe(form);
         });
     });
 

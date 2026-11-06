@@ -18,7 +18,7 @@ export { hasInjection, validateTokenValue } from './value.js';
 export type { TypeLookup } from './value.js';
 export { mergeOverDefaults, validateTokens } from './validate.js';
 export type { ValidateTokensOptions } from './validate.js';
-export { THEME_VALIDATOR, validateThemeTokens } from './documentValidator.js';
+export { THEME_VALIDATOR, themeTokenLookup, validateThemeTokens } from './documentValidator.js';
 export { validateAppThemes, validateTheme, validateThemeOverlays } from './documentValidator.js';
 export { validateNodeThemes } from './nodeOverrides.js';
 export {

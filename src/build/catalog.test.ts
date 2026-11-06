@@ -225,6 +225,16 @@ describe('shapeEntry', () => {
         expect(validateNode(entry.shape, entry.example, '$.app')).toEqual([]);
     });
 
+    it('should keep the shapes a group shape takes in its children, in the shape and on the entry', () => {
+        const shape = parsed({ summary: 'A group of shapes', childComponents: ['bar', 'dot'], properties: {} });
+        const { tag: _tag, ...component } = scanned('group', 'molecules');
+
+        const entry = shapeEntry({ ...component, tier: 'shape' }, shape, 'molecule');
+
+        expect(entry.shape.childComponents).toEqual(['bar', 'dot']);
+        expect(entry.childComponents).toEqual(['bar', 'dot']);
+    });
+
     it('should list the options of the graphics validators, with the field list of fields, in the catalog text', () => {
         const viewBox = {
             x: { type: 'number', required: true },

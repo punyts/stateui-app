@@ -8,10 +8,10 @@ export type { AppEventName } from '../core/types.js';
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'fileProgress', 'fileResult'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'fileProgress', 'fileResult', 'fileData'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -54,7 +54,10 @@ export interface ProtocolError {
     component?: string;
 }
 
-/** The reasons a file transfer fails: what `fileResult` carries as `code`, and what `transferFile` rejects with */
+/**
+ * The reasons a file transfer or read fails: what `fileResult` and `fileData` carry as `code`, and what `transferFile`
+ * and `readFile` reject with
+ */
 export const FILE_ERROR_CODES = [
     'too_large',
     'unsupported_type',
@@ -205,6 +208,25 @@ export type FileResultMessage = Envelope<'fileResult'> &
         | { requestId: number; ok: false; code: FileErrorCode; message: string }
     );
 
+/**
+ * A component asks for the bytes of a stored file (`readFile`). `requestId` is a positive integer the runtime makes;
+ * `id` is the file's id from its reference. The host answers with `fileData`
+ */
+export interface FileReadMessage extends Envelope<'fileRead'> {
+    requestId: number;
+    id: string;
+}
+
+/**
+ * The answer to `fileRead`: the reference of the stored file and its bytes (`data`, an `ArrayBuffer` of `file.size`
+ * bytes that travels in the transfer list), or the reason it could not be read
+ */
+export type FileDataMessage = Envelope<'fileData'> &
+    (
+        | { requestId: number; ok: true; file: FileReference; data: ArrayBuffer }
+        | { requestId: number; ok: false; code: FileErrorCode; message: string }
+    );
+
 export type InboundMessage =
     | LoadMessage
     | WriteMessage
@@ -214,7 +236,8 @@ export type InboundMessage =
     | EventMessage
     | PingMessage
     | FileProgressMessage
-    | FileResultMessage;
+    | FileResultMessage
+    | FileDataMessage;
 export type OutboundMessage =
     | ReadyMessage
     | ChangeMessage
@@ -222,5 +245,6 @@ export type OutboundMessage =
     | ErrorMessage
     | PongMessage
     | FileMessage
-    | FileCancelMessage;
+    | FileCancelMessage
+    | FileReadMessage;
 export type RuntimeMessage = InboundMessage | OutboundMessage;

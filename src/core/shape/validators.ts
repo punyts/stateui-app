@@ -144,9 +144,25 @@ function parseTrue(options: JsonValue): true | undefined {
     return options === true ? true : undefined;
 }
 
+/** The three forms a value of the `color` validator takes */
+export type ColorForm = 'literal' | 'token' | 'paint';
+
+/**
+ * The form of a colour value, as the `color` validator reads it: `token` for a reference `{group.name...}`, `literal`
+ * for a colour the theme accepts (`transparent`, hex, `rgb()`, `rgba()`, `hsl()`, `hsla()`), `paint` for the name of
+ * an entry of a drawing's `paints`, and undefined for anything else or a string over `MAX_COLOR_LENGTH`. A literal
+ * wins over a paint name, so `transparent` is a colour. The document check and the renderers' paint resolution use it
+ */
+export function colorForm(value: string): ColorForm | undefined {
+    if (value.length > MAX_COLOR_LENGTH) return undefined;
+    if (TOKEN_REFERENCE.test(value)) return 'token';
+    if (isColor(value)) return 'literal';
+    if (PAINT_NAME.test(value)) return 'paint';
+    return undefined;
+}
+
 function isColorValue(value: string): boolean {
-    if (value.length > MAX_COLOR_LENGTH) return false;
-    return TOKEN_REFERENCE.test(value) || PAINT_NAME.test(value) || isColor(value);
+    return colorForm(value) !== undefined;
 }
 
 function isPathData(value: string): boolean {

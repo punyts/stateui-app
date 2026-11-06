@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_FILE_BYTES, MAX_WRITES, MESSAGE_TYPES, PROTOCOL_VERSION, isIconsMap, isWritablePath, validateMessage } from './protocol.js';
+import { MAX_FILE_BYTES, MAX_WRITES, MESSAGE_BYTE_LIMITS, MESSAGE_TYPES, PROTOCOL_VERSION, isIconsMap, isWritablePath, validateMessage } from './protocol.js';
 
 const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTOCOL_VERSION, nonce: 'n', type, ...fields });
 
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileProgress', 'fileResult', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileResult', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
         );
     });
 
@@ -34,7 +34,10 @@ describe('runtime message validator', () => {
         base('fileCancel', { requestId: 1 }),
         base('fileProgress', { requestId: 1, loaded: 1, total: 3 }),
         base('fileResult', { requestId: 1, ok: true, file: { id: 'f', name: 'a.txt', size: 3, type: 'text/plain' } }),
-        base('fileResult', { requestId: 1, ok: false, code: 'quota', message: 'Full' })
+        base('fileResult', { requestId: 1, ok: false, code: 'quota', message: 'Full' }),
+        base('fileRead', { requestId: 1, id: '0b6e8c1a-3f1e-4a52-9a43-2f4f1c8f2d10' }),
+        base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a.png', size: 3, type: 'image/png' }, data: new ArrayBuffer(3) }),
+        base('fileData', { requestId: 1, ok: false, code: 'not_found', message: 'Gone' })
     ])('should accept a valid $type message', (value) => {
         expect(validateMessage(value).ok).toBe(true);
     });
@@ -68,7 +71,17 @@ describe('runtime message validator', () => {
         ['file whose data is a typed array', base('file', { requestId: 1, name: 'a', size: 3, mediaType: 'text/plain', data: new Uint8Array(3) })],
         ['file without a media type', base('file', { requestId: 1, name: 'a', size: 3, data: new ArrayBuffer(3) })],
         ['fileResult with an unknown code', base('fileResult', { requestId: 1, ok: false, code: 'nope', message: 'm' })],
-        ['fileProgress with loaded above total', base('fileProgress', { requestId: 1, loaded: 4, total: 3 })]
+        ['fileProgress with loaded above total', base('fileProgress', { requestId: 1, loaded: 4, total: 3 })],
+        ['fileRead without an id', base('fileRead', { requestId: 1 })],
+        ['fileRead with an empty id', base('fileRead', { requestId: 1, id: '' })],
+        ['fileRead with a long id', base('fileRead', { requestId: 1, id: 'x'.repeat(129) })],
+        ['fileRead with requestId 0', base('fileRead', { requestId: 0, id: 'f' })],
+        ['fileData whose buffer differs from the size', base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 4, type: 'image/png' }, data: new ArrayBuffer(3) })],
+        ['fileData whose data is a typed array', base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' }, data: new Uint8Array(3) })],
+        ['fileData without data', base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' } })],
+        ['fileData with an extra field', base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' }, data: new ArrayBuffer(3), more: 1 })],
+        ['fileData with an unknown code', base('fileData', { requestId: 1, ok: false, code: 'nope', message: 'm' })],
+        ['failed fileData with data', base('fileData', { requestId: 1, ok: false, code: 'internal', message: 'm', data: new ArrayBuffer(1) })]
     ])('should reject %s as invalid', (_name, value) => {
         expect(validateMessage(value)).toEqual({ ok: false, reason: 'invalid' });
     });
@@ -82,6 +95,15 @@ describe('runtime message validator', () => {
         const data = new ArrayBuffer(MAX_FILE_BYTES + 1);
         expect(validateMessage(base('file', { requestId: 1, name: 'a', size: data.byteLength, mediaType: 'text/plain', data }))).toEqual({ ok: false, reason: 'oversized' });
         expect(validateMessage(base('fileResult', { requestId: 1, ok: false, code: 'internal', message: 'x'.repeat(3000) })).ok).toBe(false);
+    });
+
+    it('should report a fileData buffer over MAX_FILE_BYTES and a fileRead over the JSON limit as oversized', () => {
+        const data = new ArrayBuffer(MAX_FILE_BYTES + 1);
+        const file = { id: 'f', name: 'a.png', size: data.byteLength, type: 'image/png' };
+        expect(validateMessage(base('fileData', { requestId: 1, ok: true, file, data }))).toEqual({ ok: false, reason: 'oversized' });
+        expect(validateMessage(base('fileRead', { requestId: 1, id: 'x'.repeat(3000) }))).toEqual({ ok: false, reason: 'oversized' });
+        expect(MESSAGE_BYTE_LIMITS.fileRead).toBe(2 * 1024);
+        expect(MESSAGE_BYTE_LIMITS.fileData).toBe(2 * 1024);
     });
 
     it('should treat a value that cannot be serialised as oversized or invalid, never throw', () => {

@@ -100,6 +100,8 @@ export interface ShapeCatalogEntry extends EntryBase, SearchKeys {
     /** The content (`_`) properties, with `map.field` for fields inside map items */
     content: string[];
     events: string[];
+    /** The shapes its `children` accept (`drawGroup`); absent when it takes no children */
+    childComponents?: string[];
     /** The component tokens the shape declares; absent when it declares none */
     tokens?: ComponentToken[];
 }
@@ -324,7 +326,7 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
     };
 }
 
-/** The entry of a shape component that built: its summary, search keys, shape, own and content properties, events and tokens */
+/** The entry of a shape component that built: its summary, search keys, shape, own and content properties, events, the components its `children` accept and tokens */
 export function shapeEntry(component: ScannedComponent, shape: CatalogShape, size: CatalogSize): ShapeCatalogEntry {
     return {
         name: component.name,
@@ -339,6 +341,7 @@ export function shapeEntry(component: ScannedComponent, shape: CatalogShape, siz
             events: shape.events,
             commands: shape.commands,
             layout: shape.layout,
+            ...(shape.childComponents === undefined ? {} : { childComponents: shape.childComponents }),
             ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
         },
         own: Object.keys(shape.properties).filter((name) => !isArticulationName(name)),
@@ -346,6 +349,7 @@ export function shapeEntry(component: ScannedComponent, shape: CatalogShape, siz
         events: shape.events,
         locales: Object.keys(component.locales),
         example: exampleNode(component.name, shape),
+        ...(shape.childComponents === undefined ? {} : { childComponents: shape.childComponents }),
         ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
     };
 }

@@ -148,6 +148,20 @@ function isFileResult(m: Record<string, unknown>): boolean {
     );
 }
 
+/** A `fileData`: the reference and a buffer of exactly its size, or a failure like `fileResult`'s */
+function isFileData(m: Record<string, unknown>): boolean {
+    if (!isPositiveInteger(m['requestId'])) return false;
+    if (m['ok'] === true) {
+        return (
+            hasOnlyKeys(m, ['requestId', 'ok', 'file', 'data']) &&
+            isFileReference(m['file']) &&
+            isArrayBuffer(m['data']) &&
+            m['data'].byteLength === (m['file'] as { size: number }).size
+        );
+    }
+    return isFileResult(m);
+}
+
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
@@ -197,7 +211,9 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         isInteger(m['loaded']) &&
         isInteger(m['total']) &&
         (m['loaded'] as number) <= (m['total'] as number),
-    fileResult: isFileResult
+    fileResult: isFileResult,
+    fileRead: (m) => hasOnlyKeys(m, ['requestId', 'id']) && isPositiveInteger(m['requestId']) && isText(m['id'], MAX_FILE_ID_LENGTH),
+    fileData: isFileData
 };
 
 function isMessageType(value: unknown): value is MessageType {
@@ -226,7 +242,7 @@ export function validateMessage(value: unknown): ValidationResult {
     const size = byteLength(value);
     if (size === undefined) return { ok: false, reason: 'invalid' };
     if (size > MESSAGE_BYTE_LIMITS[value['type']]) return { ok: false, reason: 'oversized' };
-    if (value['type'] === 'file' && isArrayBuffer(value['data']) && value['data'].byteLength > MAX_FILE_BYTES) {
+    if ((value['type'] === 'file' || value['type'] === 'fileData') && isArrayBuffer(value['data']) && value['data'].byteLength > MAX_FILE_BYTES) {
         return { ok: false, reason: 'oversized' };
     }
     if (value['v'] !== PROTOCOL_VERSION || !isText(value['nonce'], MAX_NONCE_LENGTH)) return { ok: false, reason: 'invalid' };

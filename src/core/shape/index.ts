@@ -31,7 +31,8 @@ export type {
     ValidatorOptions
 } from './types.js';
 export { isSafeUrl } from './url.js';
-export { VALIDATORS } from './validators.js';
+export { VALIDATORS, colorForm } from './validators.js';
+export type { ColorForm } from './validators.js';
 export { validateNode } from './validate.js';
 export type { ValidateContext } from './validate.js';
 export { reflectedProperties } from './reflect.js';

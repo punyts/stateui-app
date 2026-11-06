@@ -477,3 +477,68 @@ describe('ui-file-transfer in Chromium', () => {
         dispatcher.dispose();
     });
 });
+
+describe('ui-file-read in Chromium', () => {
+    const read = { file: { id: 'f1', name: 'a.png', size: 1, type: 'image/png' }, data: new ArrayBuffer(1) };
+
+    afterEach(() => {
+        setNodeResolver(undefined);
+        for (const host of Array.from(document.body.children)) unmount(host);
+        document.body.replaceChildren();
+    });
+
+    function request(id: unknown, signal?: AbortSignal) {
+        const respond = vi.fn<(result: Promise<unknown>) => void>();
+        const detail = { id, respond, ...(signal ? { signal } : {}) };
+        return { respond, detail };
+    }
+
+    it('should hand the id and the signal to hooks.readFile and respond with its promise', async () => {
+        // Arrange
+        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const readFile = vi.fn(() => Promise.resolve(read));
+        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, readFile } });
+        const controller = new AbortController();
+        const { respond, detail } = request('f1', controller.signal);
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-read', detail);
+
+        // Assert
+        expect(readFile).toHaveBeenCalledWith('f1', { signal: controller.signal });
+        expect(respond).toHaveBeenCalledTimes(1);
+        await expect(respond.mock.calls[0]?.[0]).resolves.toEqual(read);
+        dispatcher.dispose();
+    });
+
+    it('should leave the request unanswered when the host gives no readFile hook', () => {
+        // Arrange
+        const { element } = mountApp(panel({ b: { component: 'button' } }));
+        const { respond, detail } = request('f1');
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-read', detail);
+
+        // Assert
+        expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a detail that is not a read request and stop listening after dispose', () => {
+        // Arrange
+        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const readFile = vi.fn(() => Promise.resolve(read));
+        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { readFile } });
+        const { respond, detail } = request('f1');
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-read', request(5).detail);
+        raise(element('$.app.children.b'), 'ui-file-read', request('').detail);
+        second.dispose();
+        raise(element('$.app.children.b'), 'ui-file-read', detail);
+
+        // Assert
+        expect(readFile).not.toHaveBeenCalled();
+        expect(respond).not.toHaveBeenCalled();
+        dispatcher.dispose();
+    });
+});

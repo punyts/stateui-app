@@ -28,6 +28,12 @@ export interface ValidateDocumentOptions {
      */
     isIconName?(name: string): boolean;
     /**
+     * True when the theme has a token of this dotted name (`color.accent.base`, without braces); the `paint` validator
+     * reports a `{token}` colour it refuses as `SUI-STATE-TOKEN`. Without it a token reference is checked by syntax only.
+     * `themeTokenLookup(library)` builds one from the default tokens and the library's component tokens
+     */
+    hasToken?(name: string): boolean;
+    /**
      * How the app keeps its state. In `standalone` and `persisted` mode there is no app server, so a document that
      * names `$.server` anywhere is refused (`SUI-DOC-SERVER`); `full` and absent allow it. A link into `$.server` is
      * refused in every mode (`SUI-LINK-SERVER`)
@@ -46,6 +52,8 @@ export interface DocumentValidationContext {
     tree: ResolvedTree;
     /** The resolved root of each screen, by screen name; its state path is `$.screens.{screen}` */
     screens?: Readonly<Record<string, ResolvedTree>>;
+    /** The `hasToken` option of `validateDocument`, when the caller gave one (as it gives `isIconName`) */
+    hasToken?(name: string): boolean;
 }
 
 /** A plug-in check: returns its errors, each with a state path. It may throw; the run reports that as `SUI-DOC-VALIDATOR` */

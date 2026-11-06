@@ -9,8 +9,8 @@ import { runtimePath } from '../../core/links/index.js';
 import { RESERVED_KEYS } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import type { CommandContext } from './commands.js';
-import { FILE_TRANSFER_EVENT } from './types.js';
-import type { Dispatcher, DispatcherOptions, FileTransferRequest } from './types.js';
+import { FILE_READ_EVENT, FILE_TRANSFER_EVENT } from './types.js';
+import type { Dispatcher, DispatcherOptions, FileReadRequest, FileTransferRequest } from './types.js';
 
 const DEFAULT_ROOT = '$.app';
 const RUNTIME_NODES = '$.runtime.nodes.';
@@ -39,6 +39,12 @@ function isFileTransfer(value: unknown): value is FileTransferRequest {
     if (typeof value !== 'object' || value === null) return false;
     const request = value as Partial<FileTransferRequest>;
     return request.file instanceof File && typeof request.respond === 'function';
+}
+
+function isFileRead(value: unknown): value is FileReadRequest {
+    if (typeof value !== 'object' || value === null) return false;
+    const request = value as Partial<FileReadRequest>;
+    return typeof request.id === 'string' && request.id.length > 0 && typeof request.respond === 'function';
 }
 
 /** The element that raised the event: the first one on its path that is a library component with a scope */
@@ -224,8 +230,18 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         );
     }
 
+    /** Answers `ui-file-read` with the host's `readFile` hook; without one the event is left unanswered */
+    function read(event: Event): void {
+        const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
+        if (!isFileRead(request) || !hooks?.readFile) return;
+        event.stopPropagation();
+        const { id, signal } = request;
+        request.respond(hooks.readFile(id, signal === undefined ? {} : { signal }));
+    }
+
     for (const name of names) host.addEventListener(name, handle, true);
     host.addEventListener(FILE_TRANSFER_EVENT, transfer);
+    host.addEventListener(FILE_READ_EVENT, read);
 
     return {
         raise(name, payload): void {
@@ -235,6 +251,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         dispose(): void {
             for (const name of names) host.removeEventListener(name, handle, true);
             host.removeEventListener(FILE_TRANSFER_EVENT, transfer);
+            host.removeEventListener(FILE_READ_EVENT, read);
         }
     };
 }

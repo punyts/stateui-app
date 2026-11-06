@@ -25,6 +25,7 @@ export {
     SHAPE_KEYS,
     VALIDATORS,
     buildDefaults,
+    colorForm,
     collectComponentTokens,
     isSafeUrl,
     parseShape,
@@ -36,6 +37,7 @@ export {
 export type {
     Bounds,
     CollectedTokens,
+    ColorForm,
     ComponentCategory,
     FieldValidators,
     FileRefOptions,
@@ -108,7 +110,7 @@ export type {
     TreeNode,
     ValidateOnOptions
 } from './on/index.js';
-export { documentValidators, libraryFromCatalog, registerDocumentValidator, validateDocument } from './validate/index.js';
+export { PAINTS_PROPERTY, documentValidators, libraryFromCatalog, registerDocumentValidator, validateDocument, validatePaints, validateShapeLabels } from './validate/index.js';
 export type {
     CatalogComponent,
     CatalogSource,
@@ -150,6 +152,7 @@ export {
     SYSTEM_KINDS,
     THEME_KEY,
     THEME_VALIDATOR,
+    themeTokenLookup,
     activeAfterSwitch,
     appThemeNames,
     buildOverlayCatalog,

@@ -2,6 +2,7 @@ import type { Store } from '@punyts/state';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
+import type { FileData, ReadFile } from '../../runtime/fileRead.js';
 import type { FileProgress, TransferFile } from '../../runtime/fileTransfer.js';
 import type { FileReference } from '../../runtime/messages.js';
 
@@ -20,6 +21,22 @@ export interface FileTransferRequest {
     /** Aborting it cancels the transfer */
     readonly signal?: AbortSignal;
     respond(result: Promise<FileReference>): void;
+}
+
+/** The event a component raises to read a stored file through the host's `readFile` hook. Bubbles and is composed */
+export const FILE_READ_EVENT = 'ui-file-read';
+
+/**
+ * The `detail` of `ui-file-read`. The dispatcher calls `respond` once, synchronously, with the promise `hooks.readFile`
+ * returns, and stops the event. When the host gives no hook `respond` is never called, so a component treats an event
+ * that comes back unanswered as the `offline` failure of the read
+ */
+export interface FileReadRequest {
+    /** The id of the file's reference */
+    readonly id: string;
+    /** Aborting it cancels the read */
+    readonly signal?: AbortSignal;
+    respond(result: Promise<FileData>): void;
 }
 
 /**
@@ -48,6 +65,11 @@ export interface DispatchHooks {
      * the preview frame; absent when the app is mounted without a host that takes files
      */
     transferFile?: TransferFile;
+    /**
+     * Reads a stored file through the host and resolves with its reference and bytes (G1.9). Set by the runtime inside
+     * the preview frame; absent when the app is mounted without a host that reads files
+     */
+    readFile?: ReadFile;
     /** Called with every `SUI-RUN` error the dispatcher reports, after it is reported through `@punyts/core` */
     onError?(error: BuildError): void;
 }

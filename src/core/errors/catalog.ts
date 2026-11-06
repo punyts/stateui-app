@@ -74,6 +74,14 @@ export const ERROR_CATALOG = {
         template: 'Number field "{component}" at {path} has min {name} and step {other}: values count from min in steps, so whole numbers are not allowed; use min: 0 or a step that divides min',
         severity: 'warning'
     },
+    'SUI-STATE-PAINT': {
+        template: 'Property "{name}" at {path} names the paint "{key}", which the paints of its drawing do not define'
+    },
+    'SUI-STATE-TOKEN': { template: 'Property "{name}" at {path} names the token {token}, which is not in the theme' },
+    'SUI-STATE-LABEL': {
+        template: 'Interactive shape "{component}" at {path} has no _label, so keyboard and screen reader users cannot name it',
+        severity: 'warning'
+    },
     'SUI-LINK-ROW': { template: 'Reference {target} at {path} uses $row outside a row template' },
     'SUI-LINK-MISSING': {
         template: 'Link target {target} at {path} does not exist or is not an exposed runtime property'

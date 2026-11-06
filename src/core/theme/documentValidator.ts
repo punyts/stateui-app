@@ -8,7 +8,9 @@ import { validateNodeThemes } from './nodeOverrides.js';
 import { buildOverlayCatalog, hasOverlay } from './overlays/catalog.js';
 import { SYSTEM, SYSTEM_KINDS, isOverlayKind } from './overlays/types.js';
 import { overlayError } from './overlays/validate.js';
+import { DEFAULT_LEAVES } from './defaults.js';
 import type { ComponentToken } from './types.js';
+import type { ComponentLibrary } from '../resolve/index.js';
 import { validateTokens } from './validate.js';
 
 /** The name the theme validator is registered under; a later story that extends it registers this name again */
@@ -19,11 +21,22 @@ function wrongType(key: string, statePath: string): BuildError {
 }
 
 /** The component tokens the library's shapes declare; they join the token lookup */
-function libraryTokens(context: DocumentValidationContext): ComponentToken[] {
+function libraryTokens(context: Pick<DocumentValidationContext, 'library'>): ComponentToken[] {
     const sources = Object.values(context.library).flatMap((entry) =>
         entry.tier === 'root' ? [{ file: entry.tag, shape: entry.shape }] : []
     );
     return collectComponentTokens(sources).tokens;
+}
+
+/**
+ * A `hasToken` for `validateDocument`: true for the dotted name of a default token (primitive or semantic) or of a
+ * component token a root component of the library declares. A theme cannot add token names (`SUI-THEME-TOKEN`), so
+ * these are every name a `{token}` colour can reach
+ */
+export function themeTokenLookup(library: ComponentLibrary): (name: string) => boolean {
+    const names = new Set<string>(DEFAULT_LEAVES.map((leaf) => leaf.path));
+    for (const token of libraryTokens({ library })) names.add(token.path);
+    return (name) => names.has(name);
 }
 
 /**

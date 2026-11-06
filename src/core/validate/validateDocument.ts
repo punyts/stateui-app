@@ -9,7 +9,7 @@ import type { AppDocument, JsonObject, JsonValue, Node } from '../types.js';
 import { checkOrderedKeys, checkRoot, checkServerUse, screenRoots } from './document.js';
 import type { ResolvedTree } from '../on/index.js';
 import { documentValidators } from './registry.js';
-import type { CatalogSource, DocumentValidation, ValidateDocumentOptions } from './types.js';
+import type { CatalogSource, DocumentValidation, DocumentValidationContext, ValidateDocumentOptions } from './types.js';
 import { checkTree, childRefusal } from './tree.js';
 
 const APP_PATH = '$.app';
@@ -97,7 +97,13 @@ function runChecks(
         }
     }
 
-    const context = { document: document as unknown as AppDocument, library, tree: { node: resolved.node, instances: resolved.instances }, screens };
+    const context: DocumentValidationContext = {
+        document: document as unknown as AppDocument,
+        library,
+        tree: { node: resolved.node, instances: resolved.instances },
+        screens,
+        ...(options.hasToken !== undefined && { hasToken: options.hasToken })
+    };
     for (const [name, validator] of documentValidators()) {
         try {
             errors.push(...validator(context));

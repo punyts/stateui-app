@@ -18,12 +18,14 @@ import type { MountedApp } from '../dom/mount/index.js';
 import type { CommandContext } from '../dom/on/commands.js';
 import { applyOverlay } from '../dom/theme/index.js';
 import type { ThemeStore } from '../dom/theme/index.js';
+import { createFileReads } from './fileRead.js';
 import { createFileTransfers } from './fileTransfer.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
 import type {
     CommandMessage,
     EventMessage,
+    FileDataMessage,
     FileProgressMessage,
     FileResultMessage,
     IconsMap,
@@ -48,6 +50,10 @@ const DATA_ROOT = '$.data';
 const MAX_POSTED_ERRORS = 200;
 /** Window errors that report no failure: a ResizeObserver whose callback changed layout leaves notifications for the next frame */
 const BENIGN_ERROR = /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/;
+/** How long after a change the runtime looks for read files no node uses any more, in milliseconds */
+const FILE_RELEASE_DELAY_MS = 1000;
+/** The branches whose values can hold a file reference: the shell, the screens and the data */
+const FILE_USE_ROOTS = ['$.app', '$.screens', DATA_ROOT];
 
 /** Where the runtime posts: `window.parent` in the iframe, a fake in tests */
 export interface MessageTarget {
@@ -169,6 +175,11 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
  * linked to) never leaves the frame: such a change is not posted, and it is cut out of the value of a change above it.
  * It posts `emit` from the dispatcher hook and `error` for validation and runtime errors.
  *
+ * Files: the dispatcher's `transferFile` hook posts `file` (answered by `fileProgress` and `fileResult`) and its
+ * `readFile` hook posts `fileRead` (answered by `fileData`). The bytes of read files are kept by id across loads
+ * (`createFileReads`, at most `FILE_CACHE_BYTES`) and released a moment after a change once no value of the shell,
+ * the screens or the data holds the id any more; `dispose` cancels the waiting reads and drops them all.
+ *
  * Posting uses the target origin `*`: a frame sandboxed without `allow-same-origin` has an opaque origin, and the
  * nonce is what the host checks
  */
@@ -206,6 +217,34 @@ export function startRuntime(
             post({ type: 'fileCancel', requestId });
         }
     });
+
+    /**
+     * The ids a node still uses: an id is used while it appears anywhere in the values of the shell, the screens or the
+     * data (the definition of `isFileReferenced` in `@punyts/stateui-mcp`, which the server's file sweep uses)
+     */
+    function usedIds(ids: readonly string[]): ReadonlySet<string> {
+        const store = mounted?.store;
+        if (!store || ids.length === 0) return new Set();
+        const text = FILE_USE_ROOTS.map((root) => JSON.stringify(store.get(root as never)) ?? '').join('\n').toLowerCase();
+        return new Set(ids.filter((id) => text.includes(id.toLowerCase())));
+    }
+
+    const reads = createFileReads(
+        {
+            sendRead: (requestId, id) => post({ type: 'fileRead', requestId, id })
+        },
+        { usedIds }
+    );
+    let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /** Releases the read files no node uses, a moment after the state changed; nothing to do while none is kept */
+    function scheduleRelease(): void {
+        if (releaseTimer !== undefined || reads.cached().length === 0) return;
+        releaseTimer = setTimeout(() => {
+            releaseTimer = undefined;
+            if (!disposed) reads.release();
+        }, FILE_RELEASE_DELAY_MS);
+    }
 
     function postErrors(errors: readonly BuildError[]): void {
         const room = MAX_POSTED_ERRORS - postedErrors;
@@ -301,6 +340,7 @@ export function startRuntime(
             origins: [LOGIC_ORIGIN],
             onChanges(changes) {
                 if (disposed) return;
+                scheduleRelease();
                 for (const change of changes) {
                     const kept = postable(store, change);
                     if (kept) post({ type: 'change', change: kept });
@@ -345,6 +385,7 @@ export function startRuntime(
                 library,
                 {
                     transferFile: files.transferFile,
+                    readFile: reads.readFile,
                     onEmit(name, payload) {
                         const json = payload === undefined ? undefined : toJson(payload);
                         post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
@@ -364,6 +405,7 @@ export function startRuntime(
         }
         mounted = app;
         startCapture(app.store);
+        scheduleRelease();
         if (app.errors.length > 0) postErrors(app.errors);
         post({ type: 'ready' });
     }
@@ -401,6 +443,7 @@ export function startRuntime(
             }
         }
         if (refused.length > 0) postErrors(refused);
+        scheduleRelease();
     }
 
     function appEvent(message: EventMessage): void {
@@ -473,6 +516,9 @@ export function startRuntime(
             case 'fileResult':
                 files.result(message as FileResultMessage);
                 return;
+            case 'fileData':
+                reads.data(message as FileDataMessage);
+                return;
             case 'ping':
                 post({ type: 'pong', id: message.id });
                 return;
@@ -528,6 +574,8 @@ export function startRuntime(
             win.removeEventListener('unhandledrejection', onFailure);
             teardown();
             files.cancelAll();
+            reads.cancelAll();
+            if (releaseTimer !== undefined) clearTimeout(releaseTimer);
             localeStep.unregister();
         }
     };
