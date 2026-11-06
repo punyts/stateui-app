@@ -449,6 +449,16 @@ describe('validateNode', () => {
             expect(codes(typed, { value: 'a'.repeat(10000) })).toEqual([]);
         });
 
+        it('should name the input limit in the message of a value over it', () => {
+            const typed = propertyShape({ type: 'string', validators: { pattern: '^a+$' } });
+
+            const [over] = validateNode(typed, { component: 'test', value: 'a'.repeat(10001) } as Node, '$.app');
+            const [wrong] = validateNode(typed, { component: 'test', value: 'b' } as Node, '$.app');
+
+            expect(over?.message).toContain('10001 characters, over the 10000');
+            expect(wrong?.message).not.toContain('characters');
+        });
+
         it('should accept a value that is a short, compiling regular expression with the regex validator', () => {
             const typed = propertyShape({ type: 'string', default: '', validators: { regex: 120 } });
 

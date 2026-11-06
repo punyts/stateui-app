@@ -4,6 +4,7 @@ import type { BuildError } from '../errors/index.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
 import { fitsAnyType, fitsProperty, fitsType, typesOf } from './fit.js';
+import { MAX_PATTERN_INPUT } from './types.js';
 import type { PropertyShape, Shape } from './types.js';
 
 /**
@@ -159,6 +160,10 @@ function checkValue(property: PropertyShape, value: JsonValue, name: string, pat
     }
     if (!fitsProperty(property, value)) {
         report(walk, 'SUI-STATE-INVALID', name, path);
+        if (property.validators.pattern !== undefined && typeof value === 'string' && value.length > MAX_PATTERN_INPUT) {
+            const error = walk.errors[walk.errors.length - 1] as BuildError;
+            error.message += `: the value is ${value.length} characters, over the ${MAX_PATTERN_INPUT} a pattern-checked value may have`;
+        }
         return;
     }
     const isIconName = walk.context.isIconName;
