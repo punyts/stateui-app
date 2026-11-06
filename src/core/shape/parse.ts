@@ -1,6 +1,8 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import type { JsonValue } from '../types.js';
+import { applyShapeIncludes } from './includes.js';
+import type { ShapePartials } from './includes.js';
 import { SHAPE_KEYS, applyKeys, finishShape } from './table.js';
 import type { Shape } from './types.js';
 
@@ -8,6 +10,15 @@ import type { Shape } from './types.js';
 export interface ShapeResult {
     shape?: Shape;
     errors: BuildError[];
+}
+
+/** How `parseShape` reads a state file */
+export interface ParseShapeOptions {
+    /**
+     * The shared shape partials a state file may name in `includes`, by name (the file `<name>.json` of the library's
+     * shared shape folder), each the file text or its parsed value. Without it every included name is unknown
+     */
+    partials?: ShapePartials;
 }
 
 /** The camel-cased component name a shape file name gives: `text-label.state.json` is `textLabel` */
@@ -19,9 +30,11 @@ function componentName(file: string): string {
 
 /**
  * Reads a `*.state.json`. `json` is the file text or the already parsed value; `file` names the file in every
- * error. Every problem is reported, not just the first. `shape` is set only when there are no errors
+ * error. Every problem is reported, not just the first. `shape` is set only when there are no errors. An `includes`
+ * list merges the named `options.partials` under the file's own `properties`, `events` and `tokens` before the
+ * shape is read (`applyShapeIncludes`), so the shape and every check see the merged result
  */
-export function parseShape(json: unknown, file: string): ShapeResult {
+export function parseShape(json: unknown, file: string, options: ParseShapeOptions = {}): ShapeResult {
     let input: unknown = json;
     if (typeof json === 'string') {
         try {
@@ -37,7 +50,8 @@ export function parseShape(json: unknown, file: string): ShapeResult {
     const shape: Shape = { summary: '', properties: {}, shared: [], events: [], commands: [], layout: false };
     const errors: BuildError[] = [];
     const context = { file, errors, where: '', component: componentName(file) };
-    applyKeys(SHAPE_KEYS, input as { [key: string]: JsonValue }, shape, context);
+    const merged = applyShapeIncludes(input as { [key: string]: JsonValue }, file, options.partials, errors);
+    applyKeys(SHAPE_KEYS, merged, shape, context);
     finishShape(shape, context);
     return errors.length > 0 ? { errors } : { shape, errors };
 }

@@ -333,6 +333,58 @@ describe('buildLibrary', () => {
         expect(result.errors).toEqual([]);
     });
 
+    it('should merge the shared shape partials of sharedShapeDir into shape and root components, as if written out in full', async () => {
+        const paint = {
+            properties: { fill: { type: 'string', validators: { color: true }, default: '{color.accent.base}' }, stroke: { type: 'string', default: 'none' } },
+            events: ['press', 'hover'],
+            tokens: { fill: '{color.accent.base}' }
+        };
+        const shared = await library({ 'paint.json': JSON.stringify(paint), 'notes.txt': 'not a partial' });
+        const own = { radius: { type: 'number', default: 4 }, stroke: { type: 'string', default: 'black' } };
+        const marker = (state: Record<string, unknown>): string => JSON.stringify({ summary: 'A dot', tokenGroup: 'marker', events: ['press'], ...state });
+        const field = (state: Record<string, unknown>): string => JSON.stringify({ summary: 'A field', tokenGroup: 'field', ...state });
+        const included = await library({
+            'atoms/marker/marker.state.json': marker({ includes: ['paint'], properties: own }),
+            'atoms/field/field.view.html': '<p>{{ $.radius }}</p>',
+            'atoms/field/field.state.json': field({ includes: ['paint'], properties: own })
+        });
+        const full = { properties: { ...own, fill: paint.properties.fill }, events: ['press', 'hover'], tokens: paint.tokens };
+        const written = await library({
+            'atoms/marker/marker.state.json': marker(full),
+            'atoms/field/field.view.html': '<p>{{ $.radius }}</p>',
+            'atoms/field/field.state.json': field(full)
+        });
+
+        const result = await buildLibrary(included, await scratch(), { sharedShapeDir: shared });
+        const expected = await buildLibrary(written, await scratch());
+
+        expect(result.errors).toEqual([]);
+        expect(result.catalog.components.map((entry) => entry.tier)).toEqual(['root', 'shape']);
+        expect(result.catalog).toEqual(expected.catalog);
+        const marked = result.catalog.components.find((entry) => entry.name === 'marker');
+        expect(marked?.tier === 'shape' && marked.shape.properties.stroke?.default).toBe('black');
+    });
+
+    it('should report an unknown shape partial as SUI-BUILD-SHAPE and build nothing for the component', async () => {
+        const shared = await library({ 'paint.json': '{ "properties": {} }' });
+        const source = await library({
+            'atoms/marker/marker.state.json': '{ "summary": "A dot", "includes": ["glow"] }',
+            'atoms/field/field.view.html': '<p>x</p>',
+            'atoms/field/field.state.json': '{ "summary": "A field", "includes": ["paint"] }'
+        });
+
+        const result = await buildLibrary(source, await scratch(), { sharedShapeDir: shared });
+        const without = await buildLibrary(source, await scratch());
+
+        expect(result.errors).toEqual([expect.objectContaining({ code: 'SUI-BUILD-SHAPE', file: 'atoms/marker/marker.state.json' })]);
+        expect(result.errors[0]?.message).toContain('unknown partial "glow"');
+        expect(result.catalog.components.map((entry) => entry.name)).toEqual(['field']);
+        expect(without.errors.map((error) => `${error.file} ${error.message}`).sort()).toEqual([
+            'atoms/field/field.state.json Invalid shape file atoms/field/field.state.json: includes: unknown partial "paint"',
+            'atoms/marker/marker.state.json Invalid shape file atoms/marker/marker.state.json: includes: unknown partial "glow"'
+        ]);
+    });
+
     it('should give byte-identical output with no extension points and with empty lists', async () => {
         const first = await scratch();
         const second = await scratch();

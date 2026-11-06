@@ -1,6 +1,8 @@
 export { buildDefaults } from './defaults.js';
 export { parseShape } from './parse.js';
-export type { ShapeResult } from './parse.js';
+export type { ParseShapeOptions, ShapeResult } from './parse.js';
+export { SHAPE_PARTIAL_KEYS, SHAPE_PARTIAL_NAME, applyShapeIncludes } from './includes.js';
+export type { ShapePartials } from './includes.js';
 export { PROPERTY_KEYS, SHAPE_KEYS, categoryError, purposesError } from './table.js';
 export { COMPONENT_CATEGORIES, MAX_PURPOSES, MAX_PURPOSE_LENGTH, MIN_PURPOSES, checkPurposes, isComponentCategory, normalizePurpose } from './categories.js';
 export type { ComponentCategory } from './categories.js';

@@ -9,7 +9,7 @@ import { resolveNode } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
 import { MAX_SUMMARY_LENGTH, buildDefaults, categoryError, collectComponentTokens, normalizePurpose, parseShape, purposesError } from '../core/shape/index.js';
 import type { ComponentCategory } from '../core/shape/index.js';
-import type { Shape } from '../core/shape/index.js';
+import type { Shape, ShapePartials } from '../core/shape/index.js';
 import type { ComponentToken } from '../core/theme/index.js';
 import { generateSharedSheet } from '../dom/articulation/index.js';
 import { checkTokens, lintCss } from './lint/index.js';
@@ -28,7 +28,7 @@ import { loadStateUI } from './dom.js';
 import type { StateUIModule } from './dom.js';
 import { emitIndex, emitIndexTypes, emitModule, emitModuleTypes } from './emit.js';
 import { buildFailure } from './failures.js';
-import { inlineIncludes } from './includes.js';
+import { inlineIncludes, readShapePartials } from './includes.js';
 import { SHARED_SHEET_LINES, prependSharedSheet } from './sharedSheet.js';
 import { LAYOUT_SHEET_LINES, checkLayoutHost, prependLayoutSheets } from './layoutSheets.js';
 import { emitOverlay, inFile, overlayFileName, readOverlay } from './overlays.js';
@@ -69,7 +69,8 @@ async function compileComponent(
     sourceDir: string,
     component: ScannedComponent,
     options: BuildOptions,
-    library: LibraryTokens
+    library: LibraryTokens,
+    partials: ShapePartials
 ): Promise<Compiled> {
     const errors: BuildError[] = [...(library.conflicts.get(component.files.state as string) ?? [])];
     const files = new Map<string, string>();
@@ -95,7 +96,7 @@ async function compileComponent(
     let defaultState: JsonObject = {};
     let shape: Shape | undefined;
     if (stateText !== undefined) {
-        const result = parseShape(stateText, stateFile);
+        const result = parseShape(stateText, stateFile, { partials });
         errors.push(...result.errors);
         if (result.shape) {
             shape = result.shape;
@@ -167,7 +168,7 @@ async function compileComponent(
  * Reads a shape component: its state file and locale overlays, checked as a root component's are. It gives no module,
  * register entry or CSS, only the shape for its catalog entry and the overlay files
  */
-async function compileShape(sourceDir: string, component: ScannedComponent, options: BuildOptions): Promise<Compiled> {
+async function compileShape(sourceDir: string, component: ScannedComponent, options: BuildOptions, partials: ShapePartials): Promise<Compiled> {
     const errors: BuildError[] = [];
     const files = new Map<string, string>();
     const stateFile = component.files.state as string;
@@ -179,7 +180,7 @@ async function compileShape(sourceDir: string, component: ScannedComponent, opti
     }
     let shape: Shape | undefined;
     if (stateText !== undefined) {
-        const result = parseShape(stateText, stateFile);
+        const result = parseShape(stateText, stateFile, { partials });
         errors.push(...result.errors);
         shape = result.shape;
         if (shape !== undefined && options.requireSearchKeys === true) errors.push(...missingSearchKeys(shape, stateFile, false));
@@ -279,14 +280,14 @@ async function readComposed(sourceDir: string, file: string, errors: BuildError[
  * tokens of the whole library. Shape errors are left for the component's own build; a group conflict is reported once
  * per state file and fails that component
  */
-async function collectLibraryTokens(sourceDir: string, components: readonly ScannedComponent[]): Promise<LibraryTokens> {
+async function collectLibraryTokens(sourceDir: string, components: readonly ScannedComponent[], partials: ShapePartials): Promise<LibraryTokens> {
     const sources: { file: string; shape: Shape }[] = [];
     for (const component of components) {
         const file = component.files.state;
         if (component.tier !== 'root' || file === undefined) continue;
         try {
             const text = (await readFile(join(sourceDir, file), 'utf8')).replace(/\r\n?/g, '\n');
-            const result = parseShape(text, file);
+            const result = parseShape(text, file, { partials });
             if (result.shape) sources.push({ file, shape: result.shape });
         } catch {
             continue;
@@ -316,7 +317,8 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
     const scan = scanLibrary(fileMap as FileMap);
     const errors: BuildError[] = [...scan.errors];
 
-    const library = await collectLibraryTokens(sourceDir, scan.components);
+    const partials = await readShapePartials(options.sharedShapeDir);
+    const library = await collectLibraryTokens(sourceDir, scan.components, partials);
     errors.push(
         ...lintCss(generateSharedSheet(), { file: 'generated shared sheet', tokens: library.tokens })
     );
@@ -354,14 +356,14 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
             continue;
         }
         if (component.tier === 'shape') {
-            const compiled = await compileShape(sourceDir, component, options);
+            const compiled = await compileShape(sourceDir, component, options, partials);
             errors.push(...compiled.errors);
             if (compiled.errors.length > 0 || compiled.shape === undefined) continue;
             for (const [file, text] of compiled.files) output.set(file, text);
             entries.push(shapeEntry(component, compiled.shape, sizeOf(component.group) as CatalogSize));
             continue;
         }
-        const compiled = await compileComponent(stateui, sourceDir, component, options, library);
+        const compiled = await compileComponent(stateui, sourceDir, component, options, library, partials);
         errors.push(...compiled.errors);
         if (compiled.errors.length > 0) continue;
         for (const [file, text] of compiled.files) output.set(file, text);

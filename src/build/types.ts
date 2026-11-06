@@ -29,6 +29,13 @@ export interface BuildOptions {
      * `SUI-BUILD` error with the line. Lines reported after an include count the inlined text. Off by default
      */
     sharedCssDir?: string;
+    /**
+     * A folder of shared shape partials, `<name>.json`, each an object of only `properties`, `events` and `tokens`.
+     * A state file's `includes: ["<name>", ...]` merges them under its own before the shape is read, an own property
+     * or token winning over an included one, so the catalog shows the merged result; a name with no file is
+     * `SUI-BUILD-SHAPE`. Applies to root and shape-tier components. Without it every included name is unknown
+     */
+    sharedShapeDir?: string;
     /** The descriptions of the semantic tokens by dotted path; the library's own `tokens.descriptions.json` by default */
     tokenDescriptions?: Readonly<Record<string, string>>;
     /** Applied in order, each to the output of the one before; none by default */
