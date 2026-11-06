@@ -96,6 +96,7 @@ export {
     parseTarget,
     readCommand,
     readEntry,
+    recordKeys,
     resolveTarget,
     validateOn
 } from './on/index.js';
@@ -105,6 +106,7 @@ export type {
     OnCommand,
     OnEntry,
     ParsedTarget,
+    RecordKey,
     ResolvedTree,
     SystemCommand,
     TreeNode,

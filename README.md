@@ -351,6 +351,18 @@ payload:
 
 The node is the one at the element's state path. An event the node's `on` does not mention does nothing.
 
+**Shape events.** A shape component (graphics) has no element, so its drawing raises the event for it, with a string
+`detail.shape` naming the shape's state path (`detail` is `{ shape, key, x, y }`, the position in drawing units). The
+dispatcher listens for the events of root and shape components alike. When `detail.shape` is below the state path of the
+element that raised the event, the `on` entry of that shape node runs, with the frames from the root down to it, so
+`^name` and `.path` resolve as for any node; a `shape` outside that subtree (or the element's own path) runs nothing and
+is reported as `SUI-RUN-DRAW` with the element's path. A copy of a `drawRepeat` (`<repeat>.rows.<key>`, or a shape inside
+one) is not a node: the entry of the matching node of the repeat's row template runs (`<repeat>.row…`), with `$row` at the
+record (`<repeat>.records` resolved, plus the record's key in the set as `recordKeys` gives it) and relative targets
+resolving against the frames down to the repeat, as the document check reads a row template. A copy whose record is gone
+runs nothing. `recordKeys(records)` (from `core`) is the rule the component library's row binder names its copies by: an
+array by distinct `id` (a path segment), else by index; a map by its keys.
+
 **Slots in the runtime branch.** An event raised by a node under `$.runtime.nodes` (a record-view slot, a table cell) runs
 the `on` entry of that runtime node. Its owner is the longest prefix of its app path that is a node of `$.app`; relative
 targets resolve against the owner's chain, and `$row` against the `row` alias of the nearest slot at or above the node
