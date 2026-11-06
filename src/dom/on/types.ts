@@ -3,7 +3,7 @@ import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
 import type { FileData, ReadFile } from '../../runtime/fileRead.js';
-import type { FileProgress, TransferFile } from '../../runtime/fileTransfer.js';
+import type { FileProgress, ReleaseFile, TransferFile } from '../../runtime/fileTransfer.js';
 import type { FileReference } from '../../runtime/messages.js';
 
 /** The event a component raises to hand a file to the host's `transferFile` hook; a controller cannot reach the hooks, so the dispatcher answers it. Bubbles and is composed */
@@ -39,6 +39,21 @@ export interface FileReadRequest {
     respond(result: Promise<FileData>): void;
 }
 
+/** The event a component raises to give a stored file back through the host's `releaseFile` hook. Bubbles and is composed */
+export const FILE_RELEASE_EVENT = 'ui-file-release';
+
+/**
+ * The `detail` of `ui-file-release`. The dispatcher calls `respond` once, synchronously, with the promise
+ * `hooks.releaseFile` returns, and stops the event. When the host gives no hook `respond` is never called, so a component
+ * treats an event that comes back unanswered as a release that cannot be made (the host's sweep removes the file once
+ * nothing references it)
+ */
+export interface FileReleaseRequest {
+    /** The id of the file's reference */
+    readonly id: string;
+    respond(result: Promise<void>): void;
+}
+
 /**
  * What a root component's `commands` object holds for one command: `value` is the command object's `value`
  * (absent when it has none; `$row` and `$row.path` are already read from the record), `payload` is the `detail`
@@ -70,6 +85,11 @@ export interface DispatchHooks {
      * the preview frame; absent when the app is mounted without a host that reads files
      */
     readFile?: ReadFile;
+    /**
+     * Gives a stored file back to the host (G2.5). Set by the runtime inside the preview frame; absent when the app is
+     * mounted without a host that takes files
+     */
+    releaseFile?: ReleaseFile;
     /** Called with every `SUI-RUN` error the dispatcher reports, after it is reported through `@punyts/core` */
     onError?(error: BuildError): void;
 }

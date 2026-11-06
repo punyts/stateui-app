@@ -8,10 +8,10 @@ export type { AppEventName } from '../core/types.js';
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'fileProgress', 'fileResult', 'fileData'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -55,8 +55,8 @@ export interface ProtocolError {
 }
 
 /**
- * The reasons a file transfer or read fails: what `fileResult` and `fileData` carry as `code`, and what `transferFile`
- * and `readFile` reject with
+ * The reasons a file transfer, read or release fails: what `fileResult`, `fileData` and `fileReleased` carry as
+ * `code`, and what `transferFile`, `readFile` and `releaseFile` reject with
  */
 export const FILE_ERROR_CODES = [
     'too_large',
@@ -227,6 +227,24 @@ export type FileDataMessage = Envelope<'fileData'> &
         | { requestId: number; ok: false; code: FileErrorCode; message: string }
     );
 
+/**
+ * A component gives a stored file back (`releaseFile`), so a field that saves often does not fill the app's quota.
+ * `requestId` is a positive integer the runtime makes; `id` is the file's id from its reference. The host answers with
+ * `fileReleased`
+ */
+export interface FileReleaseMessage extends Envelope<'fileRelease'> {
+    requestId: number;
+    id: string;
+}
+
+/**
+ * The answer to `fileRelease`: `ok: true` when the file is gone, was never there, or is kept by the host because the
+ * app or its live state still references it (the host's sweep removes it once nothing does); otherwise the reason. Not
+ * `fileResult`, whose `ok: true` form carries a file reference
+ */
+export type FileReleasedMessage = Envelope<'fileReleased'> &
+    ({ requestId: number; ok: true } | { requestId: number; ok: false; code: FileErrorCode; message: string });
+
 export type InboundMessage =
     | LoadMessage
     | WriteMessage
@@ -237,7 +255,8 @@ export type InboundMessage =
     | PingMessage
     | FileProgressMessage
     | FileResultMessage
-    | FileDataMessage;
+    | FileDataMessage
+    | FileReleasedMessage;
 export type OutboundMessage =
     | ReadyMessage
     | ChangeMessage
@@ -246,5 +265,6 @@ export type OutboundMessage =
     | PongMessage
     | FileMessage
     | FileCancelMessage
-    | FileReadMessage;
+    | FileReadMessage
+    | FileReleaseMessage;
 export type RuntimeMessage = InboundMessage | OutboundMessage;

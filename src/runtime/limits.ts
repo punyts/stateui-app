@@ -54,7 +54,10 @@ export const MAX_ICONS_BYTES = 256 * 1024;
 /** Largest file a component can hand to the host or read from it: the `data` buffer of a `file` or `fileData` message (10 MiB) */
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
-/** Largest JSON part of `file`, `fileCancel`, `fileProgress`, `fileResult`, `fileRead` and `fileData` (the `data` buffer is not counted) */
+/**
+ * Largest JSON part of `file`, `fileCancel`, `fileProgress`, `fileResult`, `fileRead`, `fileData`, `fileRelease` and
+ * `fileReleased` (the `data` buffer is not counted)
+ */
 export const MAX_FILE_JSON_BYTES = 2 * 1024;
 
 /** Longest file name, in characters */
@@ -68,6 +71,9 @@ export const MAX_FILE_ID_LENGTH = 128;
 
 /** How long `transferFile` waits for the host, in milliseconds: with no `fileProgress` or `fileResult` for this long it rejects with `offline` */
 export const FILE_IDLE_TIMEOUT_MS = 120_000;
+
+/** How long `releaseFile` waits for the host's `fileReleased`, in milliseconds; then it rejects with `offline`. The idle timeout of a transfer */
+export const FILE_RELEASE_TIMEOUT_MS = FILE_IDLE_TIMEOUT_MS;
 
 /** How long `readFile` waits for the host's `fileData`, in milliseconds; then it rejects with `offline` */
 export const FILE_READ_TIMEOUT_MS = 30_000;
@@ -94,5 +100,7 @@ export const MESSAGE_BYTE_LIMITS = {
     fileProgress: MAX_FILE_JSON_BYTES,
     fileResult: MAX_FILE_JSON_BYTES,
     fileRead: MAX_FILE_JSON_BYTES,
-    fileData: MAX_FILE_JSON_BYTES
+    fileData: MAX_FILE_JSON_BYTES,
+    fileRelease: MAX_FILE_JSON_BYTES,
+    fileReleased: MAX_FILE_JSON_BYTES
 } as const;

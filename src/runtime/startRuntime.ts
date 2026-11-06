@@ -27,6 +27,7 @@ import type {
     EventMessage,
     FileDataMessage,
     FileProgressMessage,
+    FileReleasedMessage,
     FileResultMessage,
     IconsMap,
     InboundMessage,
@@ -175,8 +176,9 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
  * linked to) never leaves the frame: such a change is not posted, and it is cut out of the value of a change above it.
  * It posts `emit` from the dispatcher hook and `error` for validation and runtime errors.
  *
- * Files: the dispatcher's `transferFile` hook posts `file` (answered by `fileProgress` and `fileResult`) and its
- * `readFile` hook posts `fileRead` (answered by `fileData`). The bytes of read files are kept by id across loads
+ * Files: the dispatcher's `transferFile` hook posts `file` (answered by `fileProgress` and `fileResult`), its
+ * `readFile` hook posts `fileRead` (answered by `fileData`) and its `releaseFile` hook posts `fileRelease` (answered by
+ * `fileReleased`; the cached bytes of a released file are dropped). The bytes of read files are kept by id across loads
  * (`createFileReads`, at most `FILE_CACHE_BYTES`) and released a moment after a change once no value of the shell,
  * the screens or the data holds the id any more; `dispose` cancels the waiting reads and drops them all.
  *
@@ -215,7 +217,8 @@ export function startRuntime(
         sendFile: (message) => post({ type: 'file', ...message }, [message.data]),
         sendCancel: (requestId) => {
             post({ type: 'fileCancel', requestId });
-        }
+        },
+        sendRelease: (requestId, id) => post({ type: 'fileRelease', requestId, id })
     });
 
     /**
@@ -386,6 +389,8 @@ export function startRuntime(
                 {
                     transferFile: files.transferFile,
                     readFile: reads.readFile,
+                    // A file given back is gone from the host, so its cached bytes go too
+                    releaseFile: (id) => files.releaseFile(id).then(() => reads.forget(id)),
                     onEmit(name, payload) {
                         const json = payload === undefined ? undefined : toJson(payload);
                         post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
@@ -518,6 +523,9 @@ export function startRuntime(
                 return;
             case 'fileData':
                 reads.data(message as FileDataMessage);
+                return;
+            case 'fileReleased':
+                files.released(message as FileReleasedMessage);
                 return;
             case 'ping':
                 post({ type: 'pong', id: message.id });

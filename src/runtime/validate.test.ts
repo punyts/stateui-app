@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileResult', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
         );
     });
 
@@ -37,7 +37,10 @@ describe('runtime message validator', () => {
         base('fileResult', { requestId: 1, ok: false, code: 'quota', message: 'Full' }),
         base('fileRead', { requestId: 1, id: '0b6e8c1a-3f1e-4a52-9a43-2f4f1c8f2d10' }),
         base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a.png', size: 3, type: 'image/png' }, data: new ArrayBuffer(3) }),
-        base('fileData', { requestId: 1, ok: false, code: 'not_found', message: 'Gone' })
+        base('fileData', { requestId: 1, ok: false, code: 'not_found', message: 'Gone' }),
+        base('fileRelease', { requestId: 1, id: '0b6e8c1a-3f1e-4a52-9a43-2f4f1c8f2d10' }),
+        base('fileReleased', { requestId: 1, ok: true }),
+        base('fileReleased', { requestId: 1, ok: false, code: 'offline', message: 'Gone' })
     ])('should accept a valid $type message', (value) => {
         expect(validateMessage(value).ok).toBe(true);
     });
@@ -81,7 +84,17 @@ describe('runtime message validator', () => {
         ['fileData without data', base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' } })],
         ['fileData with an extra field', base('fileData', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' }, data: new ArrayBuffer(3), more: 1 })],
         ['fileData with an unknown code', base('fileData', { requestId: 1, ok: false, code: 'nope', message: 'm' })],
-        ['failed fileData with data', base('fileData', { requestId: 1, ok: false, code: 'internal', message: 'm', data: new ArrayBuffer(1) })]
+        ['failed fileData with data', base('fileData', { requestId: 1, ok: false, code: 'internal', message: 'm', data: new ArrayBuffer(1) })],
+        ['fileRelease without an id', base('fileRelease', { requestId: 1 })],
+        ['fileRelease with an empty id', base('fileRelease', { requestId: 1, id: '' })],
+        ['fileRelease with a long id', base('fileRelease', { requestId: 1, id: 'x'.repeat(129) })],
+        ['fileRelease with requestId 0', base('fileRelease', { requestId: 0, id: 'f' })],
+        ['fileRelease with an extra field', base('fileRelease', { requestId: 1, id: 'f', more: 1 })],
+        ['fileReleased with a file reference', base('fileReleased', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' } })],
+        ['fileReleased without ok', base('fileReleased', { requestId: 1 })],
+        ['fileReleased without a requestId', base('fileReleased', { ok: true })],
+        ['fileReleased with an unknown code', base('fileReleased', { requestId: 1, ok: false, code: 'nope', message: 'm' })],
+        ['failed fileReleased without a message', base('fileReleased', { requestId: 1, ok: false, code: 'internal' })]
     ])('should reject %s as invalid', (_name, value) => {
         expect(validateMessage(value)).toEqual({ ok: false, reason: 'invalid' });
     });
@@ -104,6 +117,13 @@ describe('runtime message validator', () => {
         expect(validateMessage(base('fileRead', { requestId: 1, id: 'x'.repeat(3000) }))).toEqual({ ok: false, reason: 'oversized' });
         expect(MESSAGE_BYTE_LIMITS.fileRead).toBe(2 * 1024);
         expect(MESSAGE_BYTE_LIMITS.fileData).toBe(2 * 1024);
+    });
+
+    it('should report a fileRelease and a fileReleased over the JSON limit as oversized, with the small file limit', () => {
+        expect(validateMessage(base('fileRelease', { requestId: 1, id: 'x'.repeat(3000) }))).toEqual({ ok: false, reason: 'oversized' });
+        expect(validateMessage(base('fileReleased', { requestId: 1, ok: false, code: 'internal', message: 'x'.repeat(3000) }))).toEqual({ ok: false, reason: 'oversized' });
+        expect(MESSAGE_BYTE_LIMITS.fileRelease).toBe(2 * 1024);
+        expect(MESSAGE_BYTE_LIMITS.fileReleased).toBe(2 * 1024);
     });
 
     it('should treat a value that cannot be serialised as oversized or invalid, never throw', () => {

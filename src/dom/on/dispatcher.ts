@@ -9,8 +9,8 @@ import { runtimePath } from '../../core/links/index.js';
 import { RESERVED_KEYS } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import type { CommandContext } from './commands.js';
-import { FILE_READ_EVENT, FILE_TRANSFER_EVENT } from './types.js';
-import type { Dispatcher, DispatcherOptions, FileReadRequest, FileTransferRequest } from './types.js';
+import { FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT } from './types.js';
+import type { Dispatcher, DispatcherOptions, FileReadRequest, FileReleaseRequest, FileTransferRequest } from './types.js';
 
 const DEFAULT_ROOT = '$.app';
 const RUNTIME_NODES = '$.runtime.nodes.';
@@ -44,6 +44,12 @@ function isFileTransfer(value: unknown): value is FileTransferRequest {
 function isFileRead(value: unknown): value is FileReadRequest {
     if (typeof value !== 'object' || value === null) return false;
     const request = value as Partial<FileReadRequest>;
+    return typeof request.id === 'string' && request.id.length > 0 && typeof request.respond === 'function';
+}
+
+function isFileRelease(value: unknown): value is FileReleaseRequest {
+    if (typeof value !== 'object' || value === null) return false;
+    const request = value as Partial<FileReleaseRequest>;
     return typeof request.id === 'string' && request.id.length > 0 && typeof request.respond === 'function';
 }
 
@@ -239,9 +245,18 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         request.respond(hooks.readFile(id, signal === undefined ? {} : { signal }));
     }
 
+    /** Answers `ui-file-release` with the host's `releaseFile` hook; without one the event is left unanswered */
+    function release(event: Event): void {
+        const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
+        if (!isFileRelease(request) || !hooks?.releaseFile) return;
+        event.stopPropagation();
+        request.respond(hooks.releaseFile(request.id));
+    }
+
     for (const name of names) host.addEventListener(name, handle, true);
     host.addEventListener(FILE_TRANSFER_EVENT, transfer);
     host.addEventListener(FILE_READ_EVENT, read);
+    host.addEventListener(FILE_RELEASE_EVENT, release);
 
     return {
         raise(name, payload): void {
@@ -252,6 +267,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             for (const name of names) host.removeEventListener(name, handle, true);
             host.removeEventListener(FILE_TRANSFER_EVENT, transfer);
             host.removeEventListener(FILE_READ_EVENT, read);
+            host.removeEventListener(FILE_RELEASE_EVENT, release);
         }
     };
 }

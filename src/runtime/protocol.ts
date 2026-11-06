@@ -15,6 +15,8 @@ export type {
     FileMessage,
     FileProgressMessage,
     FileReadMessage,
+    FileReleaseMessage,
+    FileReleasedMessage,
     FileReference,
     FileResultMessage,
     IconData,

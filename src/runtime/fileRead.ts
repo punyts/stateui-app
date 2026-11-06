@@ -41,6 +41,8 @@ export interface FileReads {
     data(message: FileDataMessage): void;
     /** Drops the cached files no node uses (`usedIds`) */
     release(): void;
+    /** Drops the cached bytes of one file, such as one given back with `releaseFile`; the next read asks the host */
+    forget(id: string): void;
     /** The ids of the cached files, least recently read first */
     cached(): string[];
     /** Rejects every waiting read with `cancelled` and empties the cache */
@@ -188,6 +190,9 @@ export function createFileReads(port: FileReadPort, options: FileReadsOptions = 
         },
         release(): void {
             for (const key of unused()) drop(key);
+        },
+        forget(id): void {
+            drop(id.toLowerCase());
         },
         cached: () => [...cache.keys()],
         cancelAll(): void {

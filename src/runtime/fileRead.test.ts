@@ -217,6 +217,23 @@ describe('file reads', () => {
         expect(reads.cached()).toEqual([ids[0], ids[3], ids[2]]);
     });
 
+    it('should forget one file by id, in any case, and leave the others', async () => {
+        // Arrange
+        const { reads } = setup();
+        const first = reads.readFile(ID);
+        reads.data(answer(1, ID, bytes(1)));
+        await first;
+        const second = reads.readFile(OTHER);
+        reads.data(answer(2, OTHER, bytes(2)));
+        await second;
+
+        // Act
+        reads.forget(ID.toUpperCase());
+
+        // Assert
+        expect(reads.cached()).toEqual([OTHER]);
+    });
+
     it('should not keep a file larger than the whole cache, and cancelAll should reject waiting reads and empty the cache', async () => {
         // Arrange
         const { reads } = setup({ cacheBytes: 1 });

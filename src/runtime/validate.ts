@@ -213,7 +213,9 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['loaded'] as number) <= (m['total'] as number),
     fileResult: isFileResult,
     fileRead: (m) => hasOnlyKeys(m, ['requestId', 'id']) && isPositiveInteger(m['requestId']) && isText(m['id'], MAX_FILE_ID_LENGTH),
-    fileData: isFileData
+    fileData: isFileData,
+    fileRelease: (m) => hasOnlyKeys(m, ['requestId', 'id']) && isPositiveInteger(m['requestId']) && isText(m['id'], MAX_FILE_ID_LENGTH),
+    fileReleased: (m) => (m['ok'] === true ? hasOnlyKeys(m, ['requestId', 'ok']) && isPositiveInteger(m['requestId']) : isFileResult(m))
 };
 
 function isMessageType(value: unknown): value is MessageType {
