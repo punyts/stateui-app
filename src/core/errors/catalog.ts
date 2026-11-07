@@ -223,6 +223,7 @@ export const ERROR_CATALOG = {
     'SUI-RUN-CAP': {
         template: 'The {component} at {path} has {actual} records, more than the {limit} the {name} renderer draws; only the first {limit} are drawn'
     },
+    'SUI-RUN-FILE': { template: 'The {component} at {path} cannot use its file: {reason}' },
     'SUI-RUN-CLIPPED': {
         template: 'Rows of "{component}" at {path} are {limit}px tall but a row needs {actual}px, so its content is cut off; set rowHeight, or the recordlist.row token in the node theme',
         severity: 'warning'

@@ -254,7 +254,7 @@ describe('parseShape', () => {
         });
 
         it('should hold exactly the closed set of validator names', () => {
-            expect(Object.keys(VALIDATORS)).toEqual(['oneOf', 'pattern', 'regex', 'range', 'length', 'color', 'pathData', 'points', 'vector', 'fields', 'fileRef']);
+            expect(Object.keys(VALIDATORS)).toEqual(['oneOf', 'eachOf', 'pattern', 'regex', 'range', 'length', 'color', 'pathData', 'points', 'vector', 'fields', 'fileRef']);
         });
 
         it.each([

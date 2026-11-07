@@ -60,6 +60,7 @@ describe('error catalog', () => {
             'SUI-RUN-WRITE',
             'SUI-RUN-DRAW',
             'SUI-RUN-CAP',
+            'SUI-RUN-FILE',
             'SUI-RUN-CLIPPED',
             'SUI-LINK-ROW',
             'SUI-LINK-TARGET',

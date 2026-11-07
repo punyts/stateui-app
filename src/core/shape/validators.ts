@@ -197,8 +197,13 @@ function isImageDataUrl(value: string, types: readonly string[]): boolean {
     return head[3] === undefined || BASE64.test(value.slice(head[0].length));
 }
 
+/**
+ * True when the value is a file reference of a listed type. A string is a `data:` URL of a listed image type with
+ * `dataUrl`; without it a `data:` URL is refused and any other string is not a file, so it is left to the property's
+ * other validators (a colour or a file: `color` checks the string, `fileRef` the reference)
+ */
 function isFileRef(value: JsonValue, options: FileRefOptions): boolean {
-    if (typeof value === 'string') return options.dataUrl === true && isImageDataUrl(value, options.types);
+    if (typeof value === 'string') return options.dataUrl === true ? isImageDataUrl(value, options.types) : !/^\s*data:/i.test(value);
     if (!isObject(value)) return true;
     if (Object.keys(value).some((key) => !FILE_REF_KEYS.includes(key))) return false;
     const { id, name, size, type } = value;
@@ -218,15 +223,25 @@ function isObjectFieldType(value: JsonValue | undefined): value is ObjectFieldTy
     return (OBJECT_FIELD_TYPES as readonly unknown[]).includes(value);
 }
 
-/** Reads the validators of one field: only the field validators, each well formed and applying to the field's type */
-function parseFieldValidators(options: JsonValue, type: ObjectFieldType): FieldValidators | undefined {
+/** The types of a field's `type`: a type, or a non-empty list of distinct types; undefined for anything else */
+function parseFieldTypes(type: JsonValue | undefined): ObjectFieldType[] | undefined {
+    if (isObjectFieldType(type)) return [type];
+    if (!Array.isArray(type) || type.length === 0 || !type.every(isObjectFieldType)) return undefined;
+    return new Set(type).size === type.length ? type : undefined;
+}
+
+/** The types a field's value may have */
+const fieldTypes = (field: ObjectField): readonly ObjectFieldType[] => (Array.isArray(field.type) ? field.type : [field.type]);
+
+/** Reads the validators of one field: only the field validators, each well formed and applying to one of the field's types */
+function parseFieldValidators(options: JsonValue, types: readonly ObjectFieldType[]): FieldValidators | undefined {
     if (!isObject(options)) return undefined;
     const parsed: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(options)) {
         if (!(FIELD_VALIDATOR_NAMES as readonly string[]).includes(name)) return undefined;
         const rule = VALIDATORS[name as keyof FieldValidators] as ValidatorRule<ValidatorName>;
         const result = rule.parse(value);
-        if (result === undefined || !rule.applies(type)) return undefined;
+        if (result === undefined || !types.some((type) => rule.applies(type))) return undefined;
         parsed[name] = result;
     }
     return parsed as FieldValidators;
@@ -235,10 +250,11 @@ function parseFieldValidators(options: JsonValue, type: ObjectFieldType): FieldV
 function parseObjectField(options: JsonValue): ObjectField | undefined {
     if (!isObject(options) || Object.keys(options).some((key) => !OBJECT_FIELD_KEYS.includes(key))) return undefined;
     const { type, values, required, validators } = options;
-    if (!isObjectFieldType(type)) return undefined;
-    const field: ObjectField = { type };
+    const types = parseFieldTypes(type);
+    if (types === undefined) return undefined;
+    const field: ObjectField = { type: types.length === 1 ? types[0]! : types };
     if (values !== undefined) {
-        if (!Array.isArray(values) || values.length === 0 || !values.every((value) => fitsFieldType(type, value))) return undefined;
+        if (!Array.isArray(values) || values.length === 0 || !values.every((value) => types.some((one) => fitsFieldType(one, value)))) return undefined;
         field.values = values;
     }
     if (required !== undefined) {
@@ -246,7 +262,7 @@ function parseObjectField(options: JsonValue): ObjectField | undefined {
         field.required = required;
     }
     if (validators !== undefined) {
-        const parsed = parseFieldValidators(validators, type);
+        const parsed = parseFieldValidators(validators, types);
         if (parsed === undefined) return undefined;
         field.validators = parsed;
     }
@@ -271,10 +287,20 @@ function fitsFieldType(type: ObjectFieldType, value: JsonValue): boolean {
     return kindOf(value) === type;
 }
 
+/**
+ * True when a value fits a field: it has one of the field's types, it is one of `values` when they hold an entry of
+ * that type, and it passes each validator that applies to that type (with one type, every validator applies)
+ */
 function fitsField(field: ObjectField, value: JsonValue): boolean {
-    if (!fitsFieldType(field.type, value)) return false;
-    if (field.values !== undefined && !field.values.some((allowed) => sameJson(allowed, value))) return false;
-    return field.validators === undefined || passesValidators(value, field.validators);
+    const type = fieldTypes(field).find((one) => fitsFieldType(one, value));
+    if (type === undefined) return false;
+    const values = field.values?.filter((allowed) => fitsFieldType(type, allowed)) ?? [];
+    if (values.length > 0 && !values.some((allowed) => sameJson(allowed, value))) return false;
+    for (const [name, options] of Object.entries(field.validators ?? {})) {
+        const rule = VALIDATORS[name as keyof FieldValidators] as ValidatorRule<ValidatorName>;
+        if (rule.applies(type) && !rule.check(value, options as never)) return false;
+    }
+    return true;
 }
 
 function hasFields(value: JsonValue, fields: Record<string, ObjectField>): boolean {
@@ -292,6 +318,11 @@ export const VALIDATORS: { [K in ValidatorName]: ValidatorRule<K> } = {
         parse: (options) => (Array.isArray(options) && options.length > 0 ? options : undefined),
         applies: () => true,
         check: (value, options) => options.some((option) => sameJson(option, value))
+    },
+    eachOf: {
+        parse: (options) => (Array.isArray(options) && options.length > 0 ? options : undefined),
+        applies: (type) => type === 'array',
+        check: (value, options) => !Array.isArray(value) || value.every((entry) => options.some((option) => sameJson(option, entry)))
     },
     pattern: {
         parse: (options) => (typeof options === 'string' && compile(options) !== undefined ? options : undefined),

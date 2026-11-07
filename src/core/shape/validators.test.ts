@@ -213,6 +213,40 @@ describe('graphics validators', () => {
         ])('should refuse %s', (_, value) => {
             expect(passes(shape, value)).toBe(false);
         });
+
+        describe('a field of several types', () => {
+            // As `transition.duration`: a number of milliseconds or a `motion.duration.*` name
+            const duration = shapeWith('object', {
+                fields: { duration: { type: ['number', 'string'], values: ['fast', 'base', 'slow'], validators: { range: { min: 0, max: 60000 } } } }
+            });
+
+            it('should accept a value of either type that passes what applies to its type', () => {
+                expect(passes(duration, { duration: 0 })).toBe(true);
+                expect(passes(duration, { duration: 250 })).toBe(true);
+                expect(passes(duration, { duration: 'base' })).toBe(true);
+            });
+
+            it.each([
+                ['a string that is not one of the values', { duration: 'medium' }],
+                ['a number that fails range', { duration: -1 }],
+                ['a number over range', { duration: 60001 }],
+                ['a value of neither type', { duration: true }]
+            ])('should refuse %s', (_, value) => {
+                expect(passes(duration, value)).toBe(false);
+            });
+
+            it.each([
+                ['an empty type list', { type: [] }],
+                ['a repeated type', { type: ['number', 'number'] }],
+                ['an unknown type in the list', { type: ['number', 'date'] }],
+                ['a value that fits none of the types', { type: ['number', 'string'], values: [true] }],
+                ['a validator that applies to none of the types', { type: ['number', 'boolean'], validators: { color: true } }]
+            ])('should refuse a shape whose field has %s as SUI-BUILD-SHAPE', (_, field) => {
+                const result = parseShape({ summary: 'A test shape', properties: { value: { type: 'object', validators: { fields: { a: field } } } } }, FILE);
+
+                expect(result.errors.map((error) => error.code)).toEqual(['SUI-BUILD-SHAPE']);
+            });
+        });
     });
 
     describe('fileRef', () => {
@@ -253,6 +287,17 @@ describe('graphics validators', () => {
             expect(passes(either, value)).toBe(false);
         });
 
+        it('should leave a string that is not a data URL to the other validators without dataUrl (G2.9b)', () => {
+            const background = shapeWith(['string', 'object'], { color: true, fileRef: { types: ['image/png'] } });
+
+            expect(passes(background, '#ff0000')).toBe(true);
+            expect(passes(background, '{color.surface.base}')).toBe(true);
+            expect(passes(background, 'not a colour')).toBe(false);
+            expect(passes(background, 'data:image/png;base64,iVBORw0KGgo=')).toBe(false);
+            expect(passes(background, { id: UUID, name: 'a.png', size: 1, type: 'image/png' })).toBe(true);
+            expect(passes(background, { id: UUID, name: 'a.txt', size: 1, type: 'text/plain' })).toBe(false);
+        });
+
         it('should still check a file reference on a property that is a string or an object', () => {
             expect(passes(either, { id: UUID, name: 'm.glb', size: 9, type: 'model/gltf-binary' })).toBe(true);
             expect(passes(either, { id: UUID, name: 'm.glb', size: 9, type: 'model/gltf' })).toBe(false);
@@ -269,5 +314,31 @@ describe('graphics validators', () => {
         expect(VALIDATORS.color.check(5, true)).toBe(true);
         expect(VALIDATORS.points.check('x', true)).toBe(true);
         expect(VALIDATORS.fields.check([], { a: { type: 'number' } })).toBe(true);
+    });
+});
+
+describe('eachOf', () => {
+    const shape = shapeWith('array', { eachOf: ['brush', 'eraser', 'fill'] });
+
+    it('should accept a list whose every entry is one of the options, and an empty list', () => {
+        expect(passes(shape, ['brush'])).toBe(true);
+        expect(passes(shape, ['fill', 'brush', 'eraser'])).toBe(true);
+        expect(passes(shape, [])).toBe(true);
+    });
+
+    it('should refuse a list with an entry that is not one of the options as SUI-STATE-INVALID', () => {
+        const errors = validateNode(shape, { component: 'testShape', value: ['brush', 'spray'] }, '$.app.children.paint');
+
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatchObject({ code: 'SUI-STATE-INVALID', statePath: '$.app.children.paint.value' });
+        expect(passes(shape, ['brush', 3])).toBe(false);
+    });
+
+    it('should refuse options that are not a non-empty list, and a type that is not an array, as SUI-BUILD-SHAPE', () => {
+        const empty = parseShape({ summary: 'A test shape', properties: { value: { type: 'array', validators: { eachOf: [] } } } }, FILE);
+        const string = parseShape({ summary: 'A test shape', properties: { value: { type: 'string', validators: { eachOf: ['a'] } } } }, FILE);
+
+        expect(empty.errors.map((error) => error.code)).toEqual(['SUI-BUILD-SHAPE']);
+        expect(string.errors.map((error) => error.code)).toEqual(['SUI-BUILD-SHAPE']);
     });
 });

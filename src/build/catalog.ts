@@ -211,9 +211,10 @@ function fieldSample(field: ObjectField): JsonValue {
     const validators = field.validators ?? {};
     if (field.values !== undefined) return field.values[0] as JsonValue;
     if (validators.oneOf !== undefined) return validators.oneOf[0] as JsonValue;
-    const graphics = graphicsSample(field.type, validators);
+    // A field of several types (`transition.duration`) is sampled as its first
+    const type = Array.isArray(field.type) ? field.type[0]! : field.type;
+    const graphics = graphicsSample(type, validators);
     if (graphics !== undefined) return graphics;
-    const type = field.type;
     if (type === 'number') return validators.range?.min ?? validators.range?.max ?? 0;
     if (type === 'string') return '';
     if (type === 'boolean') return false;

@@ -38,7 +38,12 @@ export type FieldValidators = Pick<ValidatorOptions, 'color' | 'pathData' | 'poi
 
 /** One field of an object checked by the `fields` validator */
 export interface ObjectField {
-    type: ObjectFieldType;
+    /**
+     * The type of the value, or a list of types it may have (`["number", "string"]`: `transition.duration` is a number
+     * of milliseconds or a `motion.duration.*` name). With a list, `values` restricts only a value of a type its
+     * entries have, and each validator checks only a value of a type it applies to
+     */
+    type: ObjectFieldType | ObjectFieldType[];
     /** The allowed values; absent means any value of the type */
     values?: JsonValue[];
     /** True when the object must hold the field; absent means optional */
@@ -58,6 +63,8 @@ export interface FileRefOptions {
 /** The options of each named validator. The set of names is closed */
 export interface ValidatorOptions {
     oneOf?: JsonValue[];
+    /** The value is a list whose every entry is one of these values (an empty list passes; add `length` for a minimum) */
+    eachOf?: JsonValue[];
     pattern?: string;
     /** The value is itself a regular expression of at most this many characters (1 to `MAX_PATTERN_LENGTH`) that compiles and has no nested quantifier */
     regex?: number;
