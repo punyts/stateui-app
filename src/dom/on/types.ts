@@ -3,6 +3,7 @@ import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
 import type { FileData, ReadFile } from '../../runtime/fileRead.js';
+import type { Load3d, Scene3dChunk } from '../../runtime/load3d.js';
 import type { FileProgress, ReleaseFile, TransferFile } from '../../runtime/fileTransfer.js';
 import type { FileReference } from '../../runtime/messages.js';
 
@@ -54,6 +55,19 @@ export interface FileReleaseRequest {
     respond(result: Promise<void>): void;
 }
 
+/** The event a `scene3d` raises to get the 3D renderer chunk through the host's `load3d` hook (G3.3). Bubbles and is composed */
+export const LOAD_3D_EVENT = 'ui-load-3d';
+
+/**
+ * The `detail` of `ui-load-3d`. The dispatcher calls `respond` once, synchronously, with the promise `hooks.load3d`
+ * returns (it resolves with `globalThis.__stateui3d` and rejects with a `Load3dError`), and stops the event. When the
+ * host gives no hook (no chunk is served) `respond` is never called, so the scene treats an event that comes back
+ * unanswered as a renderer it cannot load and shows its `_fallback`
+ */
+export interface Load3dRequest {
+    respond(result: Promise<Scene3dChunk>): void;
+}
+
 /**
  * What a root component's `commands` object holds for one command: `value` is the command object's `value`
  * (absent when it has none; `$row` and `$row.path` are already read from the record), `payload` is the `detail`
@@ -90,6 +104,11 @@ export interface DispatchHooks {
      * mounted without a host that takes files
      */
     releaseFile?: ReleaseFile;
+    /**
+     * Loads the 3D renderer chunk and resolves with `globalThis.__stateui3d` (G3.3). Set by the runtime inside the
+     * preview frame when the host named a `3d` chunk in `load`; absent otherwise
+     */
+    load3d?: Load3d;
     /** Called with every `SUI-RUN` error the dispatcher reports, after it is reported through `@punyts/core` */
     onError?(error: BuildError): void;
 }

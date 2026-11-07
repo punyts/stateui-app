@@ -49,6 +49,10 @@ export const ERROR_CATALOG = {
     'SUI-DOC-LIMIT-DEPTH': { template: 'Nodes nest {actual} levels deep at {path}; the limit is {limit}' },
     'SUI-DOC-LIMIT-BYTES': { template: 'The document is {actual} bytes; the limit is {limit}' },
     'SUI-DOC-LIMIT-DATA': { template: 'The data branch is {actual} bytes; the limit is {limit}' },
+    'SUI-DOC-LIMIT-SCENES': {
+        template: 'One page at {path} shows {actual} scene3d nodes; Chromium keeps at most {limit} WebGL contexts per page, so the oldest scenes show their _fallback text',
+        severity: 'warning'
+    },
     'SUI-NODE-UNKNOWN': { template: 'Unknown component "{component}" at {path}' },
     'SUI-NODE-CYCLE': { template: 'Composed component "{component}" contains itself at {path}' },
     'SUI-NODE-MISSING': { template: 'No node at {path}' },
@@ -224,6 +228,7 @@ export const ERROR_CATALOG = {
         template: 'The {component} at {path} has {actual} records, more than the {limit} the {name} renderer draws; only the first {limit} are drawn'
     },
     'SUI-RUN-FILE': { template: 'The {component} at {path} cannot use its file: {reason}' },
+    'SUI-RUN-3D': { template: 'The {component} at {path} cannot draw in 3D: {reason}' },
     'SUI-RUN-CLIPPED': {
         template: 'Rows of "{component}" at {path} are {limit}px tall but a row needs {actual}px, so its content is cut off; set rowHeight, or the recordlist.row token in the node theme',
         severity: 'warning'

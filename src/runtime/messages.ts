@@ -105,9 +105,18 @@ export interface RuntimeChange {
 }
 
 /**
+ * The scripts beside the runtime page that the runtime may load on demand, each named by its content hash: `3d` is
+ * the renderer of `@punyts/stateui-3d`, loaded by the first `scene3d` that mounts (`load3d`)
+ */
+export interface RuntimeChunks {
+    '3d'?: string;
+}
+
+/**
  * Mounts the application: the document, the state to load over it, the icons it uses beyond the core set and the
  * mode (`standalone` when absent). `instance` is a persona's instance, laid over the definition as `mountApp` lays
- * `MountOptions.instance` (the shell, the screens, the data and the route)
+ * `MountOptions.instance` (the shell, the screens, the data and the route), and `chunks` names the chunk scripts the
+ * host serves beside the runtime page
  */
 export interface LoadMessage extends Envelope<'load'> {
     document: AppDocument;
@@ -115,6 +124,8 @@ export interface LoadMessage extends Envelope<'load'> {
     state?: StateSnapshotData;
     instance?: AppInstance;
     icons?: IconsMap;
+    /** The chunk scripts the host serves (`RuntimeChunks`); without `3d` a scene shows its `_fallback` */
+    chunks?: RuntimeChunks;
 }
 
 /** Path writes for `$.data` and `$.app`, with the icons the new revision uses for the first time */

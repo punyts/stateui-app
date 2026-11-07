@@ -13,6 +13,8 @@ describe('runtime message validator', () => {
     it.each([
         base('load', { document: { app: { component: 'panel' } }, state: { data: {}, app: {} }, icons: { a: { outline: ['M0 0'] } } }),
         base('load', { document: { app: { component: 'panel' } }, mode: 'full' }),
+        base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '0123456789abcdef' } }),
+        base('load', { document: { app: { component: 'panel' } }, chunks: {} }),
         base('load', {
             document: { app: { component: 'panel' } },
             instance: { app: {}, screens: { home: {} }, route: { screen: 'home', params: { id: 'p1' } }, theme: { active: { mode: 'dark' } }, data: { bag: {} } }
@@ -51,6 +53,11 @@ describe('runtime message validator', () => {
         ['no nonce', { v: 1, type: 'ping', id: 1 }],
         ['extra field', base('ping', { id: 1, more: true })],
         ['load without app', base('load', { document: {} })],
+        ['load with a chunk hash that is too short', base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '0123456789abcde' } })],
+        ['load with an upper-case chunk hash', base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '0123456789ABCDEF' } })],
+        ['load with a chunk path', base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '../0123456789abcd' } })],
+        ['load with an unknown chunk', base('load', { document: { app: { component: 'panel' } }, chunks: { '2d': '0123456789abcdef' } })],
+        ['load with chunks that are not an object', base('load', { document: { app: { component: 'panel' } }, chunks: ['0123456789abcdef'] })],
         ['load with an unknown mode', base('load', { document: { app: { component: 'panel' } }, mode: 'cloud' })],
         ['load with an instance without screens', base('load', { document: { app: { component: 'panel' } }, instance: { app: {} } })],
         ['load with a route without a screen', base('load', { document: { app: { component: 'panel' } }, instance: { app: {}, screens: {}, route: { params: {} } } })],

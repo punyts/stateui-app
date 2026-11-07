@@ -556,6 +556,88 @@ describe('ui-file-read in Chromium', () => {
     });
 });
 
+describe('ui-load-3d in Chromium', () => {
+    const chunk = { version: '0.1.0', createScene3d: () => ({}) };
+
+    afterEach(() => {
+        setNodeResolver(undefined);
+        for (const host of Array.from(document.body.children)) unmount(host);
+        document.body.replaceChildren();
+    });
+
+    function request() {
+        const respond = vi.fn<(result: Promise<unknown>) => void>();
+        return { respond, detail: { respond } };
+    }
+
+    it('should respond with the promise of hooks.load3d and stop the event', async () => {
+        // Arrange
+        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const load3d = vi.fn(() => Promise.resolve(chunk));
+        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, load3d } });
+        const outside = vi.fn();
+        document.body.addEventListener('ui-load-3d', outside);
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        expect(load3d).toHaveBeenCalledTimes(1);
+        expect(respond).toHaveBeenCalledTimes(1);
+        await expect(respond.mock.calls[0]?.[0]).resolves.toBe(chunk);
+        expect(outside).not.toHaveBeenCalled();
+        document.body.removeEventListener('ui-load-3d', outside);
+        dispatcher.dispose();
+    });
+
+    it('should hand on the rejection of hooks.load3d', async () => {
+        // Arrange
+        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const failure = Object.assign(new Error('The 3D chunk script could not be loaded'), { code: 'load_failed' });
+        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, load3d: () => Promise.reject(failure) } });
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        await expect(respond.mock.calls[0]?.[0]).rejects.toBe(failure);
+        dispatcher.dispose();
+    });
+
+    it('should leave the request unanswered when the host gives no load3d hook', () => {
+        // Arrange
+        const { element } = mountApp(panel({ b: { component: 'button' } }));
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a detail without respond and stop listening after dispose', () => {
+        // Arrange
+        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const load3d = vi.fn(() => Promise.resolve(chunk));
+        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { load3d } });
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', { respond: 'no' });
+        raise(element('$.app.children.b'), 'ui-load-3d');
+        second.dispose();
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        expect(load3d).not.toHaveBeenCalled();
+        expect(respond).not.toHaveBeenCalled();
+        dispatcher.dispose();
+    });
+});
+
 describe('shape events from a drawing in Chromium', () => {
     const MAP = '$.app.children.map';
     const SEATS = `${MAP}.children.seats`;

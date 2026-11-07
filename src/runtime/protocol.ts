@@ -35,6 +35,7 @@ export type {
     ProtocolError,
     ReadyMessage,
     RuntimeChange,
+    RuntimeChunks,
     RuntimeMessage,
     RuntimeMode,
     StateSnapshotData,

@@ -1,5 +1,7 @@
 import { isIconsMap } from './icons.js';
 import {
+    CHUNK_HASH_PATTERN,
+    CHUNK_NAMES,
     MAX_CHANGE_ID_LENGTH,
     MAX_ERROR_TEXT,
     MAX_ERRORS,
@@ -67,6 +69,12 @@ function isInstance(value: unknown): boolean {
     const theme = value['theme'];
     if (theme !== undefined && !(isRecord(theme) && hasOnlyKeys(theme, ['active']) && (theme['active'] === undefined || isRecord(theme['active'])))) return false;
     return value['data'] === undefined || isRecord(value['data']);
+}
+
+/** The `chunks` of a `load`: an object of known chunk names (`CHUNK_NAMES`), each a hash of 16 lower-case hex characters */
+function isChunks(value: unknown): boolean {
+    if (!isRecord(value)) return false;
+    return Object.entries(value).every(([name, hash]) => (CHUNK_NAMES as readonly string[]).includes(name) && typeof hash === 'string' && CHUNK_HASH_PATTERN.test(hash));
 }
 
 function isSafePath(path: unknown, pattern: RegExp): path is string {
@@ -165,13 +173,14 @@ function isFileData(m: Record<string, unknown>): boolean {
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
-        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode']) &&
+        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks']) &&
         (m['mode'] === undefined || MODES.includes(m['mode'] as string)) &&
         isJsonObject(m['document']) &&
         isRecord(m['document']['app']) &&
         (m['state'] === undefined || (isRecord(m['state']) && isStateSnapshot(m['state']))) &&
         (m['instance'] === undefined || isInstance(m['instance'])) &&
-        (m['icons'] === undefined || isIconsMap(m['icons'])),
+        (m['icons'] === undefined || isIconsMap(m['icons'])) &&
+        (m['chunks'] === undefined || isChunks(m['chunks'])),
     write: (m) =>
         hasOnlyKeys(m, ['writes', 'icons']) &&
         Array.isArray(m['writes']) &&

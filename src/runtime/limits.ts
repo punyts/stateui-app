@@ -81,6 +81,15 @@ export const FILE_READ_TIMEOUT_MS = 30_000;
 /** Most bytes of read files a runtime keeps (50 MiB); past it the files no node uses go first, then the least recently read */
 export const FILE_CACHE_BYTES = 50 * 1024 * 1024;
 
+/** The names of the scripts a `load` may name in `chunks`: the closed set, today only the 3D renderer */
+export const CHUNK_NAMES = ['3d'] as const;
+
+/** The hash that names a chunk script (`<hash>.js` beside the runtime page): 16 lower-case hex characters, as the runtime bundle's */
+export const CHUNK_HASH_PATTERN = /^[0-9a-f]{16}$/;
+
+/** How long the `load3d` hook waits for the 3D chunk script to load, in milliseconds; then it rejects with `timeout` */
+export const CHUNK_LOAD_TIMEOUT_MS = 15_000;
+
 /** The byte limit of each message type */
 export const MESSAGE_BYTE_LIMITS = {
     load: MAX_LOAD_BYTES,

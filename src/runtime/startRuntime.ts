@@ -21,6 +21,7 @@ import type { ThemeStore } from '../dom/theme/index.js';
 import { createFileReads } from './fileRead.js';
 import { createFileTransfers } from './fileTransfer.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
+import { createChunkLoader } from './load3d.js';
 import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
 import type {
     CommandMessage,
@@ -182,6 +183,14 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
  * (`createFileReads`, at most `FILE_CACHE_BYTES`) and released a moment after a change once no value of the shell,
  * the screens or the data holds the id any more; `dispose` cancels the waiting reads and drops them all.
  *
+ * Chunks (G3.3): when `load` names a `3d` chunk in `chunks`, the dispatcher gets the `load3d` hook, which a `scene3d`
+ * asks with `ui-load-3d`. It adds one `<script src="./<hash>.js">` to the page (`createChunkLoader`), resolves with
+ * `globalThis.__stateui3d` once the script has run, rejects with a `Load3dError` (`load_failed`, `script_error`,
+ * `timeout` after `CHUNK_LOAD_TIMEOUT_MS`) and returns the same promise on later calls, across loads too. An error the
+ * chunk throws while it loads is its load's `script_error`, not a `SUI-RUN-BINDING`. Without `chunks` there is no hook,
+ * so the event goes unanswered and the scene shows its `_fallback`; an app with no scene never asks, so the script is
+ * never requested.
+ *
  * Posting uses the target origin `*`: a frame sandboxed without `allow-same-origin` has an opaque origin, and the
  * nonce is what the host checks
  */
@@ -232,6 +241,7 @@ export function startRuntime(
         return new Set(ids.filter((id) => text.includes(id.toLowerCase())));
     }
 
+    const chunks = createChunkLoader(win.document);
     const reads = createFileReads(
         {
             sendRead: (requestId, id) => post({ type: 'fileRead', requestId, id })
@@ -391,6 +401,8 @@ export function startRuntime(
                     readFile: reads.readFile,
                     // A file given back is gone from the host, so its cached bytes go too
                     releaseFile: (id) => files.releaseFile(id).then(() => reads.forget(id)),
+                    // Only a host that serves the 3D chunk names it; without the hook a scene shows its fallback
+                    ...(message.chunks?.['3d'] !== undefined && { load3d: chunks.load3d(message.chunks['3d']) }),
                     onEmit(name, payload) {
                         const json = payload === undefined ? undefined : toJson(payload);
                         post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
@@ -565,6 +577,8 @@ export function startRuntime(
     function onFailure(event: Event): void {
         // The browser raises this when a resize handler changes layout again; nothing failed
         if (event instanceof ErrorEvent && event.error == null && BENIGN_ERROR.test(event.message)) return;
+        // A chunk script that throws while it loads fails its load, which the scene reports as SUI-RUN-3D
+        if (chunks.owns(event)) return;
         postErrors([buildError('SUI-RUN-BINDING', { component: 'runtime', path: '$', statePath: '$' })]);
     }
 
@@ -583,6 +597,7 @@ export function startRuntime(
             teardown();
             files.cancelAll();
             reads.cancelAll();
+            chunks.dispose();
             if (releaseTimer !== undefined) clearTimeout(releaseTimer);
             localeStep.unregister();
         }

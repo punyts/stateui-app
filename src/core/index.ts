@@ -112,7 +112,7 @@ export type {
     TreeNode,
     ValidateOnOptions
 } from './on/index.js';
-export { PAINTS_PROPERTY, documentValidators, libraryFromCatalog, registerDocumentValidator, validateDocument, validatePaints, validateShapeLabels } from './validate/index.js';
+export { MAX_SCENES_PER_PAGE, PAINTS_PROPERTY, SCENE3D_COMPONENT, documentValidators, libraryFromCatalog, registerDocumentValidator, validateDocument, validatePaints, validateSceneCount, validateShapeLabels } from './validate/index.js';
 export type {
     CatalogComponent,
     CatalogSource,

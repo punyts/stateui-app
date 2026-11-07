@@ -10,8 +10,8 @@ import { RESERVED_KEYS } from '../../core/types.js';
 import type { JsonValue } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import type { CommandContext } from './commands.js';
-import { FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT } from './types.js';
-import type { Dispatcher, DispatcherOptions, FileReadRequest, FileReleaseRequest, FileTransferRequest } from './types.js';
+import { FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT, LOAD_3D_EVENT } from './types.js';
+import type { Dispatcher, DispatcherOptions, FileReadRequest, FileReleaseRequest, FileTransferRequest, Load3dRequest } from './types.js';
 
 const DEFAULT_ROOT = '$.app';
 const RUNTIME_NODES = '$.runtime.nodes.';
@@ -62,6 +62,10 @@ function isFileRelease(value: unknown): value is FileReleaseRequest {
     if (typeof value !== 'object' || value === null) return false;
     const request = value as Partial<FileReleaseRequest>;
     return typeof request.id === 'string' && request.id.length > 0 && typeof request.respond === 'function';
+}
+
+function isLoad3d(value: unknown): value is Load3dRequest {
+    return typeof value === 'object' && value !== null && typeof (value as Partial<Load3dRequest>).respond === 'function';
 }
 
 /** The element that raised the event: the first one on its path that is a library component with a scope */
@@ -334,10 +338,19 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         request.respond(hooks.releaseFile(request.id));
     }
 
+    /** Answers `ui-load-3d` with the host's `load3d` hook; without one the event is left unanswered */
+    function load3d(event: Event): void {
+        const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
+        if (!isLoad3d(request) || !hooks?.load3d) return;
+        event.stopPropagation();
+        request.respond(hooks.load3d());
+    }
+
     for (const name of names) host.addEventListener(name, handle, true);
     host.addEventListener(FILE_TRANSFER_EVENT, transfer);
     host.addEventListener(FILE_READ_EVENT, read);
     host.addEventListener(FILE_RELEASE_EVENT, release);
+    host.addEventListener(LOAD_3D_EVENT, load3d);
 
     return {
         raise(name, payload): void {
@@ -349,6 +362,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             host.removeEventListener(FILE_TRANSFER_EVENT, transfer);
             host.removeEventListener(FILE_READ_EVENT, read);
             host.removeEventListener(FILE_RELEASE_EVENT, release);
+            host.removeEventListener(LOAD_3D_EVENT, load3d);
         }
     };
 }
