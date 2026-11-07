@@ -744,15 +744,19 @@ What this package holds for drawings (graphics epic 1); the `drawing` component,
   names it (see Shape format and Convention scan; `SUI-BUILD-TIER-SHAPE`). Shared property groups come from
   `includes` partials (see Building a component library).
 - **Graphics validators** for shape properties: `color`, `pathData`, `points`, `vector`, `fields` and `fileRef` (see
-  Shape format), and the document checks `validatePaints` (`SUI-STATE-PAINT`, `SUI-STATE-TOKEN`) and
+  Shape format; a `fields` field may take a list of types, so `transition.duration` is a number of milliseconds or a
+  `motion.duration.*` name), and the document checks `validatePaints` (`SUI-STATE-PAINT`, `SUI-STATE-TOKEN`) and
   `validateShapeLabels` (warning `SUI-STATE-LABEL`) (see Document validation).
 - **Run-time reports**: `SUI-RUN-DRAW` (a shape or value that cannot be drawn, or a shape event outside the element's
   subtree),
   `SUI-RUN-CAP` (a `drawRepeat` cut at the renderer's cap) and `SUI-RUN-FILE` (a component's stored file that is
   missing or cannot be read or decoded, such as a `paintField` background) (see Error catalog).
-- **Shape events**: the dispatcher runs a shape's `on` entry, or a `drawRepeat` row template's with `$row` at the
-  record, from the `detail.shape` of the event (see Dispatching `on` in the browser); `recordKeys` names the copies.
-- **Path geometry** (below), and **file reads** into the frame (see Preview runtime and message protocol).
+- **Shape events** (`press`, `hover`, `dragEnd`): the dispatcher runs a shape's `on` entry, or a `drawRepeat` row
+  template's with `$row` at the record, from the `detail.shape` of the event (see Dispatching `on` in the browser);
+  `recordKeys` names the copies. A drag writes the shape's position itself before it raises `dragEnd`; the dispatcher
+  has no drag code.
+- **Path geometry** (below), and **file reads** into the frame (`readFile`, `ui-file-read`, the `fileRead` and
+  `fileData` messages; see Preview runtime and message protocol).
 
 ## Path geometry
 
