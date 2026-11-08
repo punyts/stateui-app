@@ -50,7 +50,7 @@ afterEach(async () => {
 });
 
 describe('buildLibrary with patternsDir', () => {
-    it('should emit a good shell and a good screen, sorted by kind then name, with the components they use', async () => {
+    it('should emit the good screens, sorted by kind then name, with the components they use', async () => {
         // Arrange and Act
         const result = await build(PATTERNS);
 
@@ -58,7 +58,7 @@ describe('buildLibrary with patternsDir', () => {
         expect(result.errors).toEqual([]);
         expect(result.catalog.patterns.map((entry) => [entry.kind, entry.name, entry.components])).toEqual([
             ['screen', 'item-list', ['caption', 'stack']],
-            ['shell', 'top-bar', ['caption', 'outlet', 'stack']]
+            ['screen', 'top-bar', ['caption', 'stack']]
         ]);
         const [itemList] = result.catalog.patterns;
         expect(itemList).toEqual({
@@ -91,7 +91,7 @@ describe('buildLibrary with patternsDir', () => {
     it.each([
         ['a file outside a pattern folder', 'screen/loose.pattern.json', 'must be at <kind>/<name>/<name>.pattern.json'],
         ['a file too deep', 'screen/a/b/b.pattern.json', 'must be at <kind>/<name>/<name>.pattern.json'],
-        ['a kind folder other than shell or screen', 'widget/thing/thing.pattern.json', 'is in the folder "widget"; the kind folders are "shell", "screen"'],
+        ['a kind folder other than screen', 'widget/thing/thing.pattern.json', 'is in the folder "widget"; the kind folders are "screen"'],
         ['a folder name that is not lower-case hyphenated', 'screen/itemGrid/itemGrid.pattern.json', 'is in the folder "itemGrid", which is not a lower-case hyphenated name'],
         ['a file not named after its folder', 'screen/grid/list.pattern.json', 'must be named "grid.pattern.json" after its folder']
     ])('should report %s as SUI-PATTERN-FILE with the file', async (_label, file, reason) => {

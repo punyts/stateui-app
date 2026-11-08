@@ -29,7 +29,7 @@ function partOf(path: string, document: AppDocument, blueprint: AppBlueprint, ap
 }
 
 /**
- * Assembles an app and checks the result with `validateDocument`, which checks the shell at `$.app` and each screen's
+ * Assembles an app and checks the result with `validateDocument`, which checks the app node at `$.app` and each screen's
  * root at `$.screens.{screen}`. Each error names the part that holds it: an owner component (`$.composed.{name}`), the
  * first theme (`$.theme`, `$.themes`), a dataset (`$.data.{binding}`), a logic module (its binding and param errors),
  * or the app itself. The errors of assembling come first, then a Persisted app's bindings to shared datasets

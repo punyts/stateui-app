@@ -61,7 +61,7 @@ export interface BlueprintUses {
     logic?: Record<string, ModuleUse>;
 }
 
-/** One screen: shown in the shell's `outlet` */
+/** One screen: a root node the app node lays out (its `placement` places it in the app's `layout`) */
 export interface BlueprintScreen {
     title?: string;
     params?: Record<string, ParamDeclaration>;
@@ -76,8 +76,8 @@ export interface AppBlueprint {
     uses?: BlueprintUses;
     /** The screen shown first; a key of `screens` */
     start: string;
-    /** The frame around every screen, with one `outlet` node */
-    shell: Node;
+    /** The app node (`{ "component": "app" }`): the layout of the visible screens, the document title and the toasts */
+    app: Node;
     screens: Record<string, BlueprintScreen>;
     /** The app's own units, which may touch its screens */
     logic?: LogicDocument;
@@ -135,8 +135,8 @@ export interface PatternSlot {
     description: string;
 }
 
-/** The kinds of pattern: a shell (the frame with one outlet) or a screen */
-export const PATTERN_KINDS = ['shell', 'screen'] as const;
+/** The kinds of pattern: a screen (an app is its screens; there is no shell to pattern) */
+export const PATTERN_KINDS = ['screen'] as const;
 
 export type PatternKind = (typeof PATTERN_KINDS)[number];
 
@@ -154,7 +154,7 @@ export interface PatternParam {
     description: string;
 }
 
-/** A shell or screen pattern (the `*.pattern.json` format); the kind stands in for a category */
+/** A screen pattern (the `*.pattern.json` format); the kind stands in for a category */
 export interface PatternPart {
     kind: PatternKind;
     summary: string;

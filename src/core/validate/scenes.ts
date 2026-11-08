@@ -34,19 +34,19 @@ function countScenes(root: Node, rootPath: string, library: ComponentLibrary): n
 /**
  * The `scenes` plug-in of `validateDocument` (G3.4 of the graphics epic 3): a warning (`SUI-DOC-LIMIT-SCENES`) when one
  * page would show more than `MAX_SCENES_PER_PAGE` `scene3d` nodes. Each scene has its own WebGL context and Chromium
- * keeps at most 16 per page, so past that the oldest scenes lose theirs and show `_fallback`. A page is the `app` tree
- * (the shell) together with one screen: a shell over the limit is warned once at `$.app`, otherwise each screen whose
- * scenes and the shell's are over it is warned at `$.screens.{name}`. Composed trees are counted where they are used
+ * keeps at most 16 per page, so past that the oldest scenes lose theirs and show `_fallback`. A page is the `app`
+ * node (or the one tree of an app without screens) together with one screen: an app node over the limit is warned once at `$.app`, otherwise each screen whose
+ * scenes and the app node's are over it is warned at `$.screens.{name}`. Composed trees are counted where they are used
  */
 export function validateSceneCount(context: DocumentValidationContext): BuildError[] {
-    const shell = countScenes(context.tree.node, APP_PATH, context.library);
+    const atApp = countScenes(context.tree.node, APP_PATH, context.library);
     const warn = (path: string, actual: number): BuildError =>
         buildError('SUI-DOC-LIMIT-SCENES', { path, actual, limit: MAX_SCENES_PER_PAGE, statePath: path });
-    if (shell > MAX_SCENES_PER_PAGE) return [warn(APP_PATH, shell)];
+    if (atApp > MAX_SCENES_PER_PAGE) return [warn(APP_PATH, atApp)];
     const errors: BuildError[] = [];
     for (const [name, tree] of Object.entries(context.screens ?? {})) {
         const path = `$.screens.${name}`;
-        const total = shell + countScenes(tree.node, path, context.library);
+        const total = atApp + countScenes(tree.node, path, context.library);
         if (total > MAX_SCENES_PER_PAGE) errors.push(warn(path, total));
     }
     return errors;

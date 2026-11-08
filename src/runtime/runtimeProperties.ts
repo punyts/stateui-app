@@ -1,7 +1,7 @@
 import { entryShape } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
 
-/** The branches that hold nodes: the shell and the screens */
+/** The branches that hold nodes: the app and the screens */
 const NODE_ROOTS = ['$.app', '$.screens'];
 
 interface StoreReader {

@@ -50,7 +50,7 @@ export interface BuildOptions {
      */
     requireSearchKeys?: boolean;
     /**
-     * A folder of patterns, `<kind>/<name>/<name>.pattern.json` with the kind `shell` or `screen`. They are read after
+     * A folder of patterns, `<kind>/<name>/<name>.pattern.json` with the kind `screen`. They are read after
      * the components are built and checked against them; each one that passes is in the catalog's `patterns`, and each
      * problem is a build error. Without it the catalog's `patterns` is empty
      */

@@ -17,7 +17,7 @@ const LIBRARY: ComponentLibrary = Object.freeze({
     text: { tier: 'root', tag: 'ui-text', shape: shapeOf({ properties: { _text: { type: 'string', kind: 'content', default: 'Text' } } }) },
     button: { tier: 'root', tag: 'ui-button', shape: shapeOf({ properties: { _title: { type: 'string', kind: 'content', default: 'Go' } }, events: ['press'] }) },
     list: { tier: 'root', tag: 'ui-list', shape: shapeOf({ properties: { items: { type: 'object', default: {} }, pageSize: { type: 'number', default: 10 } } }) },
-    outlet: { tier: 'root', tag: 'ui-outlet', shape: shapeOf({ properties: {} }) },
+    app: { tier: 'root', tag: 'ui-app', shape: shapeOf({ properties: {}, layout: true }) },
     grid: { tier: 'root', tag: 'ui-grid', shape: shapeOf({ properties: { records: { type: 'object' }, row: { type: 'node', row: true } } }) },
     menu: { tier: 'root', tag: 'ui-menu', shape: shapeOf({ properties: {}, layout: true, childComponents: ['button'] }) },
     card: { tier: 'composed', tree: { component: 'panel', children: { body: { component: 'text' } } } }
@@ -51,22 +51,23 @@ function screenJson(): JsonObject {
     };
 }
 
-function shellJson(): JsonObject {
+/** A screen pattern with no slots or params */
+function plainJson(): JsonObject {
     return {
-        summary: 'A header over the current screen',
-        purposes: ['top navigation bar', 'header with links over each screen', 'frame an app with a header'],
-        tree: { component: 'panel', children: { header: { component: 'text', _text: 'App' }, outlet: { component: 'outlet' } } }
+        summary: 'A header over some text',
+        purposes: ['top navigation bar', 'header with links over the content', 'frame a screen with a header'],
+        tree: { component: 'panel', children: { header: { component: 'text', _text: 'App' }, body: { component: 'text' } } }
     };
 }
 
-function read(json: unknown, kind: 'shell' | 'screen' = 'screen'): PatternPart {
-    const result = readPattern(json, FILE, kind);
+function read(json: unknown): PatternPart {
+    const result = readPattern(json, FILE, 'screen');
     expect(result.errors).toEqual([]);
     return result.pattern as PatternPart;
 }
 
-function problems(json: unknown, kind: 'shell' | 'screen' = 'screen'): string[] {
-    return readPattern(json, FILE, kind).errors.map((error) => `${error.code} ${error.message}`);
+function problems(json: unknown): string[] {
+    return readPattern(json, FILE, 'screen').errors.map((error) => `${error.code} ${error.message}`);
 }
 
 describe('readPattern', () => {
@@ -85,7 +86,7 @@ describe('readPattern', () => {
 
     it('should read a pattern with no slots or params as empty maps', () => {
         // Arrange and Act
-        const pattern = read(shellJson(), 'shell');
+        const pattern = read(plainJson());
 
         // Assert
         expect(pattern.slots).toEqual({});
@@ -154,13 +155,13 @@ describe('readPattern', () => {
 });
 
 describe('checkPattern', () => {
-    function check(json: JsonObject, kind: 'shell' | 'screen' = 'screen'): string[] {
-        return checkPattern(read(json, kind), LIBRARY, FILE).map((error) => error.message);
+    function check(json: JsonObject): string[] {
+        return checkPattern(read(json), LIBRARY, FILE).map((error) => error.message);
     }
 
-    it('should accept good screen and shell patterns', () => {
+    it('should accept good screen patterns', () => {
         expect(check(screenJson())).toEqual([]);
-        expect(check(shellJson(), 'shell')).toEqual([]);
+        expect(check(plainJson())).toEqual([]);
     });
 
     it('should refuse a node whose component is not in the library', () => {
@@ -199,23 +200,13 @@ describe('checkPattern', () => {
         ]);
     });
 
-    it('should refuse a shell without exactly one outlet', () => {
-        // Arrange
-        const none = { ...shellJson(), tree: { component: 'panel', children: { header: { component: 'text' } } } };
-        const two = { ...shellJson(), tree: { component: 'panel', children: { a: { component: 'outlet' }, b: { component: 'outlet' } } } };
-
-        // Act and Assert
-        expect(check(none, 'shell')).toEqual([`Pattern ${FILE} is not valid at $.tree: a shell holds exactly one "outlet", not 0`]);
-        expect(check(two, 'shell')).toEqual([`Pattern ${FILE} is not valid at $.tree: a shell holds exactly one "outlet", not 2`]);
-    });
-
-    it('should refuse a screen that holds an outlet', () => {
+    it('should refuse a screen that holds an app node', () => {
         // Arrange
         const json = screenJson();
-        ((json.tree as JsonObject).children as JsonObject).outlet = { component: 'outlet' };
+        ((json.tree as JsonObject).children as JsonObject).inner = { component: 'app' };
 
         // Act and Assert
-        expect(check(json)).toEqual([`Pattern ${FILE} is not valid at $.tree: a screen holds no "outlet"; the shell has it`]);
+        expect(check(json)).toEqual([`Pattern ${FILE} is not valid at $.tree: a screen holds no "app" node; only $.app is one`]);
     });
 
     it('should accept $row inside a row template, also in its children, and refuse it outside', () => {

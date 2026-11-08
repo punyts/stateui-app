@@ -4,7 +4,7 @@ import type { LogicDocument } from '../logic/types.js';
 import { parseComposed } from '../convention/composed.js';
 import { inferModel, readModel } from '../models/index.js';
 import { cloneJson, isObject } from '../resolve/merge.js';
-import { OUTLET_COMPONENT, screenPath } from '../route/outlet.js';
+import { APP_COMPONENT, screenPath } from '../route/app.js';
 import { NAVIGATE_COMMAND } from '../route/route.js';
 import { RESERVED_KEYS, isAppEvent } from '../types.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
@@ -141,20 +141,6 @@ function at(root: JsonValue | undefined, steps: readonly string[]): JsonValue | 
     return current;
 }
 
-/** Sets the value at `steps` below `root` (at least one step) */
-function put(root: JsonObject, steps: readonly string[], value: JsonValue): void {
-    const parent = at(root, steps.slice(0, -1)) as JsonObject | JsonValue[];
-    const last = steps[steps.length - 1] as string;
-    if (Array.isArray(parent)) parent[Number(last)] = value;
-    else parent[last] = value;
-}
-
-/** Removes the value at `steps` below `root`; nothing when it is absent */
-function remove(root: JsonObject, steps: readonly string[]): void {
-    const parent = at(root, steps.slice(0, -1));
-    if (isObject(parent)) delete parent[steps[steps.length - 1] as string];
-}
-
 /** A tab's node as a screen root: the node without the strip's placement */
 function screenRoot(tab: JsonObject): Node {
     const { [PLACEMENT]: _placement, ...root } = cloneJson(tab);
@@ -203,17 +189,17 @@ function unconverted(report: SplitProblem[], renamed: SplitRename[] = []): Split
  *
  * - Names become slugs (`slugifyName`): the app, the theme, the datasets and models, the components and the screens;
  *   a name in `taken` or already given gets a numeric suffix. The stored name stays as the app's `title`.
- * - `app` becomes the shell and its screens. With one hidden-strip `tabs` node, the shell is the app with an `outlet`
- *   in the tabs' place and each tab becomes a screen (titled by its `_tab`), starting on the strip's `active` tab; an
- *   `on` command that sets the strip's `active` to a tab becomes a `navigate` to it. Without one, the shell is a bare
- *   `outlet` (holding the root's app-event entries) and the whole tree is the screen `main`. State paths into moved
+ * - `app` becomes an `app` node and its screens. When the root is one hidden-strip `tabs` node, each tab becomes a
+ *   screen (titled by its `_tab`), starting on the strip's `active` tab; an `on` command that sets the strip's
+ *   `active` to a tab becomes a `navigate` to it. Otherwise the app node holds the root's app-event entries and the
+ *   whole tree is the screen `main` (a hidden-strip `tabs` deeper in it stays tabs). State paths into moved
  *   nodes, in nodes and logic, follow them to `$.screens.{screen}`; the document's locale overlays are split the same way.
  * - `theme` and `themes` become a theme named after the app; `theme.active` is a choice, not a definition, and is dropped.
  * - Each key of `data` (the snapshot's `data` when it has one) becomes a dataset `{app}-{key}`, bound back under the key,
  *   and a model of the same name inferred from its records (`inferModel`). A list is keyed by each record's `id`.
  * - `composed` becomes owner components; nodes naming them follow their new names.
  *
- * An app that does not convert cleanly gets no parts, and `report` says why: a second hidden-strip `tabs`, a strip that
+ * An app that does not convert cleanly gets no parts, and `report` says why: a root strip that
  * logic, a link or its own `on` refers to, data that holds no records, a document that already has screens
  */
 export function splitDocument(input: SplitInput): SplitResult {
@@ -245,18 +231,15 @@ export function splitDocument(input: SplitInput): SplitResult {
     }
     renameComponents(app, componentNames);
 
-    // The shell and the screens
+    // The app node and the screens
     const tabs = findHiddenTabs(app, [], []);
-    for (const extra of tabs.slice(1)) {
-        report.push(problem(extra.path, `a second hidden-strip tabs; only one (at ${tabs[0]?.path}) can become the screens`));
-    }
-    let shell: JsonObject;
+    let appNode: JsonObject;
     const screens: Record<string, BlueprintScreen> = {};
     let start: string;
     /** Old path prefix to the screen's path */
     const moves: [string, string][] = [];
-    let locales: Record<string, JsonObject> | undefined;
-    const found = tabs[0];
+    // Only a strip at the root becomes the screens: the screens are laid out by the app node, not inside a frame
+    const found = tabs[0] !== undefined && tabs[0].steps.length === 0 ? tabs[0] : undefined;
     if (found !== undefined) {
         const tabNames = new Map<string, string>();
         const children = found.node[RESERVED_KEYS.children];
@@ -291,40 +274,29 @@ export function splitDocument(input: SplitInput): SplitResult {
             screens[screen] = { title, root: screenRoot(tab) };
             moves.push([`${found.path}.children.${key}`, screenPath(screen)]);
         }
-        const outlet: JsonObject = { component: OUTLET_COMPONENT };
-        if (found.node[PLACEMENT] !== undefined) outlet[PLACEMENT] = cloneJson(found.node[PLACEMENT]);
-        if (found.steps.length === 0) shell = outlet;
-        else {
-            shell = app;
-            put(shell, found.steps, outlet);
-        }
+        appNode = { component: APP_COMPONENT };
+        // Each tab's part of a locale overlay goes to its screen; the strip's own text has no place left
         if (document.locales !== undefined) {
-            locales = {};
             for (const [code, overlay] of Object.entries(document.locales)) {
-                const own = cloneJson(overlay);
-                const tabsOverlay = at(own, found.steps);
                 for (const [key] of tabEntries) {
-                    const content = isObject(tabsOverlay) ? at(tabsOverlay, [RESERVED_KEYS.children, key]) : undefined;
+                    const content = at(overlay, [RESERVED_KEYS.children, key]);
                     if (!isObject(content)) continue;
                     const { [PLACEMENT]: _placement, ...rest } = content;
                     if (Object.keys(rest).length === 0) continue;
                     const screen = screens[tabNames.get(key) as string] as BlueprintScreen;
-                    screen.locales = { ...screen.locales, [code]: rest };
+                    screen.locales = { ...screen.locales, [code]: cloneJson(rest) };
                 }
-                if (found.steps.length === 0) continue;
-                remove(own, found.steps);
-                if (Object.keys(own).length > 0) locales[code] = own;
             }
         }
     } else {
         if (report.length > 0) return unconverted(report, names.renamed);
         start = names.name('screens', MAIN_SCREEN);
-        shell = { component: OUTLET_COMPONENT };
+        appNode = { component: APP_COMPONENT };
         const on = app[RESERVED_KEYS.on];
         if (isObject(on)) {
             const appEvents = Object.entries(on).filter(([event]) => isAppEvent(event));
             if (appEvents.length > 0) {
-                shell[RESERVED_KEYS.on] = Object.fromEntries(appEvents);
+                appNode[RESERVED_KEYS.on] = Object.fromEntries(appEvents);
                 const rest = Object.fromEntries(Object.entries(on).filter(([event]) => !isAppEvent(event)));
                 if (Object.keys(rest).length > 0) app[RESERVED_KEYS.on] = rest;
                 else delete app[RESERVED_KEYS.on];
@@ -339,7 +311,7 @@ export function splitDocument(input: SplitInput): SplitResult {
 
     // State paths into moved nodes follow them
     const follow = (text: string): string => moves.reduce((moved, [from, to]) => movePath(moved, from, to), text);
-    shell = mapStrings(shell, APP_PATH, follow) as JsonObject;
+    appNode = mapStrings(appNode, APP_PATH, follow) as JsonObject;
     for (const screen of Object.values(screens)) screen.root = mapStrings(screen.root as unknown as JsonObject, '$', follow) as unknown as Node;
     if (logic !== undefined) logic = mapStrings(logic, '$.logic', follow) as JsonObject;
 
@@ -380,10 +352,9 @@ export function splitDocument(input: SplitInput): SplitResult {
         title: input.name,
         ...(Object.keys(uses).length > 0 ? { uses } : {}),
         start,
-        shell: shell as unknown as Node,
+        app: appNode as unknown as Node,
         screens,
-        ...(logic === undefined ? {} : { logic: logic as unknown as LogicDocument }),
-        ...(locales === undefined || Object.keys(locales).length === 0 ? {} : { locales })
+        ...(logic === undefined ? {} : { logic: logic as unknown as LogicDocument })
     };
     return { app: { name: appName, blueprint }, themes, models, datasets, components, renamed: names.renamed, report };
 }

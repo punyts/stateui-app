@@ -1,11 +1,11 @@
 {
-    "summary": "A title bar over the current screen",
-    "purposes": ["put a title bar over every screen", "frame an app with a header", "show the app name at the top"],
+    "summary": "A title bar over the content of a screen",
+    "purposes": ["put a title bar over the content", "frame a screen with a header", "show the app name at the top"],
     "tree": {
         "component": "stack",
         "children": {
             "header": { "component": "stack", "children": { "title": { "component": "caption", "_text": "App" } } },
-            "outlet": { "component": "outlet" }
+            "content": { "component": "stack" }
         }
     },
     "slots": { "actions": { "path": "children.header.children", "description": "Buttons beside the title" } },

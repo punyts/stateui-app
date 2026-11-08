@@ -1,7 +1,7 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
-import { NAVIGATE_COMMAND, OUTLET_COMPONENT, checkNavigate } from '../route/index.js';
+import { APP_COMPONENT, NAVIGATE_COMMAND, checkNavigate, findAppNodes } from '../route/index.js';
 import { RESERVED_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 import type { DocumentValidationContext } from './types.js';
@@ -40,7 +40,7 @@ function findScreenProperties(value: JsonValue | undefined, path: string, contex
 }
 
 /**
- * Checks every `navigate` command, in the logic and in the `on` entries of the shell, the screens and the composed
+ * Checks every `navigate` command, in the logic and in the `on` entries of the app node, the screens and the composed
  * components they expand: the target must name a screen (`SUI-ROUTE-SCREEN`) and literal params must be declared and
  * fit (`SUI-ROUTE-PARAMS`). A command that takes its params `from` a path is checked for its screen only. A node whose
  * component has a string `screen` property (`link`, `menuItem`) is checked the same way, with its `params` property
@@ -67,37 +67,30 @@ export function validateRoutes(context: DocumentValidationContext): BuildError[]
     return errors;
 }
 
-/** The paths of every `outlet` node below `value`, depth first in key order, not looking inside `on` entries */
-function findOutlets(value: JsonValue | undefined, path: string, found: string[] = []): string[] {
-    if (Array.isArray(value)) {
-        value.forEach((item, index) => findOutlets(item, `${path}.${index}`, found));
-        return found;
-    }
-    if (!isObject(value)) return found;
-    if (value[RESERVED_KEYS.component] === OUTLET_COMPONENT) found.push(path);
-    for (const [key, item] of Object.entries(value)) {
-        if (key !== RESERVED_KEYS.on) findOutlets(item, `${path}.${key}`, found);
-    }
-    return found;
-}
-
-function outletError(path: string, reason: string): BuildError {
-    return buildError('SUI-SHELL-OUTLET', { path, statePath: path, reason });
+function appError(path: string, reason: string): BuildError {
+    return buildError('SUI-APP-ROOT', { path, statePath: path, reason });
 }
 
 /**
- * Checks where the screens show (`SUI-SHELL-OUTLET`): in an app with screens the resolved shell holds exactly one
- * `outlet` node (one a composed component brings counts), and no screen holds one. An app without screens is not
- * checked, so an `outlet` there is an ordinary empty node
+ * Checks the app node (`SUI-APP-ROOT`). An app with screens has an `app` node at `$.app`: it lays out the screens with
+ * its `layout`, holds the app-wide toasts and has no children of its own, so a screen is where components go. No other
+ * node is an `app` (none below `$.app`, none in a screen, none a composed component brings). An app without screens is
+ * one tree at `$.app` and is not checked
  */
-export function validateOutlets(context: DocumentValidationContext): BuildError[] {
+export function validateAppRoot(context: DocumentValidationContext): BuildError[] {
     if (!isObject(context.document.screens as JsonValue | undefined)) return [];
     const errors: BuildError[] = [];
-    const inShell = findOutlets(context.tree.node, '$.app');
-    if (inShell.length === 0) errors.push(outletError('$.app', 'the shell of an app with screens needs one outlet node to show them in'));
-    for (const extra of inShell.slice(1)) errors.push(outletError(extra, `the shell has more than one outlet; the screens show in ${inShell[0]}`));
+    const root = context.tree.node;
+    if (root.component !== APP_COMPONENT) {
+        errors.push(appError('$.app', `an app with screens has an "${APP_COMPONENT}" node at $.app, not "${root.component}"; put components in the screens`));
+    } else if (Object.hasOwn(root, RESERVED_KEYS.children)) {
+        errors.push(appError('$.app.children', 'the app node lays out the screens and holds no children; put components in the screens'));
+    }
+    for (const path of findAppNodes(root as unknown as JsonValue, '$.app')) {
+        if (path !== '$.app') errors.push(appError(path, 'only $.app is an app node'));
+    }
     for (const [name, tree] of Object.entries(context.screens ?? {})) {
-        for (const path of findOutlets(tree.node, `$.screens.${name}`)) errors.push(outletError(path, 'only the shell holds an outlet; a screen cannot'));
+        for (const path of findAppNodes(tree.node as unknown as JsonValue, `$.screens.${name}`)) errors.push(appError(path, 'only $.app is an app node; a screen cannot hold one'));
     }
     return errors;
 }

@@ -28,7 +28,7 @@ const library: ComponentLibrary = Object.freeze({
     panel: { tier: 'root', tag: 'x-ins-panel', shape: shapeOf({ children: { type: 'map', items: 'string', default: {} } }) },
     field: { tier: 'root', tag: 'x-ins-field', shape: shapeOf({ value: { type: 'string', default: '' } }) },
     button: { tier: 'root', tag: 'x-ins-button', shape: shapeOf({}, ['press']) },
-    outlet: { tier: 'root', tag: 'x-ins-outlet', shape: shapeOf({}) }
+    app: { tier: 'root', tag: 'x-ins-app', shape: shapeOf({ toasts: { type: 'node' } }) }
 });
 
 defineComponent({
@@ -38,11 +38,11 @@ defineComponent({
 /** Shows its typed value, so a test can read it from the DOM */
 defineComponent({ tag: 'x-ins-field', template: '<output>{{ $.value }}</output>' });
 defineComponent({ tag: 'x-ins-button', template: '<b>button</b>' });
-defineComponent({ tag: 'x-ins-outlet', template: '<section><slot></slot></section>' });
+defineComponent({ tag: 'x-ins-app', template: '<section layout-host=""></section><sui-node state=".toasts"></sui-node>' });
 
-/** A shell with a search field and an outlet, a home screen with a button to the product screen, a night overlay */
+/** An app node with a field as its toasts stand-in, a home screen with a button to the product screen, a night overlay */
 const DOCUMENT = {
-    app: { component: 'panel', children: { search: { component: 'field' }, main: { component: 'outlet' } } },
+    app: { component: 'app', toasts: { component: 'field' } },
     screens: {
         home: {
             root: {
@@ -108,7 +108,7 @@ describe('a persona instance in mountApp', () => {
     it('should show a typed value of the instance after mount and start on its screen, theme and data', () => {
         // Arrange
         const instance: AppInstance = {
-            app: { children: { search: { value: 'lamp' } } },
+            app: { toasts: { value: 'lamp' } },
             screens: { product: { children: { qty: { value: '3' } } } },
             route: { screen: 'product', params: { id: 'p2' } },
             theme: { active: { mode: 'night' } },
@@ -120,7 +120,7 @@ describe('a persona instance in mountApp', () => {
 
         // Assert
         expect(notContrast(app.errors)).toEqual([]);
-        expect(fieldTexts(host)).toEqual(['lamp', '3']);
+        expect(fieldTexts(host)).toEqual(['3', 'lamp']);
         expect(app.visibleScreen()).toBe('product');
         expect(app.store?.get('$.theme.active.mode')).toBe('night');
         expect(app.store?.get('$.theme.tokens.color.surface.base')).toBe('#101820');
@@ -146,12 +146,12 @@ describe('a persona instance in mountApp', () => {
     it('should never write the definition: a deep-frozen document mounts, takes interaction and a theme switch, and disposes', () => {
         // Arrange
         const frozen = deepFreeze(JSON.parse(JSON.stringify(DOCUMENT)) as AppDocument);
-        const instance = deepFreeze({ app: { children: { search: { value: 'lamp' } } }, screens: {}, data: { bag: { l1: { qty: 1 } } } } as AppInstance);
+        const instance = deepFreeze({ app: { toasts: { value: 'lamp' } }, screens: {}, data: { bag: { l1: { qty: 1 } } } } as AppInstance);
 
         // Act
         const run = (): void => {
             const { app, host } = start(frozen, { instance });
-            app.store?.set('$.app.children.search.value' as never, 'chair' as never);
+            app.store?.set('$.app.toasts.value' as never, 'chair' as never);
             app.store?.set('$.data.bag.l2' as never, { qty: 2 } as never);
             app.store?.set('$.theme.active.mode' as never, 'night' as never);
             app.store?.set('$.theme.active.theme' as never, 'bold' as never);

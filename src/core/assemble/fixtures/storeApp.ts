@@ -18,16 +18,15 @@ function shapeOf(properties: Record<string, unknown>, layout = false): Shape {
     return result.shape;
 }
 
-/** A small library: a page frame, panels, text, and the `outlet` the shell shows screens in */
+/** A small library: the app node, panels and text */
 export const STORE_LIBRARY: ComponentLibrary = deepFreeze({
-    page: { tier: 'root', tag: 'ui-page', shape: shapeOf({ title: { type: 'string', default: '' } }, true) },
+    app: { tier: 'root', tag: 'ui-app', shape: shapeOf({ title: { type: 'string', default: '' } }, true) },
     panel: { tier: 'root', tag: 'ui-panel', shape: shapeOf({ title: { type: 'string', default: '' } }, true) },
     text: { tier: 'root', tag: 'ui-text', shape: shapeOf({ _value: { type: 'string', kind: 'content', default: '' } }) },
-    outlet: { tier: 'root', tag: 'ui-outlet', shape: shapeOf({}) },
     banner: { tier: 'composed', tree: { component: 'panel', title: 'Library banner' } }
 }) as ComponentLibrary;
 
-/** A store: a shell with a header and an outlet, a home and a product screen, one theme, a catalog dataset, a persona bag and the cart module */
+/** A store: an app node, a home screen with a header, a home and a product screen, one theme, a catalog dataset, a persona bag and the cart module */
 export const STORE_APP: AppBlueprint = deepFreeze({
     title: 'Store',
     uses: {
@@ -40,17 +39,18 @@ export const STORE_APP: AppBlueprint = deepFreeze({
         logic: { cart: { params: { taxRate: 0.2, currency: 'EUR' } } }
     },
     start: 'home',
-    shell: {
-        component: 'page',
-        children: {
-            header: { component: 'panel', children: { brand: { component: 'brand-mark' } } },
-            main: { component: 'outlet' }
-        }
-    },
+    app: { component: 'app', layout: { type: 'column' } },
     screens: {
         home: {
             title: 'Store',
-            root: { component: 'panel', title: 'Products', children: { intro: { component: 'text', _value: 'Our products' } } }
+            root: {
+                component: 'panel',
+                title: 'Products',
+                children: {
+                    header: { component: 'panel', children: { brand: { component: 'brand-mark' } } },
+                    intro: { component: 'text', _value: 'Our products' }
+                }
+            }
         },
         product: {
             title: 'Product',

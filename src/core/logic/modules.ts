@@ -20,7 +20,7 @@ export const MODULE_UNIT_SEPARATOR = ':';
 /** `$params.{name}` in an expression or as a whole value */
 const PARAM_REFERENCE = /\$params\.([A-Za-z_][A-Za-z0-9_]*)/g;
 const WHOLE_PARAM = /^\$params\.([A-Za-z_][A-Za-z0-9_]*)$/;
-/** A path into the shell or the screens, anywhere in a string */
+/** A path into the app node or the screens, anywhere in a string */
 const NODE_PATH = /\$\.(app|screens)(?![A-Za-z0-9_])/;
 /** A `$.data` path and its first segment: a name, a `{capture}`, `*`, or nothing for `$.data` itself */
 const DATA_PATH = /\$\.data(?![A-Za-z0-9_])(?:\.(\{[A-Za-z_][A-Za-z0-9_]*\}|\*|[A-Za-z0-9_-]+))?/g;

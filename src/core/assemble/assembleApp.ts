@@ -161,9 +161,9 @@ function bindModules(blueprint: AppBlueprint, parts: PartSource, assembler: Asse
  * gives `theme.tokens` and `themes` (its overlays), and `appThemes` carries every listed theme by name (tokens and
  * overlays) for switching at run time; every listed theme must exist. Each `uses.data` binding becomes
  * `data.{binding}`: the dataset's records, or an empty map for a persona binding. Owner components named by a node of
- * the shell, a screen or another used owner component go into `composed` as their trees with `exposes`, without the
+ * the app node, a screen or another used owner component go into `composed` as their trees with `exposes`, without the
  * search keys; an owner component wins over a library component of the same name, as `composed` does. `app` is the
- * shell. A persona binding starts as the model's defaults over an empty map (`applyDefaults(model, {})`), so a model
+ * app node. A persona binding starts as the model's defaults over an empty map (`applyDefaults(model, {})`), so a model
  * without defaults gives `{}`. `logic` is the app's own units followed by each module of `uses.logic`, instantiated
  * with its params (`instantiateModule`, units named `{module}:{unit}`); a module whose needs are not bound under their
  * names to data of their models (`SUI-USES-NEEDS`, `SUI-USES-MODEL`) or whose params do not fit (`SUI-MODULE-PARAM`)
@@ -173,7 +173,7 @@ function bindModules(blueprint: AppBlueprint, parts: PartSource, assembler: Asse
  */
 export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options: AssembleOptions = {}): AssembleResult {
     const assembler = new Assembler(parts, options);
-    const document: AppDocument = { app: cloneJson(blueprint.shell as unknown as JsonValue) as Node };
+    const document: AppDocument = { app: cloneJson(blueprint.app as unknown as JsonValue) as Node };
 
     const themes = blueprint.uses?.themes ?? [];
     themes.forEach((name, index) => assembler.require('themes', name, `$.uses.themes.${index}`, parts.themes));
@@ -211,7 +211,7 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
 
     const logic = bindModules(blueprint, parts, assembler, bound);
 
-    assembler.components(blueprint.shell as unknown as JsonValue, '$.shell');
+    assembler.components(blueprint.app as unknown as JsonValue, '$.app');
     const screens: Record<string, DocumentScreen> = {};
     for (const [name, screen] of Object.entries(blueprint.screens)) {
         screens[name] = cloneJson(screen as unknown as JsonValue) as unknown as DocumentScreen;

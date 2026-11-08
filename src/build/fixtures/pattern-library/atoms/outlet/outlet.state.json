@@ -1,6 +1,0 @@
-{
-    "summary": "Where the current screen shows",
-    "category": "navigation",
-    "purposes": ["show the current screen", "hold the screens of an app", "swap screens under a header"],
-    "properties": {}
-}

@@ -16,6 +16,8 @@ const ROOT_PATH = '$.app';
 export interface ValidateOnOptions {
     /** The state path of the node being validated; `$.app` when absent */
     path?: string;
+    /** The resolved app node: a screen's commands aiming at `$.app…` (such as its toasts) are checked against it */
+    app?: ResolvedTree;
 }
 
 /** The part of a `ResolveResult` the validator needs */
@@ -48,7 +50,8 @@ class OnValidator {
     constructor(
         private readonly library: ComponentLibrary,
         private readonly instances: Readonly<Record<string, string[]>>,
-        private readonly rootPath: string
+        private readonly rootPath: string,
+        private readonly app?: ResolvedTree
     ) {}
 
     /** `owner` is the index in the chain of the node that owns the row template this node is inside, if any */
@@ -178,7 +181,7 @@ class OnValidator {
         }
 
         const self = chain[chain.length - 1] as Frame;
-        const located: Located | undefined =
+        let located: Located | undefined =
             command.target === undefined
                 ? { kind: 'node', path: self.path, node: self.node }
                 : this.locate(command.target, scope);
@@ -186,7 +189,15 @@ class OnValidator {
             this.badTarget(command.target ?? '', event, chain, statePath);
             return;
         }
-        if (located.kind === 'outside') return;
+        if (located.kind === 'outside') {
+            if (!this.reachesApp(located.path)) return;
+            const inApp = this.locateInApp(located.path);
+            if (inApp?.kind !== 'node') {
+                this.badTarget(command.target ?? '', event, chain, statePath);
+                return;
+            }
+            located = inApp;
+        }
 
         const commands = this.commandsOf(located.node.component);
         if (commands && !commands.includes(name)) {
@@ -220,6 +231,19 @@ class OnValidator {
         return parsed
             ? resolveTarget(parsed, relativeChain(scope), this.rootPath, scope.owner === undefined ? undefined : ROW_MARKER)
             : undefined;
+    }
+
+    /** Whether a path outside the validated tree names the app node or below it, and the app node is known */
+    private reachesApp(path: string): boolean {
+        return this.app !== undefined && (path === ROOT_PATH || path.startsWith(`${ROOT_PATH}.`));
+    }
+
+    /** A `$.app…` path resolved against the app node */
+    private locateInApp(path: string): Located | undefined {
+        const parsed = parseTarget(path);
+        if (!parsed || this.app === undefined) return undefined;
+        const frame: Frame = { path: ROOT_PATH, key: 'app', node: this.app.node as TreeNode, instances: [] };
+        return resolveTarget(parsed, [frame], ROOT_PATH);
     }
 
     private commandsOf(component: string): readonly string[] | undefined {
@@ -256,7 +280,7 @@ class OnValidator {
  */
 export function validateOn(tree: ResolvedTree, library: ComponentLibrary, options: ValidateOnOptions = {}): BuildError[] {
     const rootPath = options.path ?? ROOT_PATH;
-    const validator = new OnValidator(library, tree.instances, rootPath);
+    const validator = new OnValidator(library, tree.instances, rootPath, options.app);
     validator.visit(tree.node, rootPath, []);
     return validator.errors;
 }

@@ -84,7 +84,7 @@ export interface MountOptions {
     route?: boolean;
     /**
      * A persona's instance, laid over the definition's values before the store exists (`layInstance`): the
-     * articulation of the shell and the screens, the persona's data, the route and the active overlay names. A screen
+     * articulation of the app node and the screens, the persona's data, the route and the active overlay names. A screen
      * or an overlay name the app no longer has falls back with a `SUI-INSTANCE-STALE` warning in `errors`. The
      * document is never written
      */

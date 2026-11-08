@@ -53,7 +53,7 @@ describe('assembleApp', () => {
         const { document, errors } = assembleApp(STORE_APP, STORE_PARTS);
 
         expect(errors).toEqual([]);
-        expect(document.app).toEqual(STORE_APP.shell);
+        expect(document.app).toEqual(STORE_APP.app);
         expect(Object.keys(document.screens ?? {})).toEqual(['home', 'product']);
         expect(document.start).toBe('home');
         expect(document.screens?.['product']?.params).toEqual({ id: { type: 'string', required: true } });
@@ -259,7 +259,7 @@ describe('assembleApp', () => {
     });
 
     it('should show a changed theme token in every app that lists the theme', () => {
-        const other: AppBlueprint = { start: 'only', shell: { component: 'page' }, screens: { only: { root: { component: 'panel' } } }, uses: { themes: ['store'] } };
+        const other: AppBlueprint = { start: 'only', app: { component: 'app' }, screens: { only: { root: { component: 'panel' } } }, uses: { themes: ['store'] } };
         const parts = copy(STORE_PARTS);
         ((parts.themes?.['store']?.tokens as JsonObject)['color'] as JsonObject)['brand'] = '#ff0000';
 
@@ -271,10 +271,10 @@ describe('assembleApp', () => {
     it('should share nothing with its inputs', () => {
         const { document } = assembleApp(STORE_APP, STORE_PARTS);
 
-        (document.app.children as JsonObject)['extra'] = { component: 'panel' };
+        (document.app as JsonObject)['layout'] = { type: 'row' };
         (document.data?.['products'] as JsonObject)['p3'] = { name: 'Desk' };
 
-        expect(STORE_APP.shell.children).not.toHaveProperty('extra');
+        expect(STORE_APP.app['layout']).toEqual({ type: 'column' });
         expect(STORE_PARTS.datasets?.['catalog']?.records).not.toHaveProperty('p3');
     });
 });
@@ -310,15 +310,18 @@ describe('validateApp', () => {
     });
 
     it('should give the same result as the single document for a blueprint with only the start screen and no uses', () => {
-        const shell = { component: 'page', children: { main: { component: 'outlet' }, note: { component: 'text', wrong: 1 } } };
-        const blueprint: AppBlueprint = { start: 'home', shell, screens: { home: { root: { component: 'panel' } } }, locales: { de: {} } };
+        const app = { component: 'app', wrong: 1 };
+        const blueprint: AppBlueprint = { start: 'home', app, screens: { home: { root: { component: 'panel', children: { note: { component: 'text', wrong: 1 } } } } }, locales: { de: {} } };
 
-        const app = validateApp(blueprint, {}, STORE_LIBRARY);
-        const single = validateDocument({ app: shell, screens: { home: { root: { component: 'panel' } } }, start: 'home', locales: { de: {} } }, STORE_LIBRARY);
+        const result = validateApp(blueprint, {}, STORE_LIBRARY);
+        const single = validateDocument(
+            { app, screens: { home: { root: { component: 'panel', children: { note: { component: 'text', wrong: 1 } } } } }, start: 'home', locales: { de: {} } },
+            STORE_LIBRARY
+        );
 
         expect(single.errors.length).toBeGreaterThan(0);
-        expect(app.errors.map(({ part: _part, ...error }) => error)).toEqual(single.errors);
-        expect(app.valid).toBe(single.valid);
+        expect(result.errors.map(({ part: _part, ...error }) => error)).toEqual(single.errors);
+        expect(result.valid).toBe(single.valid);
     });
 
     it('should report an error inside a screen at the screen path and name the app as its part', () => {
@@ -365,12 +368,12 @@ describe('validateApp', () => {
 
     it('should report a missing component once, as SUI-USES-MISSING, not again for each node', () => {
         const blueprint = copy(STORE_APP);
-        (blueprint.shell.children as JsonObject)['footer'] = { component: 'nowhere' };
         (blueprint.screens['home']?.root.children as JsonObject)['a'] = { component: 'nowhere' };
+        (blueprint.screens['product']?.root.children as JsonObject)['b'] = { component: 'nowhere' };
 
         const result = validateApp(blueprint, STORE_PARTS, STORE_LIBRARY);
 
-        expect(codesAndPaths(result.errors)).toEqual(['SUI-USES-MISSING $.shell.children.footer']);
+        expect(codesAndPaths(result.errors)).toEqual(['SUI-USES-MISSING $.screens.home.root.children.a']);
         expect(result.valid).toBe(false);
     });
 });

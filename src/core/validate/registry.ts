@@ -1,7 +1,7 @@
 import { validateLayouts, validatePlacements } from '../layout/index.js';
 import { createLogicIndex, readLogic } from '../logic/index.js';
 import { validateOn } from '../on/index.js';
-import { validateOutlets, validateRoutes } from './route.js';
+import { validateAppRoot, validateRoutes } from './route.js';
 import { validatePaints, validateShapeLabels } from './paint.js';
 import { validateSceneCount } from './scenes.js';
 import { validateSteps } from './steps.js';
@@ -29,7 +29,7 @@ export function documentValidators(): [string, DocumentValidator][] {
 
 registerDocumentValidator('on', (context) => [
     ...validateOn(context.tree, context.library),
-    ...Object.entries(context.screens ?? {}).flatMap(([name, tree]) => validateOn(tree, context.library, { path: `$.screens.${name}` }))
+    ...Object.entries(context.screens ?? {}).flatMap(([name, tree]) => validateOn(tree, context.library, { path: `$.screens.${name}`, app: context.tree }))
 ]);
 registerDocumentValidator('layout', validateLayouts);
 registerDocumentValidator('placement', validatePlacements);
@@ -43,4 +43,4 @@ registerDocumentValidator('logic', (context) => {
     return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain }).errors;
 });
 registerDocumentValidator('route', validateRoutes);
-registerDocumentValidator('outlet', validateOutlets);
+registerDocumentValidator('app', validateAppRoot);

@@ -31,7 +31,7 @@ interface Parent {
 export type Check = (node: Node, path: string, shape: Shape | undefined, parent: Parent | undefined) => void;
 
 /** Walks one resolved tree and calls `check` for every node with its parent */
-function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Check): void {
+function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Check, rootParent?: Parent): void {
     const visit = (node: Node, path: string, parent: Parent | undefined): void => {
         const shape = shapeOf(library, node.component);
         check(node, path, shape, parent);
@@ -39,13 +39,18 @@ function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Ch
             visit(child.node as Node, child.path, { node, path, shape });
         }
     };
-    visit(root, rootPath, undefined);
+    visit(root, rootPath, rootParent);
 }
 
-/** The trees to check: the resolved `app` tree and every composed tree on its own */
+/**
+ * The trees to check: the resolved `app` tree, every screen with the app node as the parent of its root (the app's
+ * layout places the screens) and every composed tree on its own
+ */
 export function forEachTree(context: DocumentValidationContext, check: Check): void {
-    walk(context.tree.node, APP_PATH, context.library, check);
-    for (const [name, tree] of Object.entries(context.screens ?? {})) walk(tree.node, `$.screens.${name}`, context.library, check);
+    const app = context.tree.node;
+    walk(app, APP_PATH, context.library, check);
+    const screenParent: Parent = { node: app, path: APP_PATH, shape: shapeOf(context.library, app.component) };
+    for (const [name, tree] of Object.entries(context.screens ?? {})) walk(tree.node, `$.screens.${name}`, context.library, check, screenParent);
     const composed = context.document.composed;
     if (composed === undefined || !isObject(composed as JsonValue)) return;
     for (const [name, tree] of Object.entries(composed)) {

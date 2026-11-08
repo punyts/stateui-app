@@ -23,7 +23,7 @@ const content = { type: 'string', kind: 'content', default: '' };
 const library: ComponentLibrary = Object.freeze({
     panel: { tier: 'root', tag: 'x-sloc-panel', shape: shapeOf({ children: { type: 'map', items: 'string', default: {} } }) },
     heading: { tier: 'root', tag: 'x-sloc-heading', shape: shapeOf({ _text: { ...content, default: 'Heading' } }) },
-    outlet: { tier: 'root', tag: 'x-sloc-outlet', shape: shapeOf({}) }
+    app: { tier: 'root', tag: 'x-sloc-app', shape: shapeOf({ toasts: { type: 'node' } }) }
 });
 
 defineComponent({
@@ -31,16 +31,16 @@ defineComponent({
     template: '<sui-node repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
 });
 defineComponent({ tag: 'x-sloc-heading', template: '<h1>{{ $._text }}</h1>' });
-defineComponent({ tag: 'x-sloc-outlet', template: '<section><slot></slot></section>' });
+defineComponent({ tag: 'x-sloc-app', template: '<section layout-host=""></section><sui-node state=".toasts"></sui-node>' });
 
 /** The heading component's own default is translated by its overlay; text the author wrote comes from `locales` */
 const components: ComponentOverlays = Object.freeze({ heading: Object.freeze({ de: Object.freeze({ _text: 'Überschrift' }) }) });
 
-/** A shell with a header, a home screen with the component default and a product screen with its own text */
+/** An app node whose toasts stand-in has text, a home screen with the component default and a product screen with its own text */
 const DOCUMENT = Object.freeze({
     locale: 'en',
-    app: { component: 'panel', children: { header: { component: 'heading', _text: 'Shop' }, main: { component: 'outlet' } } },
-    locales: { de: { children: { header: { _text: 'Laden' } } } },
+    app: { component: 'app', toasts: { component: 'heading', _text: 'Shop' } },
+    locales: { de: { toasts: { _text: 'Laden' } } },
     screens: {
         home: { root: { component: 'panel', children: { title: { component: 'heading' } } } },
         product: {
@@ -117,11 +117,11 @@ describe('locales of screens', () => {
         expect(switched).toEqual([]);
         expect(before).toEqual({ home: 'Überschrift' });
         expect(after).toEqual({ home: 'Überschrift', product: 'Ein Produkt' });
-        expect(app.store?.get('$.app.children.header._text')).toBe('Laden');
+        expect(app.store?.get('$.app.toasts._text')).toBe('Laden');
         expect(app.store?.get('$.locale')).toBe('de');
     });
 
-    it('should restore every screen and the shell when switching back to the base language', () => {
+    it('should restore every screen and the app node when switching back to the base language', () => {
         // Arrange
         const { app, host, handle } = start();
         app.navigate('product');
@@ -133,7 +133,7 @@ describe('locales of screens', () => {
         // Assert
         expect(errors).toEqual([]);
         expect(screenTexts(host)).toEqual({ home: 'Heading', product: 'A product' });
-        expect(app.store?.get('$.app.children.header._text')).toBe('Shop');
+        expect(app.store?.get('$.app.toasts._text')).toBe('Shop');
         expect(handle.screenOverlays?.['product']?.['en']).toEqual({ children: { name: { _text: 'A product' } } });
     });
 

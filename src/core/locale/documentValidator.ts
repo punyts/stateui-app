@@ -1,7 +1,7 @@
 import type { BuildError } from '../errors/index.js';
 import { extractLinks } from '../links/index.js';
 import { isObject } from '../resolve/merge.js';
-import { screenPath } from '../route/outlet.js';
+import { screenPath } from '../route/app.js';
 import { registerDocumentValidator } from '../validate/registry.js';
 import type { ResolvedTree } from '../on/index.js';
 import type { DocumentValidator } from '../validate/types.js';
@@ -24,7 +24,7 @@ function withoutLinked(tree: Node, linkedPaths: readonly string[], root: string)
     return copy;
 }
 
-/** The errors of the overlays of one root (the shell or a screen) against its resolved tree */
+/** The errors of the overlays of one root (the app node or a screen) against its resolved tree */
 function checkRoot(
     locales: Readonly<Record<string, JsonObject>>,
     tree: ResolvedTree,

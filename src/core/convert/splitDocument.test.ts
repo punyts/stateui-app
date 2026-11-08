@@ -27,7 +27,7 @@ function withData(data: JsonObject): AppDocument {
 }
 
 describe('splitDocument with one screen', () => {
-    it('should make an outlet shell and the whole tree the screen main, and pass validateApp', () => {
+    it('should make an app node and the whole tree the screen main, and pass validateApp', () => {
         // Act
         const result = splitDocument({ name: 'Customers', document: SAMPLE_FORM_AND_LIST_APP });
 
@@ -36,7 +36,7 @@ describe('splitDocument with one screen', () => {
         expect(result.app?.name).toBe('customers');
         const blueprint = result.app?.blueprint;
         expect(blueprint?.title).toBe('Customers');
-        expect(blueprint?.shell).toEqual({ component: 'outlet' });
+        expect(blueprint?.app).toEqual({ component: 'app' });
         expect(blueprint?.start).toBe('main');
         expect(blueprint?.screens['main']?.root).toEqual(SAMPLE_FORM_AND_LIST_APP.app);
         expect(blueprint?.uses).toEqual({ data: { customers: { dataset: 'customers-customers' } } });
@@ -77,7 +77,7 @@ describe('splitDocument with one screen', () => {
         expect(Object.keys(result.datasets['notes-notes']?.records ?? {})).toEqual(['r1', 'n7', 'x', 'x-2']);
     });
 
-    it('should move app-event entries of the root to the shell and follow paths into the tree', () => {
+    it('should move app-event entries of the root to the app node and follow paths into the tree', () => {
         // Arrange
         const document = deepFreeze({
             app: {
@@ -91,8 +91,8 @@ describe('splitDocument with one screen', () => {
         const result = splitDocument({ name: 'notes', document });
 
         // Assert
-        expect(result.app?.blueprint.shell).toEqual({
-            component: 'outlet',
+        expect(result.app?.blueprint.app).toEqual({
+            component: 'app',
             on: { 'sync.rejected': { command: 'set', target: '$.screens.main.children.note._text', value: 'Not saved' } }
         });
         expect(result.app?.blueprint.screens['main']?.root).toEqual({ component: 'panel', children: { note: { component: 'text', _text: '' } } });
@@ -103,14 +103,10 @@ describe('splitDocument with a hidden-strip tabs', () => {
     const result = splitDocument({ name: 'Halo Store', document: TABS_APP });
     const blueprint = result.app?.blueprint;
 
-    it('should put an outlet in the strip place and make each tab a screen titled by its tab', () => {
+    it('should make each tab of a root strip a screen titled by its tab', () => {
         // Assert
         expect(result.report).toEqual([]);
-        expect(blueprint?.shell).toEqual({
-            component: 'page',
-            _title: 'Halo',
-            children: { header: { component: 'text', _text: 'Welcome to Halo' }, pages: { component: 'outlet' } }
-        });
+        expect(blueprint?.app).toEqual({ component: 'app' });
         expect(Object.keys(blueprint?.screens ?? {})).toEqual(['home', 'bag']);
         expect(blueprint?.screens['home']?.title).toBe('Home');
         expect(blueprint?.screens['bag']?.title).toBe('Your bag');
@@ -146,9 +142,9 @@ describe('splitDocument with a hidden-strip tabs', () => {
         expect(((blueprint?.screens['home']?.root['children'] as JsonObject)['featured'] as JsonObject)['component']).toBe('product-card');
     });
 
-    it('should split the locale overlay between the shell and the screens', () => {
+    it('should move the locale overlay of each tab to its screen', () => {
         // Assert
-        expect(blueprint?.locales).toEqual({ de: { children: { header: { _text: 'Willkommen bei Halo' } } } });
+        expect(blueprint?.locales).toBeUndefined();
         expect(blueprint?.screens['home']?.locales).toEqual({ de: { children: { intro: { _text: 'Lampen und Stühle' } } } });
         expect(blueprint?.screens['bag']?.locales).toBeUndefined();
     });
@@ -181,21 +177,15 @@ describe('splitDocument reports', () => {
         expect(result.report).toEqual([
             {
                 path: '$.logic.rules.toBag.do.0.target',
-                reason: 'refers to the hidden-strip tabs at $.app.children.pages ($.app.children.pages.active), which screens cannot follow'
+                reason: 'refers to the hidden-strip tabs at $.app ($.app.active), which screens cannot follow'
             }
         ]);
     });
 
-    it('should report a second hidden strip and a strip linked to data', () => {
+    it('should report a root strip linked to data and keep a deeper strip as tabs', () => {
         // Arrange
         const document = deepFreeze({
-            app: {
-                component: 'panel',
-                children: {
-                    pages: { component: 'tabs', strip: 'hidden', '<-active': '$.data.page', children: { a: { component: 'text' } } },
-                    more: { component: 'tabs', strip: 'hidden', children: { b: { component: 'text' } } }
-                }
-            },
+            app: { component: 'tabs', strip: 'hidden', '<-active': '$.data.page', children: { a: { component: 'text' } } },
             data: { page: 'a', tags: ['x'] }
         }) as unknown as AppDocument;
 
@@ -204,7 +194,16 @@ describe('splitDocument reports', () => {
 
         // Assert
         expect(result.app).toBeUndefined();
-        expect(result.report.map((entry) => entry.path)).toEqual(['$.app.children.more', '$.app.children.pages.<-active']);
+        expect(result.report.map((entry) => entry.path)).toEqual(['$.app.<-active']);
+
+        const deeper = splitDocument({
+            name: 'pages',
+            document: deepFreeze({
+                app: { component: 'panel', children: { more: { component: 'tabs', strip: 'hidden', children: { b: { component: 'text' } } } } }
+            }) as unknown as AppDocument
+        });
+        expect(deeper.report).toEqual([]);
+        expect(Object.keys(deeper.app?.blueprint.screens ?? {})).toEqual(['main']);
     });
 
     it('should report data that holds no records', () => {
@@ -221,7 +220,7 @@ describe('splitDocument reports', () => {
 
     it('should report a document that already has screens', () => {
         // Act
-        const result = splitDocument({ name: 'new', document: deepFreeze({ app: { component: 'outlet' }, screens: {}, start: 'a' }) as unknown as AppDocument });
+        const result = splitDocument({ name: 'new', document: deepFreeze({ app: { component: 'app' }, screens: {}, start: 'a' }) as unknown as AppDocument });
 
         // Assert
         expect(result.report).toEqual([{ path: '$.screens', reason: 'the document already has screens' }]);

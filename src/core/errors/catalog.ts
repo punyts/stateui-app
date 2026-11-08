@@ -19,7 +19,7 @@ export const ERROR_PREFIXES = [
     'SUI-INSTANCE',
     'SUI-USES',
     'SUI-ROUTE',
-    'SUI-SHELL',
+    'SUI-APP',
     'SUI-BUILD',
     'SUI-RUN',
     'SUI-SYNC'
@@ -205,7 +205,7 @@ export const ERROR_CATALOG = {
         template: 'The data binding "{name}" at {path} shares the dataset "{target}", which needs Full mode (an app server) to stay in step across apps, and the app runs in {other} mode'
     },
     'SUI-ROUTE-PARAMS': { template: 'The params of navigate at {path} do not fit: {reason}' },
-    'SUI-SHELL-OUTLET': { template: 'The outlet at {path} is not valid: {reason}' },
+    'SUI-APP-ROOT': { template: 'The app node at {path} is not valid: {reason}' },
     'SUI-LOGIC-COMMAND': { template: 'Unknown logic command "{command}" at {path}' },
     'SUI-LOGIC-PATH': {
         template: 'Path {target} at {path} must be under $.app, $.data, $.server, $.screens or $.route, use only the captures of its trigger, or be a node reference that resolves to one node'

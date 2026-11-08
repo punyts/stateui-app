@@ -22,7 +22,7 @@ const STORE: JsonObject = deepFreeze({
         logic: { cart: { params: { taxRate: 0.0825, currency: 'USD' } } }
     },
     start: 'home',
-    shell: { component: 'page', children: { header: { component: 'panel' }, main: { component: 'outlet' } } },
+    app: { component: 'app', layout: { type: 'column' } },
     screens: {
         home: { title: 'Store', root: { component: 'panel' } },
         product: { title: 'Product', params: { id: { type: 'string' } }, root: { component: 'panel' } }
@@ -104,8 +104,8 @@ describe('readBlueprint', () => {
         expect(result.blueprint?.uses?.data?.['bag']).toEqual({ model: 'bag-line', scope: 'persona' });
     });
 
-    it('should accept a blueprint with only start, shell and screens', () => {
-        const json = { start: 'home', shell: { component: 'page' }, screens: { home: { root: { component: 'panel' } } } };
+    it('should accept a blueprint with only start, app and screens', () => {
+        const json = { start: 'home', app: { component: 'app' }, screens: { home: { root: { component: 'panel' } } } };
 
         expect(readBlueprint(json).errors).toEqual([]);
     });
@@ -139,10 +139,10 @@ describe('readBlueprint', () => {
         expect(errorsOf(storeWith('uses.data.my-bag', { model: 'bag-line', scope: 'persona' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.my-bag']);
     });
 
-    it('should refuse a screen without root and a root or shell that is not a node', () => {
+    it('should refuse a screen without root and a root or app that is not a node', () => {
         expect(errorsOf(storeWith('screens.home.root', undefined))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens.home.root']);
         expect(errorsOf(storeWith('screens.home.root', { children: {} }))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens.home.root']);
-        expect(errorsOf(storeWith('shell', undefined))).toEqual(['SUI-BLUEPRINT-SHAPE $.shell']);
+        expect(errorsOf(storeWith('app', undefined))).toEqual(['SUI-BLUEPRINT-SHAPE $.app']);
     });
 
     it('should accept screen locales and refuse ones that are not overlays by language', () => {

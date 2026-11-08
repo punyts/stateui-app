@@ -208,6 +208,41 @@ describe('validateOn', () => {
         expect(path).toEqual([]);
     });
 
+    it('should check a screen command aimed at the app node against the app tree', () => {
+        // Arrange
+        const region = parseShape(
+            {
+                summary: 'Region',
+                commands: ['show'],
+                commandValues: { show: 'messages' },
+                properties: { messages: { type: 'map', items: 'string', default: { saved: 'Saved' } } }
+            },
+            'region.state.json'
+        ).shape as Shape;
+        const library: ComponentLibrary = { ...LIBRARY, region: { tier: 'root', tag: 'ui-region', shape: region } };
+        const appTree = resolveNode({ component: 'toolbar', children: { r: { component: 'region' } as Node } }, library);
+        const screen = (command: string, target: string, value: string): Node =>
+            ({ component: 'button', on: { press: { command, target, value } } }) as Node;
+        const run = (node: Node, app = appTree): string[] =>
+            validateOn(resolveNode(node, library), library, { path: '$.screens.home.root', app }).map((error) => error.code);
+
+        // Act
+        const known = run(screen('show', '$.app.children.r', 'saved'));
+        const unknownValue = run(screen('show', '$.app.children.r', 'nope'));
+        const unknownCommand = run(screen('submit', '$.app.children.r', 'saved'));
+        const missing = run(screen('show', '$.app.children.gone', 'saved'));
+        const withoutApp = validateOn(resolveNode(screen('show', '$.app.children.r', 'nope'), library), library, {
+            path: '$.screens.home.root'
+        });
+
+        // Assert
+        expect(known).toEqual([]);
+        expect(unknownValue).toEqual(['SUI-ON-VALUE']);
+        expect(unknownCommand).toEqual(['SUI-ON-COMMAND']);
+        expect(missing).toEqual(['SUI-ON-TARGET']);
+        expect(withoutApp).toEqual([]);
+    });
+
     it('should report a missing target node and a missing provider', () => {
         const missing = check(button({ press: { command: 'submit', target: '.children.nope' } }));
         const provider = check(button({ press: { command: 'submit', target: '$parent' } }));

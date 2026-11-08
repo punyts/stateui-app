@@ -8,7 +8,7 @@ import type { AppDocument, DocumentScreen, JsonObject, JsonValue } from '../type
 
 /**
  * Where navigation lives in the store: `screen` and `params`. It sits beside `$.app`, `$.data` and `$.theme`, never
- * under `$.app` (a key there would be a property of the shell's root component), and is not a document key
+ * under `$.app` (a key there would be a property of the app node's root component), and is not a document key
  */
 export const ROUTE_PATH = '$.route';
 

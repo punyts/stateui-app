@@ -18,7 +18,7 @@ function shapeOf(properties: Record<string, unknown>, events: string[] = []): Sh
 const library: ComponentLibrary = Object.freeze({
     panel: { tier: 'root', tag: 'x-rts-panel', shape: shapeOf({ children: { type: 'map', items: 'string', default: {} } }) },
     label: { tier: 'root', tag: 'x-rts-label', shape: shapeOf({ text: { type: 'string', default: '' } }) },
-    outlet: { tier: 'root', tag: 'x-rts-outlet', shape: shapeOf({}) }
+    app: { tier: 'root', tag: 'x-rts-app', shape: shapeOf({}) }
 });
 
 defineComponent({
@@ -26,11 +26,11 @@ defineComponent({
     template: '<sui-node repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
 });
 defineComponent({ tag: 'x-rts-label', template: '<p>{{ $.text }}</p>' });
-defineComponent({ tag: 'x-rts-outlet', template: '<section><slot></slot></section>' });
+defineComponent({ tag: 'x-rts-app', template: '<section layout-host=""></section>' });
 
-/** A shell with an outlet, a home screen and a product screen that needs an `id` and takes a `qty` */
+/** An app node, a home screen and a product screen that needs an `id` and takes a `qty` */
 const DOCUMENT = Object.freeze({
-    app: { component: 'panel', children: { main: { component: 'outlet' } } },
+    app: { component: 'app' },
     screens: {
         home: { root: { component: 'panel', children: { title: { component: 'label', text: 'Home' } } } },
         product: {

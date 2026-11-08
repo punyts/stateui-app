@@ -64,13 +64,13 @@ describe('the scenes document validator (more than 16 scenes on a page)', () => 
         expect(found.map((warning) => [warning.code, warning.statePath])).toEqual([['SUI-DOC-LIMIT-SCENES', '$.app']]);
     });
 
-    it('should count a page as the shell and one screen, and warn at the screen that is over', () => {
+    it('should count each screen on its own, and warn at the screen that is over', () => {
         // Arrange
         const document = {
-            app: { component: 'page', children: { main: { component: 'outlet' }, ...scenes(2) } },
+            app: { component: 'app' },
             screens: {
-                light: { title: 'Light', root: { component: 'panel', children: scenes(14) } },
-                heavy: { title: 'Heavy', root: { component: 'panel', children: scenes(15) } }
+                light: { title: 'Light', root: { component: 'panel', children: scenes(16) } },
+                heavy: { title: 'Heavy', root: { component: 'panel', children: scenes(17) } }
             },
             start: 'light'
         };

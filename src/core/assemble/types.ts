@@ -26,7 +26,7 @@ export interface AssembleError extends BuildError {
 }
 
 export interface AssembleResult {
-    /** The document the runtime mounts: `app` is the shell, `screens` the screens */
+    /** The document the runtime mounts: `app` is the app node, `screens` the screens it lays out */
     document: AppDocument;
     /**
      * `SUI-USES-MISSING` for each part named in `uses` (or a component in a node) that the owner does not have, and the

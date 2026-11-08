@@ -11,7 +11,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Error catalog, types and limits
 All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
 
-- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-PATTERN`, `SUI-PRESET`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-SHELL`, `SUI-BUILD`, `SUI-RUN`, `SUI-SYNC` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values. `SUI-RUN-CAP` is for the component library's `drawRepeat`: its records are more than the renderer draws (`actual` records, `limit` the cap, `name` the renderer), so only the first are drawn. `SUI-RUN-FILE` ("The {component} at {path} cannot use its file: {reason}") is for a component of the library whose stored file (read with `ui-file-read`) is missing, cannot be read or does not decode; the reason is the read's code (`not_found`, `offline`, ...) or `not_an_image`, never the file id or name; `paintField` reports it for a background file (G2.9b). `SUI-RUN-3D` ("The {component} at {path} cannot draw in 3D: {reason}") is for the component library's `scene3d`: its renderer chunk did not load (the reason is the `Load3dError` code, `load_failed`, `script_error` or `timeout`, or `no_chunk` for a host that serves none), a browser without WebGL (`no_webgl`) or a WebGL context not restored within 5 s (`context_lost`), in which cases the scene shows its `_fallback` text, and a `model` file it cannot draw (`not_glb`, `draco`, `meshopt`, `ktx2`, `external_uri` or `invalid_glb`; the other nodes still draw). `SUI-RUN-DRAW` ("Shape at {path} cannot be drawn as written: {reason}") is for the component library's `drawing`: a shape whose resolved value it cannot draw (a link that delivers text where a number belongs), a node that is not a 2D shape, or a linked colour that is not a colour; the reason names the property or component, never the value.
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-PATTERN`, `SUI-PRESET`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-APP`, `SUI-BUILD`, `SUI-RUN`, `SUI-SYNC` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values. `SUI-RUN-CAP` is for the component library's `drawRepeat`: its records are more than the renderer draws (`actual` records, `limit` the cap, `name` the renderer), so only the first are drawn. `SUI-RUN-FILE` ("The {component} at {path} cannot use its file: {reason}") is for a component of the library whose stored file (read with `ui-file-read`) is missing, cannot be read or does not decode; the reason is the read's code (`not_found`, `offline`, ...) or `not_an_image`, never the file id or name; `paintField` reports it for a background file (G2.9b). `SUI-RUN-3D` ("The {component} at {path} cannot draw in 3D: {reason}") is for the component library's `scene3d`: its renderer chunk did not load (the reason is the `Load3dError` code, `load_failed`, `script_error` or `timeout`, or `no_chunk` for a host that serves none), a browser without WebGL (`no_webgl`) or a WebGL context not restored within 5 s (`context_lost`), in which cases the scene shows its `_fallback` text, and a `model` file it cannot draw (`not_glb`, `draco`, `meshopt`, `ktx2`, `external_uri` or `invalid_glb`; the other nodes still draw). `SUI-RUN-DRAW` ("Shape at {path} cannot be drawn as written: {reason}") is for the component library's `drawing`: a shape whose resolved value it cannot draw (a link that delivers text where a number belongs), a node that is not a 2D shape, or a linked colour that is not a colour; the reason names the property or component, never the value.
 - **Types.** `AppDocument` (`theme`, `themes`, `appThemes`, `locale`, `data`, `app`, `screens`, `start`, `composed`, `locales`, `logic`; `DOCUMENT_KEYS`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
 - **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
 
@@ -153,13 +153,13 @@ and no DOM.
 
 ## Patterns
 
-A pattern is a ready tree for a shell or a screen, found by search and copied into an app. Its file is `<name>.pattern.json` under `patterns/<kind>/<name>/`, where the kind is `shell` or `screen` (`PATTERN_KINDS`). `src/core/convention/patterns.ts` reads, checks and applies one.
+A pattern is a ready tree for a screen, found by search and copied into an app. Its file is `<name>.pattern.json` under `patterns/<kind>/<name>/`, where the kind is `screen` (`PATTERN_KINDS`; an app is its screens, so there is nothing else to pattern). `src/core/convention/patterns.ts` reads, checks and applies one.
 
 - **Keys.** `summary` (one line, at most 120 characters), `purposes` (the `checkPurposes` rule of components), `tree` (a node), and optional `kind` (it must match the folder), `slots` and `params`. Paths in `slots` and `params` use the syntax of `exposes`, relative to the tree (`children.grid.pageSize`); there is no templating in the tree.
 - **Slots** map a name to `{ path, description }`: the node where the agent adds content after the pattern is applied.
 - **Params** map a name to `{ type, default?, required?, paths, description }`. `type` is one of `PATTERN_PARAM_TYPES` (`string`, `number`, `boolean`, `path`, a state path such as `$.data.products`); `paths` lists every tree path the value is written to. A param needs a `default` that fits its type, or `required: true`.
 - **`readPattern(json, file, kind)`** returns `{ pattern?, errors }`. Each problem is `SUI-PATTERN-SHAPE` with its path; an unknown key names the keys allowed there.
-- **`checkPattern(pattern, library, file)`** reports, as `SUI-PATTERN-SHAPE`: a component not in the library; a node of a root component that fails `validateNode` (the node error's code leads the reason; `$row` is legal inside a row template; a composed node is not opened); a child its slot's `childComponents` does not accept; a slot or param path that does not resolve (`exposedPathResolves`); a shell without exactly one `outlet`; a screen that holds one. `checkPatternPurposes(patterns)` reports a purpose two patterns share as `SUI-BUILD-PURPOSE-DUPLICATE`.
+- **`checkPattern(pattern, library, file)`** reports, as `SUI-PATTERN-SHAPE`: a component not in the library; a node of a root component that fails `validateNode` (the node error's code leads the reason; `$row` is legal inside a row template; a composed node is not opened); a child its slot's `childComponents` does not accept; a slot or param path that does not resolve (`exposedPathResolves`); a screen that holds an `app` node. `checkPatternPurposes(patterns)` reports a purpose two patterns share as `SUI-BUILD-PURPOSE-DUPLICATE`.
 - **`applyPattern(pattern, values?)`** returns `{ tree?, slots, errors }`: a copy of the tree with each value (or its default) written at each of its paths, and the slots as `{ name, path, description }`. An unknown param (the message lists the params), a missing required param or a value of the wrong type is `SUI-PATTERN-PARAM`, and no tree is returned. The pattern is not changed.
 
 ## Resolving a node
@@ -240,7 +240,7 @@ A command object is `{ command, target?, value? }`. `value` is the command's arg
 Targets: `^name.path` (nearest node, starting with the node itself, whose key is `name` or that is an instance of
 composed component `name`, then the path below it), `.path` (own subtree), `$parent` (nearest ancestor whose component
 declares the command), `$row` / `$row.path` (the record a row template's slot shows) and `$.app…` (absolute; in a
-screen, `$.screens.{name}…` paths of that screen name nodes too, while in the shell they are plain state paths). Dot
+screen, `$.screens.{name}…` paths of that screen name nodes too, while in the app node's `on` they are plain state paths). Dot
 climbing (`..x`) is rejected.
 
 **`$row`.** Legal as a `target` and as a `value` (`"value": "$row.id"`) only inside a row template (the value of a
@@ -310,9 +310,9 @@ it sets to `true`, without a non-blank `_label` or a `<-_label` link.
 
 The `scenes` validator (`validateSceneCount`, graphics G3.4) warns (`SUI-DOC-LIMIT-SCENES`) when one page would show more
 than `MAX_SCENES_PER_PAGE` (16) `scene3d` nodes: each scene has its own WebGL context and Chromium keeps at most 16 per
-page, so the oldest scenes would lose theirs and show `_fallback`. A page is the `app` tree (the shell) with one screen:
-a shell over the limit is warned once at `$.app`, otherwise each screen whose scenes and the shell's are over it is
-warned at `$.screens.{name}`. The warning names the count; the document stays valid.
+page, so the oldest scenes would lose theirs and show `_fallback`. A page is the `app` node (or the one tree of an app
+without screens) with one screen: `$.app` over the limit is warned once there, otherwise each screen whose scenes and
+those of `$.app` are over it is warned at `$.screens.{name}`. The warning names the count; the document stays valid.
 
 Node fields inside map items (a table column's `cell`, a `descriptionList` item `node`) are resolved, validated against
 their component's shape and checked for `on` and links like any other node; those of a `row: true` field are row
@@ -322,8 +322,8 @@ A runtime property that still has its default in a resolved node counts as not s
 value is `SUI-STATE-RUNTIME`.
 
 Layouts, node overrides, ordered keys, `on` entries and the node limit cover the screens as they cover `app`.
-`core/route/` holds the route: `ROUTE_PATH` (`$.route`), `OUTLET_COMPONENT` (`outlet`), `screenPath(name)`
-(`$.screens.{name}`), `findOutlet(tree, path)` (the path of the first `outlet` node), `RouteState` (`{ screen, params }`), `paramDefaults(declarations)`
+`core/route/` holds the route: `ROUTE_PATH` (`$.route`), `APP_COMPONENT` (`app`), `screenPath(name)`
+(`$.screens.{name}`), `findAppNodes(value, path)` (the paths of the `app` nodes in a tree), `RouteState` (`{ screen, params }`), `paramDefaults(declarations)`
 and `initialRoute(document)`, the `start` screen with copies of its params' defaults (undefined without screens).
 
 **Navigating.** `{ "command": "navigate", "target": "product", "value": { "id": "$row.id" } }` moves `$.route` to a
@@ -333,15 +333,21 @@ such screen (with the nearest names), params that are not an object, a param the
 that does not fit its type or validators, or a required param left out. In logic a refusal fails the transition
 (`logic.failed`); in `on` it is `SUI-RUN-ON-COMMAND`. The browser runs it through the dispatcher's `navigate` option,
 which `mountApp` sets for a document with screens; logic hosts give `screens()`. The `route` document validator checks
-every `navigate` of the shell, the screens and the logic with `checkNavigate`: `SUI-ROUTE-SCREEN` for a target that
+every `navigate` of the app node, the screens and the logic with `checkNavigate`: `SUI-ROUTE-SCREEN` for a target that
 names no screen, `SUI-ROUTE-PARAMS` for literal params that do not fit (a `$`, `^` or `{{ }}` value is checked by name
 only; a command with `from` by screen only). A node whose component has a string `screen` property (`link`,
 `menuItem`) is checked the same way, with its `params`: the errors are at the node's `.screen` or `.params`. A
 component command named `navigate` is shadowed by the system command. An `on` command in a screen whose target is
-under `$.app` (a toaster of the shell) is found from the shell's root.
-The `outlet` validator checks where the screens show (`SUI-SHELL-OUTLET`): in an app with screens the resolved shell
-holds exactly one `outlet` node (one a composed component brings counts; each extra one is an error at its path, none is
-an error at `$.app`), and no screen holds one. An app without screens is not checked.
+under `$.app` (the app's `toasts`) is found from the root at `$.app`.
+
+**The app node.** An app is its screens. In an app with screens `$.app` is an `app` node: its `layout` (any layout
+type) places the screens, which are its layout items, by each screen root's `placement`; it holds the app-wide things
+(the document title, `toasts`, app events in `on`) and no `children`, so components go in the screens, and a header or
+menu every screen shows is a composed component each screen places. The `app` validator (`validateAppRoot`,
+`SUI-APP-ROOT`) reports a `$.app` that is not an `app` node, an app node with `children`, and an `app` node anywhere
+else (below `$.app`, in a screen, brought by a composed component). The `placement` validator checks each screen
+root's `placement` against the app node's `layout`. An app without screens is one tree at `$.app` (a test harness or an
+embedded part) and is not checked.
 
 ## Dispatching `on` in the browser
 
@@ -455,7 +461,7 @@ Save button saves and a count follows its records without an agent in the loop.
   below) and `reject`. A rule whose only command is `reject` is a **guard**:
   it refuses the change. Trigger and command paths may be under `$.app`, `$.data`, `$.server`, `$.screens` and `$.route`.
 - **Values.** `{{ expression }}` templates; `$.path`, `^node.path` (a node key or composed name, unique in the current
-  screen, else in the shell; while validating, in the shell, else among the screens), `$trigger`,
+  screen, else in the app node; while validating, in the app node, else among the screens), `$trigger`,
   `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
   `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
   `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,
@@ -487,7 +493,7 @@ Save button saves and a count follows its records without an agent in the loop.
 The owner tree (`knowledge-base/design/stateui-owner-tree-and-tools.md` in AI Minion) splits an app into a blueprint and
 the owner's parts. `src/core/blueprint/` holds their types and the blueprint reader; `src/core/assemble/` assembles and validates an app.
 
-- **Types.** `AppBlueprint` (`title`, `uses`, `start`, `shell`, `screens`, `logic`, `locales`), `ThemePart`
+- **Types.** `AppBlueprint` (`title`, `uses`, `start`, `app`, `screens`, `logic`, `locales`), `ThemePart`
   (base `tokens`, `overlays` by name with a `kind` of `OVERLAY_KINDS`), `LogicModule` (`needs`, `params` and the logic
   units), `ModelPart` (`fields`), `DatasetPart` (`model?`, `records`), `ComposedPart` (a tree, `exposes` and the search
   keys) and `PatternPart` (read and checked under Patterns). `PART_KINDS` lists the owner roots and `PartRef` names a part by kind and name;
@@ -501,19 +507,19 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
 - **Reader.** `readBlueprint(json)` returns `{ blueprint, errors }`, with `blueprint` only when there are no errors. Each
   problem is a `SUI-BLUEPRINT-SHAPE` naming its path: an unknown key, `uses` of the wrong shape (theme names that are not
   part names or listed twice, a binding that is neither `{ dataset }` nor `{ model, scope: "persona" }`, a binding name that
-  is not a key name, a module name that is not a part name), a shell or screen root that is not a node, a screen without
+  is not a key name, a module name that is not a part name), an app node or screen root that is not a node, a screen without
   `root`, no screens, a screen name that is not a part name, a `start` that names no screen, and params that are not typed
   declarations. `declarationProblems(value, path)` checks one typed declaration for the blueprint, models and modules: its
   keys, a type of `FIELD_TYPES`, a boolean `required`, validators that are known, well formed (their own `parse`) and
   apply to the type (`pattern` on a `number` does not; `any` takes every validator), and a default that fits the type
-  and its own validators. `isKeyName` is the rule for binding, param and field names (`^[A-Za-z_][A-Za-z0-9_]*$`). The contents of `logic`, the parts `uses` names and the shell's `outlet` are checked when the app is
+  and its own validators. `isKeyName` is the rule for binding, param and field names (`^[A-Za-z_][A-Za-z0-9_]*$`). The contents of `logic`, the parts `uses` names and the app node (`SUI-APP-ROOT`) are checked when the app is
   assembled.
 - **Assembling.** `assembleApp(blueprint, parts, { library? })` takes a `PartSource` (plain maps of `themes`, `modules`,
   `models`, `datasets` and `components` by name; no IO) and returns `{ document, errors, uses }`. The document is today's
-  `AppDocument` plus `screens`: `app` is the shell, `theme.tokens` and `themes` (the overlays) come from the first of
+  `AppDocument` plus `screens`: `app` is the app node, `theme.tokens` and `themes` (the overlays) come from the first of
   `uses.themes` (`appThemes` holds every listed theme by name), `data.{binding}` holds the bound dataset's records (for a persona binding, the model's defaults over an
   empty map: `applyDefaults(model, {})`), `composed` holds
-  the owner components that a node of the shell, a screen or another used component names (their trees with `exposes`,
+  the owner components that a node of the app node, a screen or another used component names (their trees with `exposes`,
   without the search keys; an owner component wins over a library component of the same name), and `locales` are the
   app's own. `logic` is the app's own units followed by each module of `uses.logic`, instantiated with its params
   (`instantiateModule`, units named `{module}:{unit}`). Each need of a module must be bound under its own name
@@ -526,7 +532,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   components. Pure: the result shares nothing with the inputs, so changing one theme part shows
   in every app assembled from it.
 - **Validating.** `validateApp(blueprint, parts, catalog, { name?, ...ValidateDocumentOptions })` assembles and runs
-  `validateDocument` on the assembled document, which checks the shell at `$.app` and each screen at
+  `validateDocument` on the assembled document, which checks the app node at `$.app` and each screen at
   `$.screens.{screen}`. Each error gains `part`: the owner component (`$.composed.{name}`), the first theme
   (`$.theme`, `$.themes`), the dataset of a binding (`$.data.{binding}`), the logic module of a binding or param error
   (the `part` assembling gave it) or the app. A component already reported
@@ -539,10 +545,10 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   renamed, report }`. Pure, so each adapter runs it over its own storage.
   - Names become slugs (`slugifyName`); a name in `taken` (by part kind) or already given in the run gets `-2`, `-3`, …;
     the stored name stays as the blueprint's `title`. `renamed` lists each name that changed.
-  - With one hidden-strip `tabs` (`strip: "hidden"`), the shell is the app with an `outlet` in its place (keeping its
-    `placement`), each tab a screen titled by its `_tab`, and `start` the strip's `active` tab. An `on` command that
-    sets the strip's `active` to a tab name becomes a `navigate` to that screen. Without one, the shell is a bare
-    `outlet`, which takes the root's app-event `on` entries, and the whole tree is the screen `main`.
+  - The app node is `{ "component": "app" }`. When the root is a hidden-strip `tabs` (`strip: "hidden"`), each tab is
+    a screen titled by its `_tab`, and `start` the strip's `active` tab. An `on` command that sets the strip's `active`
+    to a tab name becomes a `navigate` to that screen. Otherwise the app node takes the root's app-event `on` entries,
+    and the whole tree is the screen `main` (a hidden-strip `tabs` deeper in it stays tabs).
   - State paths into moved nodes, whole values or inside `{{ }}`, follow them to `$.screens.{screen}` in nodes and
     logic. The document's locale overlays split the same way: a tab's part goes to its screen, the rest stays the app's.
   - `theme.tokens` and `themes` become a theme named after the app; `theme.active` and `locale` are choices, not
@@ -619,10 +625,12 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
 4. `<sui-node>` gets a resolver (component name to the root component's tag) and options (`reflect(name)` from the shapes'
    `reflect: true` properties). The store is mounted on `host`, the `on` dispatcher is attached and `<ui-app-root>`
    is appended; it holds `<sui-node state="$.app">`. If the library registers its own `ui-app-root` first, that one is used (it then carries no token properties).
-   With screens, `startScreens` shows the screen `$.route.screen` names: on its first visit a container
-   (`<div data-sui-screen="{name}">` holding `<sui-node state="$.screens.{name}">`) is appended to the element of the
-   shell's first `outlet` node (the host when there is none), and a screen that is left gets `hidden`, so its elements
-   and articulation (typed values, open panels) are there on the way back. The shell is never re-rendered.
+   With screens, `startScreens` shows the screen `$.route.screen` names: on its first visit a
+   `<sui-node state="$.screens.{name}" data-sui-screen="{name}">` is appended directly to the `[layout-host]` of the
+   `app` element at `$.app` (the host when there is none), so the app's `layout` places it by the screen root's
+   `placement`. A screen that is left gets `hidden` (and `display: none`), so its elements and articulation (typed
+   values, open panels) are there on the way back; switching to a screen moves focus to its root. The app node is never
+   re-rendered by a screen change.
    `visibleScreen()` says which screen shows and `navigate(screen, params?)` moves the route (it returns why it cannot).
    `writeNode` and `removeNode` take paths below a screen's root as well as below `$.app`.
    The `route` step (`dom/route/`, `ROUTE_STEP`) keeps `$.route` in the window's URL fragment, as
@@ -649,7 +657,7 @@ Registering a name again replaces the step and keeps its place; `mountSteps()` l
 
 Code is in `src/core/locale/` (exported from `./core`) and `src/dom/locale/`. `mountApp` keeps the content of the application as it was mounted: `app.baseOverlay` (every `_` property that is not linked, including keyed-map entries such as `columns.<key>._title`, `placement._tab` and content maps such as `_errors`) and `app.baseLocale`. `switchLocale(store, 'de', { [app.baseLocale]: app.baseOverlay, de: germanOverlay })` applies a copy of the overlay to `$.app` and sets `$.locale`; applying the base overlay switches back. A language without an overlay returns `SUI-LOCALE-UNKNOWN` and changes nothing. `$.data` and `$.theme` are never touched.
 
-**Screens.** Each screen's text has its own overlays: a screen's `locales.<code>` (`screens.home.locales.de`) is relative to its root `$.screens.{name}`, as the document's `locales.<code>` is relative to `$.app`. `app.screenBaseOverlays` holds the base content of each screen by name. `switchLocale(store, code, overlays, screens)` takes the screens' overlays by screen name, then by language, as a fourth argument and applies each to its root, whether the screen is shown, hidden or not mounted yet, so a screen shown after a switch already has the language. A code that neither the shell nor any screen has is `SUI-LOCALE-UNKNOWN`. The `locale` validator checks every screen's `locales` against that screen at its own path, and `readBlueprint` accepts `locales` on a blueprint screen.
+**Screens.** Each screen's text has its own overlays: a screen's `locales.<code>` (`screens.home.locales.de`) is relative to its root `$.screens.{name}`, as the document's `locales.<code>` is relative to `$.app`. `app.screenBaseOverlays` holds the base content of each screen by name. `switchLocale(store, code, overlays, screens)` takes the screens' overlays by screen name, then by language, as a fourth argument and applies each to its root, whether the screen is shown, hidden or not mounted yet, so a screen shown after a switch already has the language. A code that neither the app node nor any screen has is `SUI-LOCALE-UNKNOWN`. The `locale` validator checks every screen's `locales` against that screen at its own path, and `readBlueprint` accepts `locales` on a blueprint screen.
 
 `extractBaseOverlay(tree, linkedPaths)` builds that overlay from a resolved tree (arrays are not searched; an overlay cannot address an array item). `validateLocaleOverlay(code, overlay, app, { linkedPaths, library })` rejects a leaf that is not a `_` text property or inside a `_` content map (`SUI-LOCALE-CONTENT`), a linked property (`SUI-LOCALE-LINKED`) and a path the application does not have (`SUI-LOCALE-PATH`); with `library`, each `_` leaf must be a `kind: content` property of its component.
 
@@ -657,7 +665,7 @@ Code is in `src/core/locale/` (exported from `./core`) and `src/dom/locale/`. `m
 
 `validateAppLocale(code, resolvedApp, componentOverlays, appOverrides, options)` returns the errors of the document's own overrides and a `SUI-LOCALE-MISSING` warning for each content path the language does not translate, in tree order, naming the language and state path. It lists at most `MAX_MISSING_PER_LANGUAGE` (50) and adds one `SUI-LOCALE-MORE` warning that counts the rest. Empty text is not counted, and a language with overlays for only some components is allowed. `validateDocument` runs the registered `locale` validator, which checks `document.locales` for `SUI-LOCALE-CONTENT`, `SUI-LOCALE-PATH` and `SUI-LOCALE-LINKED`; it cannot report missing content, because a document does not carry component overlays, so the server calls `validateAppLocale` for that.
 
-**Nodes created later.** `registerLocaleStep(componentOverlays)` registers a mount step. After `mountApp` it builds the overlay of each language (the base overlay for the mounted content, `buildAppOverlay` for the rest) for the shell and for each screen, and watches `$.app` and every `$.screens.{name}` (`createNodeLocale`'s `root` option names the root one localizer keeps). `handle.screenOverlays` holds the screens' overlays. A node written later (a keyed entry added to `children`, a `children` map added to a node, a composed node, a keyed entry such as a static select option) gets its component's overlay for the current `$.locale` in the same write, before it renders. Each language's overlay learns the new content, so `handle.switchTo(code)` keeps it translated and switching back restores the original text; a delete removes the node from the overlays. Text the author wrote that differs from the component default is kept, and the document's `locales` overrides for the path apply. Code that creates nodes itself (list and table rows, modals) calls `handle.nodes.prepare(path, node, instances?)` immediately before writing and writes what it returns; a composed node needs its `ResolveResult.instances`. Writing over an existing node is an update, not a creation, so add nodes under new keys.
+**Nodes created later.** `registerLocaleStep(componentOverlays)` registers a mount step. After `mountApp` it builds the overlay of each language (the base overlay for the mounted content, `buildAppOverlay` for the rest) for the app node and for each screen, and watches `$.app` and every `$.screens.{name}` (`createNodeLocale`'s `root` option names the root one localizer keeps). `handle.screenOverlays` holds the screens' overlays. A node written later (a keyed entry added to `children`, a `children` map added to a node, a composed node, a keyed entry such as a static select option) gets its component's overlay for the current `$.locale` in the same write, before it renders. Each language's overlay learns the new content, so `handle.switchTo(code)` keeps it translated and switching back restores the original text; a delete removes the node from the overlays. Text the author wrote that differs from the component default is kept, and the document's `locales` overrides for the path apply. Code that creates nodes itself (list and table rows, modals) calls `handle.nodes.prepare(path, node, instances?)` immediately before writing and writes what it returns; a composed node needs its `ResolveResult.instances`. Writing over an existing node is an update, not a creation, so add nodes under new keys.
 
 ## State snapshot
 
@@ -826,7 +834,7 @@ Composed components have no module; `catalog.json` describes them with their def
   `cssChecks` (return `SUI-BUILD` errors; they see the CSS as written, so their lines match the file). With none
   registered the output is the same as without the points.
 - **Search keys (`requireSearchKeys`).** Off by default: a component without `category` or `purposes` (and a composed file without `summary`) builds and its entry leaves the keys out. With `{ requireSearchKeys: true }` each missing key is an error (`SUI-BUILD-CATEGORY`, `SUI-BUILD-PURPOSES`, `SUI-BUILD-SUMMARY`) and the component gets no entry. In both modes a present value that breaks its rule is an error, and a purpose phrase that repeats another component's, compared lowercased, trimmed and with inner spaces collapsed (`normalizePurpose`), is `SUI-BUILD-PURPOSE-DUPLICATE` on the later component in name order, naming the earlier one.
-- **Patterns (`patternsDir`).** A folder of `<kind>/<name>/<name>.pattern.json`, where the kind is `shell` or `screen` and the name is lower-case hyphenated (see Patterns). After the components are built, each file is read with `readPattern`, checked with `checkPattern` against the components that built, and the purposes with `checkPatternPurposes` across the patterns. A file in the wrong place (wrong depth, an unknown kind folder, a folder name that is not lower-case hyphenated, a file not named after its folder) or not valid JSON is `SUI-PATTERN-FILE`; files are named relative to `patternsDir`. A pattern with any problem fails the build and is left out; for a repeated purpose, the later pattern in name order. `catalog.json` has a top-level `patterns`: `{ name, kind, summary, purposes, tree, slots, params, components }` sorted by kind then name, where `components` lists the component names the tree uses, sorted (a composed node is not opened). Without the option `patterns` is `[]`. `buildPatterns(patternsDir, library)` is exported for a build of patterns alone.
+- **Patterns (`patternsDir`).** A folder of `<kind>/<name>/<name>.pattern.json`, where the kind is `screen` and the name is lower-case hyphenated (see Patterns). After the components are built, each file is read with `readPattern`, checked with `checkPattern` against the components that built, and the purposes with `checkPatternPurposes` across the patterns. A file in the wrong place (wrong depth, an unknown kind folder, a folder name that is not lower-case hyphenated, a file not named after its folder) or not valid JSON is `SUI-PATTERN-FILE`; files are named relative to `patternsDir`. A pattern with any problem fails the build and is left out; for a repeated purpose, the later pattern in name order. `catalog.json` has a top-level `patterns`: `{ name, kind, summary, purposes, tree, slots, params, components }` sorted by kind then name, where `components` lists the component names the tree uses, sorted (a composed node is not opened). Without the option `patterns` is `[]`. `buildPatterns(patternsDir, library)` is exported for a build of patterns alone.
 - **Theme presets (`presetsDir`).** A folder of `<name>.preset.json`, the name lower-case hyphenated, each a theme part with a one-line `summary`: `{ summary, tokens, overlays? }`, `overlays` by name as `{ kind, tokens }`. `readPreset` checks the shape (`SUI-PRESET-SHAPE` with its path), the base tokens with `validateTokens` (with the library's component tokens) and each overlay with `validateThemeOverlay`; the overlay contrast warnings are not build errors, since a theme's contrast is reported where it is written. A file with another name, in a sub-folder or not valid JSON is `SUI-PRESET-FILE`. A preset with any problem fails the build and is left out. `catalog.json` has a top-level `themePresets`: `{ name, summary, tokens, overlays }` sorted by name; without the option it is `[]`. `buildPresets(presetsDir, componentTokens?)` is exported.
 - **Shared stylesheets (`sharedCssDir`).** With `buildLibrary(src, out, { sharedCssDir: 'src/shared/css' })`, a line that holds only `@include "<name>.css";` in a component's `view.css` is replaced with the text of `<name>.css` from that folder, before the `cssChecks`, the built-in checks and the transforms run. The token lint therefore checks the partial as part of every component that includes it, and the token fallbacks apply to it. The name must be a plain file name (`^[a-z0-9][a-z0-9-]*\.css$`); an unknown file, a name with a path, and an `@include` inside a partial are `SUI-BUILD-IO` errors at the include line and column, and the component gets no module. Lines reported after an include count the inlined text. Without the option no line is touched.
 - **Shared shape partials (`sharedShapeDir`, `includes`).** With `buildLibrary(src, out, { sharedShapeDir: 'src/shared/shape' })`, a state file (of a root or a shape-tier component) may list `"includes": ["paint", "transform"]`: each name is a file `<name>.json` directly in that folder, an object of only `properties`, `events` and `tokens`, merged under the file's own before the shape is read (`parseShape(text, file, { partials })`, `applyShapeIncludes`). The merged shape lists the own properties and tokens first, in file order, then each included one the file does not declare, in the order of `includes`; the events are the own ones followed by each included event not already listed. An own property or token wins over an included one, and the included properties are checked as if written in the file, so the catalog entry (and `ui_component_get`) shows the merged result and equals the one of the file written out in full. `SUI-BUILD-SHAPE` on the state file: `includes` that is not a list of unique names (`^[a-z0-9][a-z0-9-]*$`, no `.json`), an unknown partial, a partial that is not valid JSON or holds another key (so a partial cannot include another), and a property or token two partials both declare. Without the option every included name is unknown. `shared` stays the closed list of articulation names; `includes` is how a property group is shared.

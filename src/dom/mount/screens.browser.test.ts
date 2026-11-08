@@ -10,8 +10,8 @@ import { mountApp } from './index.js';
 import type { MountedApp } from './index.js';
 import { SCREEN_ATTRIBUTE, startScreens, writeRoute } from './screens.js';
 
-function shapeOf(properties: Record<string, unknown>, events: string[] = []): Shape {
-    const result = parseShape({ summary: 'Fixture', properties, events }, 'fixture.state.json');
+function shapeOf(properties: Record<string, unknown>, events: string[] = [], layout = false): Shape {
+    const result = parseShape({ summary: 'Fixture', properties, events, ...(layout && { layout }) }, 'fixture.state.json');
     if (!result.shape) throw new Error(JSON.stringify(result.errors));
     return result.shape;
 }
@@ -21,8 +21,8 @@ const library: ComponentLibrary = Object.freeze({
     label: { tier: 'root', tag: 'x-scr-label', shape: shapeOf({ text: { type: 'string', default: '' } }) },
     field: { tier: 'root', tag: 'x-scr-field', shape: shapeOf({ value: { type: 'string', default: '' } }) },
     button: { tier: 'root', tag: 'x-scr-button', shape: shapeOf({}, ['press']) },
-    /** The test stand-in for the real outlet (O1.7): it shows what is put in it */
-    outlet: { tier: 'root', tag: 'x-scr-outlet', shape: shapeOf({}) }
+    /** The test stand-in for the app component: a layout host for the screens and the toasts after it */
+    app: { tier: 'root', tag: 'x-scr-app', shape: shapeOf({ toasts: { type: 'node' } }, [], true) }
 });
 
 defineComponent({
@@ -33,14 +33,11 @@ defineComponent({ tag: 'x-scr-label', template: '<p>{{ $.text }}</p>' });
 /** An input whose typed value lives only in the DOM, like any articulation the store does not hold */
 defineComponent({ tag: 'x-scr-field', template: '<input />' });
 defineComponent({ tag: 'x-scr-button', template: '<b>button</b>' });
-defineComponent({ tag: 'x-scr-outlet', template: '<section><slot></slot></section>' });
+defineComponent({ tag: 'x-scr-app', template: '<section layout-host=""></section><sui-node state=".toasts"></sui-node>' });
 
-/** A shell with a header and an outlet, a home screen with a field and a button that opens a product screen */
+/** An app node, a home screen with a field and a button that opens a product screen, and a product screen */
 const DOCUMENT = Object.freeze({
-    app: {
-        component: 'panel',
-        children: { header: { component: 'label', text: 'Shop' }, main: { component: 'outlet' } }
-    },
+    app: { component: 'app', layout: { type: 'column' } },
     screens: {
         home: {
             title: 'Home',
@@ -86,10 +83,10 @@ function findAll(root: ParentNode, tag: string, found: Element[] = []): Element[
     return found;
 }
 
-/** The screen names of the containers below `root` (crossing shadow roots) and whether each is hidden */
+/** The names of the screen elements below `root` (crossing shadow roots) and whether each is hidden */
 function containers(root: ParentNode): Record<string, boolean> {
     const result: Record<string, boolean> = {};
-    for (const element of findAll(root, 'div')) {
+    for (const element of findAll(root, 'sui-node')) {
         const name = element.getAttribute(SCREEN_ATTRIBUTE);
         if (name !== null) result[name] = (element as HTMLElement).hidden;
     }
@@ -117,7 +114,7 @@ describe('screens in mountApp', () => {
         document.body.replaceChildren();
     });
 
-    it('should hold the screens and the start route in the store, and mount only the start screen in the outlet', () => {
+    it('should hold the screens and the start route in the store, and mount only the start screen in the app layout host', () => {
         // Act
         const { app, host } = start();
 
@@ -128,9 +125,12 @@ describe('screens in mountApp', () => {
         expect(app.store?.get('$.screens.home.children.greeting.text')).toBe('Ada');
         expect(app.visibleScreen()).toBe('home');
         expect(containers(host)).toEqual({ home: false });
-        const outlet = find(host, 'x-scr-outlet') as Element;
-        expect(outlet.querySelector(`[${SCREEN_ATTRIBUTE}="home"]`)).not.toBeNull();
-        expect(find(outlet, 'x-scr-field')).toBeDefined();
+        const layoutHost = (find(host, 'x-scr-app') as Element).shadowRoot?.querySelector('[layout-host]') as Element;
+        const screen = layoutHost.querySelector(`:scope > [${SCREEN_ATTRIBUTE}="home"]`) as HTMLElement;
+        expect(screen.localName).toBe('sui-node');
+        expect(screen.getAttribute('state')).toBe('$.screens.home');
+        expect(screen.style.display).toBe('contents');
+        expect(find(layoutHost, 'x-scr-field')).toBeDefined();
     });
 
     it('should refuse a plain write to $.route and move it only through navigate', () => {
@@ -164,14 +164,14 @@ describe('screens in mountApp', () => {
         expect(containers(host)).toEqual({ home: true, product: false });
     });
 
-    it('should run a command from a screen node on a node of the shell, found from the app root', () => {
+    it('should run a command from a screen node on the toasts of the app node', () => {
         // Arrange
         const toaster = parseShape({ summary: 'Fixture', properties: {}, events: [], commands: ['show'] }, 'fixture.state.json').shape as Shape;
         const withToaster: ComponentLibrary = { ...library, toaster: { tier: 'root', tag: 'x-scr-toaster', shape: toaster } };
         if (customElements.get('x-scr-toaster') === undefined) defineComponent({ tag: 'x-scr-toaster', template: '<i>toasts</i>' });
-        const doc = copy() as unknown as { app: { children: Record<string, unknown> }; screens: { home: { root: { children: Record<string, unknown> } } } };
-        doc.app.children['toasts'] = { component: 'toaster' };
-        doc.screens.home.root.children['open'] = { component: 'button', on: { press: { command: 'show', target: '$.app.children.toasts', value: 'Saved' } } };
+        const doc = copy() as unknown as { app: Record<string, unknown>; screens: { home: { root: { children: Record<string, unknown> } } } };
+        doc.app['toasts'] = { component: 'toaster' };
+        doc.screens.home.root.children['open'] = { component: 'button', on: { press: { command: 'show', target: '$.app.toasts', value: 'Saved' } } };
         const host = document.body.appendChild(document.createElement('div'));
         const app = mountApp(host, doc as unknown as AppDocument, withToaster);
         apps.push(app);
@@ -205,17 +205,37 @@ describe('screens in mountApp', () => {
         expect(containers(host)).toEqual({ home: false, product: true });
     });
 
-    it('should keep the shell header as the same element across navigation', () => {
+    it('should keep the app element and lay the next screen beside the hidden one in its layout host', () => {
         // Arrange
         const { app, host } = start();
-        const before = find(host, 'x-scr-label');
+        const before = find(host, 'x-scr-app') as Element;
 
         // Act
         app.navigate('product', { id: 'p2' });
 
         // Assert
-        expect(find(host, 'x-scr-label')).toBe(before);
-        expect(before?.shadowRoot?.textContent).toContain('Shop');
+        expect(find(host, 'x-scr-app')).toBe(before);
+        const screens = Array.from(before.shadowRoot?.querySelector('[layout-host]')?.children ?? []) as HTMLElement[];
+        expect(screens.map((screen) => [screen.getAttribute(SCREEN_ATTRIBUTE), screen.hidden, screen.style.display])).toEqual([
+            ['home', true, 'none'],
+            ['product', false, 'contents']
+        ]);
+    });
+
+    it('should move focus to a screen that is switched to, and not to the first one', () => {
+        // Arrange
+        const { app, host } = start();
+        const first = document.activeElement;
+
+        // Act
+        app.navigate('product', { id: 'p2' });
+
+        // Assert
+        expect(first).toBe(document.body);
+        const product = findAll(host, 'sui-node').find((node) => node.getAttribute(SCREEN_ATTRIBUTE) === 'product') as Element;
+        const root = product.firstElementChild as HTMLElement;
+        expect(root.getAttribute('tabindex')).toBe('-1');
+        expect(root.matches(':focus')).toBe(true);
     });
 
     it('should write and remove nodes below a screen root, and refuse paths outside the app and the screens', () => {
@@ -295,7 +315,7 @@ describe('startScreens', () => {
         document.body.replaceChildren();
     });
 
-    it('should put the containers in the host without an outlet and record which one is visible', () => {
+    it('should put the screens in the host without an app element and record which one is visible', () => {
         // Arrange
         const host = document.body.appendChild(document.createElement('div'));
         const store = createStore({ route: { screen: 'a', params: {} } });

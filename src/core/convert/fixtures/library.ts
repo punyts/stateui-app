@@ -24,7 +24,7 @@ export const CONVERT_TAGS = {
     modal: 'x-cv-modal',
     button: 'x-cv-button',
     tabs: 'x-cv-tabs',
-    outlet: 'x-cv-outlet'
+    app: 'x-cv-app'
 } as const;
 
 /** The components the converter fixtures use, with the properties they set */
@@ -50,5 +50,5 @@ export const CONVERT_LIBRARY: ComponentLibrary = deepFreeze({
             }
         })
     },
-    outlet: { tier: 'root', tag: CONVERT_TAGS.outlet, shape: shapeOf({ properties: {} }) }
+    app: { tier: 'root', tag: CONVERT_TAGS.app, shape: shapeOf({ layout: true, properties: { _title: content } }) }
 }) as ComponentLibrary;

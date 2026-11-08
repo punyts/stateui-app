@@ -27,7 +27,7 @@ export interface ThemeState {
     active?: Record<string, string>;
 }
 
-/** One screen of an assembled app: shown in the shell's `outlet` */
+/** One screen of an assembled app: a root node the app node lays out; its `placement` places it in the app's `layout` */
 export interface DocumentScreen {
     title?: string;
     /** Typed param declarations by name */
@@ -48,7 +48,7 @@ export interface AppDocument {
     appThemes?: Record<string, AppTheme>;
     locale?: string;
     data?: JsonObject;
-    /** The shell when the app has screens */
+    /** The app node (`app` component) when the app has screens; otherwise the one tree of the app */
     app: Node;
     /** The screens of an app assembled from a blueprint; each root node's state path is `$.screens.{screen}` */
     screens?: Record<string, DocumentScreen>;

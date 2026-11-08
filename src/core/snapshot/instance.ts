@@ -9,7 +9,7 @@ import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { AppDocument, JsonObject, JsonValue } from '../types.js';
 
 /**
- * What one persona did in an app: the articulation of the shell (`app`) and of each screen (`screens`, by name), the
+ * What one persona did in an app: the articulation of the app node (`app`) and of each screen (`screens`, by name), the
  * route, the active overlay names and the persona's data. Shaped like a `StateSnapshot`; every part is sparse
  */
 export interface AppInstance {
@@ -22,7 +22,7 @@ export interface AppInstance {
 
 /** The definition's own starting values, before an instance is laid over them; never changed */
 export interface InstanceBase {
-    /** The resolved shell tree */
+    /** The resolved app node tree */
     app: JsonObject;
     /** Each screen's resolved root by name */
     screens?: Readonly<Record<string, JsonObject>>;

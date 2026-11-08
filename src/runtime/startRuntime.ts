@@ -54,7 +54,7 @@ const MAX_POSTED_ERRORS = 200;
 const BENIGN_ERROR = /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/;
 /** How long after a change the runtime looks for read files no node uses any more, in milliseconds */
 const FILE_RELEASE_DELAY_MS = 1000;
-/** The branches whose values can hold a file reference: the shell, the screens and the data */
+/** The branches whose values can hold a file reference: the app node, the screens and the data */
 const FILE_USE_ROOTS = ['$.app', '$.screens', DATA_ROOT];
 
 /** Where the runtime posts: `window.parent` in the iframe, a fake in tests */
@@ -122,7 +122,7 @@ function truncate(text: string): string {
 /** Writes from the host are sync writes: the store tags their events, so capture does not post them back */
 const SYNC_WRITE = { origin: SYNC_ORIGIN };
 /** Paths below the app tree, where a written node is mounted rather than stored */
-/** The node trees a host write may mount a node in: the shell and the screens */
+/** The node trees a host write may mount a node in: the app node and the screens */
 const NODE_PREFIXES = ['$.app.', '$.screens.'];
 
 function protocolError(error: BuildError): ProtocolError {
@@ -180,7 +180,7 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
  * Files: the dispatcher's `transferFile` hook posts `file` (answered by `fileProgress` and `fileResult`), its
  * `readFile` hook posts `fileRead` (answered by `fileData`) and its `releaseFile` hook posts `fileRelease` (answered by
  * `fileReleased`; the cached bytes of a released file are dropped). The bytes of read files are kept by id across loads
- * (`createFileReads`, at most `FILE_CACHE_BYTES`) and released a moment after a change once no value of the shell,
+ * (`createFileReads`, at most `FILE_CACHE_BYTES`) and released a moment after a change once no value of the app node,
  * the screens or the data holds the id any more; `dispose` cancels the waiting reads and drops them all.
  *
  * Chunks (G3.3): when `load` names a `3d` chunk in `chunks`, the dispatcher gets the `load3d` hook, which a `scene3d`
@@ -231,7 +231,7 @@ export function startRuntime(
     });
 
     /**
-     * The ids a node still uses: an id is used while it appears anywhere in the values of the shell, the screens or the
+     * The ids a node still uses: an id is used while it appears anywhere in the values of the app node, the screens or the
      * data (the definition of `isFileReferenced` in `@punyts/stateui-mcp`, which the server's file sweep uses)
      */
     function usedIds(ids: readonly string[]): ReadonlySet<string> {

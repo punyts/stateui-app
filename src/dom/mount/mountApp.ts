@@ -8,7 +8,7 @@ import type { Link } from '../../core/links/index.js';
 import { extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
 import { cloneJson, entryShape, resolveNode } from '../../core/resolve/index.js';
-import { OUTLET_COMPONENT, ROUTE_PATH, findOutlet, initialRoute, isRouteRefusal, routeTo, screenPath } from '../../core/route/index.js';
+import { APP_COMPONENT, ROUTE_PATH, initialRoute, isRouteRefusal, routeTo, screenPath } from '../../core/route/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, nodeChildren, reflectedProperties } from '../../core/shape/index.js';
@@ -202,7 +202,7 @@ export function mountApp(
     const baseOverlay = extractBaseOverlay(extracted.tree, extracted.linkedPaths);
     restoreRowLinks(extracted.tree, rowLinks);
 
-    // Each screen resolves and links as the shell does, at its own root `$.screens.{name}`; a node reference in a
+    // Each screen resolves and links as the app node does, at its own root `$.screens.{name}`; a node reference in a
     // screen resolves within that screen, as the validator checks it
     const screens = document.screens;
     let screenTrees: Record<string, Node> | undefined;
@@ -308,8 +308,7 @@ export function mountApp(
         ...(navigate === undefined ? {} : { navigate })
     });
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));
-    const outletPath = screens === undefined ? undefined : findOutlet(extracted.tree as unknown as JsonValue, APP_PATH);
-    const outletTag = rootEntry(library, OUTLET_COMPONENT)?.tag;
+    const appTag = rootEntry(library, APP_COMPONENT)?.tag;
     const screenView: ScreenView | undefined =
         screens === undefined
             ? undefined
@@ -317,7 +316,7 @@ export function mountApp(
                   host,
                   store: store as never,
                   screens: Object.keys(screens),
-                  ...(outletPath === undefined || outletTag === undefined ? {} : { outlet: { path: outletPath, tag: outletTag } })
+                  ...(appTag === undefined ? {} : { appTag })
               });
     /** The root (`$.app` or a screen's) that a node written at `path` goes below; undefined for any other path */
     const baseOf = (path: string): string | undefined => [APP_PATH, ...screenRoots].find((base) => path.startsWith(`${base}.`));

@@ -6,7 +6,7 @@ import { declarationProblems, isKeyName } from './declaration.js';
 import { isPartName } from './names.js';
 import type { AppBlueprint } from './types.js';
 
-const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'shell', 'screens', 'logic', 'locales'];
+const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locales'];
 const USES_KEYS = ['themes', 'data', 'logic'];
 const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
@@ -57,7 +57,7 @@ class Reader {
         this.knownKeys(json, BLUEPRINT_KEYS, '$');
         this.optionalText(json['title'], '$.title');
         if (json['uses'] !== undefined) this.uses(json['uses'], '$.uses');
-        this.node(json['shell'], '$.shell');
+        this.node(json['app'], '$.app');
         const screens = this.screens(json['screens'], '$.screens');
         const start = json['start'];
         if (typeof start !== 'string') this.shape('$.start', 'must name the first screen');
@@ -169,8 +169,8 @@ class Reader {
 }
 
 /**
- * Reads an app blueprint: its keys, the shape of `uses`, the shell and screen nodes, typed screen params and `start`.
- * The contents of `logic`, the parts `uses` names and the shell's `outlet` are checked when the app is assembled
+ * Reads an app blueprint: its keys, the shape of `uses`, the app and screen nodes, typed screen params and `start`.
+ * The contents of `logic`, the parts `uses` names and the app node are checked when the app is assembled
  */
 export function readBlueprint(json: JsonValue): ReadBlueprintResult {
     const reader = new Reader();

@@ -15,8 +15,8 @@ const PATTERN_KEYS = ['kind', 'summary', 'purposes', 'tree', 'slots', 'params'] 
 const SLOT_KEYS = ['path', 'description'] as const;
 const PARAM_KEYS = ['type', 'default', 'required', 'paths', 'description'] as const;
 
-/** The component a shell shows its screens in */
-const OUTLET = 'outlet';
+/** The component of an app's root node; never in a screen */
+const APP = 'app';
 
 /** A state path a `path` param holds, such as `$.data.products` */
 const STATE_PATH = /^\$\.[^\s.]+(?:\.[^\s.]+)*$/;
@@ -200,8 +200,7 @@ function shapeOf(library: ComponentLibrary, component: string): Shape | undefine
 /**
  * Checks a read pattern against a component library: every node's component is in the library and every node of a
  * root component passes `validateNode` (a composed node is not opened: the resolver checks its own tree), every slot
- * and param path resolves in the tree as an `exposes` path does, and a shell holds exactly one `outlet` while a
- * screen holds none. Data links are not checked here: a `$.data` path is checked when the pattern is copied into an
+ * and param path resolves in the tree as an `exposes` path does, and a screen holds no `app` node. Data links are not checked here: a `$.data` path is checked when the pattern is copied into an
  * app and the app is validated. Each problem is a `SUI-PATTERN-SHAPE` naming its path below `$.tree`, `$.slots` or `$.params`
  */
 export function checkPattern(pattern: PatternPart, library: ComponentLibrary, file: string): BuildError[] {
@@ -209,10 +208,10 @@ export function checkPattern(pattern: PatternPart, library: ComponentLibrary, fi
     const problem = (path: string, reason: string): void => {
         errors.push(buildError('SUI-PATTERN-SHAPE', { file, path, reason }));
     };
-    let outlets = 0;
+    let apps = 0;
     const visit = (node: Node, path: string, insideRow: boolean): void => {
         const component = node.component;
-        if (component === OUTLET) outlets += 1;
+        if (component === APP) apps += 1;
         if (!Object.hasOwn(library, component)) {
             problem(path, `component "${component}" is not in the library`);
             return;
@@ -229,8 +228,7 @@ export function checkPattern(pattern: PatternPart, library: ComponentLibrary, fi
     };
     visit(pattern.tree, '$.tree', false);
 
-    if (pattern.kind === 'shell' && outlets !== 1) problem('$.tree', `a shell holds exactly one "${OUTLET}", not ${outlets}`);
-    if (pattern.kind === 'screen' && outlets > 0) problem('$.tree', `a screen holds no "${OUTLET}"; the shell has it`);
+    if (apps > 0) problem('$.tree', `a screen holds no "${APP}" node; only $.app is one`);
 
     const resolved = resolveNode(pattern.tree, library, {}, { path: '$.tree' }).node;
     for (const [name, slot] of Object.entries(pattern.slots)) {

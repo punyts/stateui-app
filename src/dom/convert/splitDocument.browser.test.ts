@@ -21,7 +21,7 @@ defineComponent({
     tag: CONVERT_TAGS.tabs,
     template: '<div repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" hidden="{{ $k !== $.active }}"><sui-node state="{{ $v }}"></sui-node></div>'
 });
-defineComponent({ tag: CONVERT_TAGS.outlet, template: '<section><slot></slot></section>' });
+defineComponent({ tag: CONVERT_TAGS.app, template: '<section layout-host=""></section>' });
 
 /** The text a person sees below `node`: across shadow roots and slots, skipping what is not displayed */
 function visibleText(node: Node, words: string[] = []): string[] {
@@ -76,7 +76,7 @@ describe('a converted hidden-strip tabs app in Chromium', () => {
 
         // Assert
         expect(errors).toEqual([]);
-        expect(original).toEqual(['Halo', 'Welcome to Halo', 'Lamps and chairs', 'Product', 'A product', 'Open bag']);
+        expect(original).toEqual(['Lamps and chairs', 'Product', 'A product', 'Open bag']);
         expect(converted).toEqual(original);
     });
 });

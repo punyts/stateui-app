@@ -20,9 +20,9 @@ const LIBRARY: ComponentLibrary = Object.freeze({
     button: { tier: 'root', tag: 'ui-button', shape: shapeOf({ pressed: { type: 'boolean', default: false } }, ['press']) }
 });
 
-/** A shell and two screens; `product` takes an `id` param with a default */
+/** An app node and two screens; `product` takes an `id` param with a default */
 const DOCUMENT = Object.freeze({
-    app: { component: 'page', children: { main: { component: 'outlet' } } },
+    app: { component: 'app', layout: { type: 'column' } },
     screens: {
         home: { title: 'Home', root: { component: 'panel', children: { go: { component: 'button' } } } },
         product: { title: 'Product', params: { id: { type: 'string', default: 'p1' }, tab: { type: 'string' } }, root: { component: 'panel' } }
@@ -47,7 +47,7 @@ function codesAndPaths(errors: readonly BuildError[]): string[] {
 }
 
 describe('validateDocument with screens', () => {
-    it('should accept a document with a shell, screens and start', () => {
+    it('should accept a document with an app node, screens and start', () => {
         expect(validateDocument(DOCUMENT, LIBRARY).errors).toEqual([]);
     });
 
@@ -93,23 +93,33 @@ describe('validateDocument with screens', () => {
         expect(codesAndPaths(validateDocument(documentWith('screens.home.locales', []), LIBRARY).errors)).toEqual(['SUI-DOC-SCREEN $.screens.home']);
     });
 
-    it('should need exactly one outlet in the shell and none in a screen', () => {
+    it('should need an app node with no children at $.app and none elsewhere', () => {
         // Arrange
-        const none = documentWith('app.children', { header: { component: 'panel' } });
-        const two = documentWith('app.children', { main: { component: 'outlet' }, side: { component: 'outlet' } });
-        const inScreen = documentWith('screens.home.root.children', { go: { component: 'button' }, inner: { component: 'outlet' } });
-        const withoutScreens = { app: { component: 'page', children: { main: { component: 'outlet' } } } } as unknown as JsonObject;
+        const notApp = documentWith('app', { component: 'panel', children: { header: { component: 'text' } } });
+        const withChildren = documentWith('app.children', { header: { component: 'text' } });
+        const inScreen = documentWith('screens.home.root.children', { go: { component: 'button' }, inner: { component: 'app' } });
+        const withoutScreens = { app: { component: 'panel', children: { inner: { component: 'text' } } } } as unknown as JsonObject;
 
         // Act
-        const outletErrors = (document: JsonObject): string[] =>
-            codesAndPaths(validateDocument(document, LIBRARY).errors.filter((error) => error.code === 'SUI-SHELL-OUTLET'));
+        const appErrors = (document: JsonObject): string[] => codesAndPaths(validateDocument(document, LIBRARY).errors.filter((error) => error.code === 'SUI-APP-ROOT'));
 
         // Assert
-        expect(outletErrors(none)).toEqual(['SUI-SHELL-OUTLET $.app']);
-        expect(outletErrors(two)).toEqual(['SUI-SHELL-OUTLET $.app.children.side']);
-        expect(outletErrors(inScreen)).toEqual(['SUI-SHELL-OUTLET $.screens.home.children.inner']);
-        expect(outletErrors(withoutScreens)).toEqual([]);
-        expect(outletErrors(DOCUMENT)).toEqual([]);
+        expect(appErrors(notApp)).toEqual(['SUI-APP-ROOT $.app']);
+        expect(appErrors(withChildren)).toEqual(['SUI-APP-ROOT $.app.children']);
+        expect(appErrors(inScreen)).toEqual(['SUI-APP-ROOT $.screens.home.children.inner']);
+        expect(appErrors(withoutScreens)).toEqual([]);
+        expect(appErrors(DOCUMENT)).toEqual([]);
+    });
+
+    it('should check the placement of a screen root against the app layout', () => {
+        // Arrange
+        const region = documentWith('app.layout', { type: 'region' });
+        (((region['screens'] as JsonObject)['home'] as JsonObject)['root'] as JsonObject)['placement'] = { region: 'center' };
+        const column = documentWith('screens.home.root.placement', { region: 'center' });
+
+        // Act and Assert
+        expect(codesAndPaths(validateDocument(region, LIBRARY).errors)).toEqual([]);
+        expect(codesAndPaths(validateDocument(column, LIBRARY).errors)).toEqual(['SUI-LAYOUT-FIELD $.screens.home.placement.region']);
     });
 
     it('should need start with screens, naming one of them, and screens with start', () => {

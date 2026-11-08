@@ -30,7 +30,7 @@ export interface LocaleStepHandle {
     unregister(): void;
 }
 
-/** One root the step keeps: the shell at `$.app` or a screen at `$.screens.{name}` */
+/** One root the step keeps: the app node at `$.app` or a screen at `$.screens.{name}` */
 interface Root {
     path: string;
     tree: JsonObject;
@@ -86,8 +86,8 @@ function routed(localizers: ReadonlyMap<string, NodeLocale>): NodeLocale {
 
 /**
  * Registers the mount step that keeps the language of an application complete: when the store exists it builds the
- * overlay of each language for the shell (`$.app`) and for each screen (`$.screens.{name}`) from `componentOverlays`,
- * the document's `locales` (for the shell) or the screen's `locales`, and the base overlay of the mounted content,
+ * overlay of each language for the app node (`$.app`) and for each screen (`$.screens.{name}`) from `componentOverlays`,
+ * the document's `locales` (for the app node) or the screen's `locales`, and the base overlay of the mounted content,
  * then watches each root for nodes created later and translates them (`createNodeLocale`). A switch changes every
  * screen in the store, so a screen that is hidden or not mounted yet shows the language when it appears.
  * The step needs the document, library and instances `mountApp` already gives it, so `mountApp` is unchanged

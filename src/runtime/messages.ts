@@ -115,7 +115,7 @@ export interface RuntimeChunks {
 /**
  * Mounts the application: the document, the state to load over it, the icons it uses beyond the core set and the
  * mode (`standalone` when absent). `instance` is a persona's instance, laid over the definition as `mountApp` lays
- * `MountOptions.instance` (the shell, the screens, the data and the route), and `chunks` names the chunk scripts the
+ * `MountOptions.instance` (the app node, the screens, the data and the route), and `chunks` names the chunk scripts the
  * host serves beside the runtime page
  */
 export interface LoadMessage extends Envelope<'load'> {

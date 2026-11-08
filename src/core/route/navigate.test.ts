@@ -35,7 +35,7 @@ const SCREENS: RouteScreens = Object.freeze({
 });
 
 const DOCUMENT = Object.freeze({
-    app: { component: 'page', children: { title: { component: 'text' }, banner: { component: 'text' }, main: { component: 'outlet' } } },
+    app: { component: 'app' },
     screens: {
         home: { title: 'Home', root: { component: 'panel', children: { title: { component: 'text' }, go: { component: 'button' } } } },
         product: { title: 'Product', params: SCREENS['product']?.params, root: { component: 'panel' } }
@@ -177,7 +177,7 @@ describe('navigate in the logic engine', () => {
 });
 
 describe('the document check of navigate', () => {
-    it('should report SUI-ROUTE-SCREEN and SUI-ROUTE-PARAMS in on entries of screens and the shell', () => {
+    it('should report SUI-ROUTE-SCREEN and SUI-ROUTE-PARAMS in on entries of screens and the app node', () => {
         const document = documentWith('screens.home.root.children.go.on', {
             press: [
                 { command: 'navigate', target: 'product', value: { id: 'p1' } },
@@ -202,29 +202,29 @@ describe('the document check of navigate', () => {
         expect(codesAndPaths(validateDocument(single, LIBRARY).errors)).toEqual(['SUI-ROUTE-SCREEN $.app.children.go.on.press']);
     });
 
-    it('should read a $.screens path as a node path in its own screen and as a state path in the shell', () => {
+    it('should read a $.screens path as a node path in its own screen and as a state path in the app node', () => {
         const inScreen = documentWith('screens.home.root.children.go.on', { press: { command: 'set', target: '$.screens.home.children.go.nope', value: 1 } });
-        const inShell = documentWith('app.children.go', { component: 'button', on: { press: { command: 'set', target: '$.screens.home.children.go.nope', value: 1 } } });
+        const inApp = documentWith('app.on', { 'notify.saved': { command: 'set', target: '$.screens.home.children.go.nope', value: 1 } });
 
         expect(codesAndPaths(validateDocument(inScreen, LIBRARY).errors)).toEqual(['SUI-ON-TARGET $.screens.home.children.go.on.press']);
-        expect(codesAndPaths(validateDocument(inShell, LIBRARY).errors)).toEqual([]);
+        expect(codesAndPaths(validateDocument(inApp, LIBRARY).errors)).toEqual([]);
     });
 
-    it('should check the screen a link or menu item names, with its params, in the shell and the screens', () => {
+    it('should check the screen a link or menu item names, with its params, in every screen', () => {
         // Arrange
         const library: ComponentLibrary = {
             ...LIBRARY,
             link: { tier: 'root', tag: 'ui-link', shape: shapeOf({ screen: { type: 'string', default: '' }, params: { type: 'object', default: {} } }, ['press']) }
         };
-        const shell = documentWith('app.children.banner', { component: 'link', screen: 'prodcut' });
+        const typo = documentWith('screens.product.root.children', { banner: { component: 'link', screen: 'prodcut' } });
         const params = documentWith('screens.home.root.children.go', { component: 'link', screen: 'product', params: { qty: 2 } });
         const good = documentWith('screens.home.root.children.go', { component: 'link', screen: 'product', params: { id: 'p1' } });
-        const empty = documentWith('app.children.banner', { component: 'link', screen: '' });
+        const empty = documentWith('screens.product.root.children', { banner: { component: 'link', screen: '' } });
 
         // Act / Assert
-        const shellErrors = validateDocument(shell, library).errors;
-        expect(codesAndPaths(shellErrors)).toEqual(['SUI-ROUTE-SCREEN $.app.children.banner.screen']);
-        expect(shellErrors[0]?.message).toContain('product');
+        const typoErrors = validateDocument(typo, library).errors;
+        expect(codesAndPaths(typoErrors)).toEqual(['SUI-ROUTE-SCREEN $.screens.product.children.banner.screen']);
+        expect(typoErrors[0]?.message).toContain('product');
         expect(codesAndPaths(validateDocument(params, library).errors)).toEqual(['SUI-ROUTE-PARAMS $.screens.home.children.go.params']);
         expect(validateDocument(good, library).errors).toEqual([]);
         expect(validateDocument(empty, library).errors).toEqual([]);
@@ -239,18 +239,19 @@ describe('the document check of navigate', () => {
 
 describe('^key in a logic index with screens', () => {
     const app = DOCUMENT as unknown as AppDocument;
-    const shell = resolveNode(app.app as Node, LIBRARY, {});
+    // An app node that holds nodes, to show the order the index looks in
+    const shell = resolveNode({ component: 'panel', children: { title: { component: 'text' }, banner: { component: 'text' } } } as Node, LIBRARY, {});
     const home = resolveNode(app.screens?.['home']?.root as Node, LIBRARY, {}, { path: '$.screens.home' });
     const trees = { home: { node: home.node, instances: home.instances } };
 
-    it('should find the node of the current screen before the shell, and a key only in the shell in the shell', () => {
+    it('should find the node of the current screen before the app node, and a key only in the app node there', () => {
         const index = createLogicIndex(shell, LIBRARY, undefined, { trees, current: () => 'home' });
 
         expect(index.resolve('^title')).toBe('$.screens.home.children.title');
         expect(index.resolve('^banner')).toBe('$.app.children.banner');
     });
 
-    it('should prefer the shell without a current screen, and find a key only in a screen there', () => {
+    it('should prefer the app node without a current screen, and find a key only in a screen there', () => {
         const index = createLogicIndex(shell, LIBRARY, undefined, { trees });
         const elsewhere = createLogicIndex(shell, LIBRARY, undefined, { trees, current: () => 'product' });
 

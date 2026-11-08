@@ -337,5 +337,5 @@ export { splitDocument } from './convert/index.js';
 export type { SplitInput, SplitProblem, SplitRename, SplitResult } from './convert/index.js';
 export { NAVIGATE_COMMAND, ROUTE_PATH, checkNavigate, initialRoute, isRouteRefusal, paramDefaults, routeTo } from './route/index.js';
 export type { NavigateProblem, RouteScreens, RouteState } from './route/index.js';
-export { OUTLET_COMPONENT, findOutlet, screenPath } from './route/index.js';
+export { APP_COMPONENT, findAppNodes, screenPath } from './route/index.js';
 export { FRAGMENT_PREFIX, formatFragment, parseFragment, sameRoute } from './route/index.js';

@@ -27,7 +27,7 @@ export interface LogicIndex {
     records(path: string): string | undefined;
 }
 
-/** The screens a logic index covers beside the shell, and the screen `$.route` shows now */
+/** The screens a logic index covers beside the app node, and the screen `$.route` shows now */
 export interface LogicIndexScreens {
     /** Each screen's resolved root, by screen name; its nodes have the paths `$.screens.{screen}...` */
     trees: Readonly<Record<string, ResolvedTree>>;
@@ -52,7 +52,7 @@ function walkValue(value: JsonValue | undefined, steps: readonly string[]): Json
     return current;
 }
 
-/** The screen a state path belongs to, or undefined for the shell */
+/** The screen a state path belongs to, or undefined for the app node */
 function screenOf(path: string): string | undefined {
     return path.startsWith('$.screens.') ? path.split('.')[2] : undefined;
 }
@@ -60,7 +60,7 @@ function screenOf(path: string): string | undefined {
 /**
  * Indexes the resolved `app` tree (`resolveNode`) once, and each screen's tree when `screens` is given. Logic has no
  * position in the tree, so a name must be unique where it is looked up: in the current screen first, then in the
- * shell. Without a current screen (while validating) a name unique in the shell wins, then a name unique among all
+ * app node. Without a current screen (while validating) a name unique in the app node wins, then a name unique among all
  * screens. A reference whose name matches no node, or several in the same place, does not resolve
  */
 export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, data?: JsonValue, screens?: LogicIndexScreens): LogicIndex {
@@ -110,7 +110,7 @@ export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, 
 
     const allNamed = (name: string): Frame[] => [...frames.values()].filter((frame) => frame.key === name || frame.instances.includes(name));
 
-    /** The frames a name means: those of the first place (current screen, shell, all screens) that has any */
+    /** The frames a name means: those of the first place (current screen, app node, all screens) that has any */
     const namedFrames = (name: string): Frame[] => {
         const named = allNamed(name);
         const current = screens?.current?.();

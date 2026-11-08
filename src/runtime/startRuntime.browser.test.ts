@@ -34,7 +34,7 @@ const library: ComponentLibrary = {
         tag: 'x-rt-counter',
         shape: shapeOf({ count: { type: 'number', default: 0, runtime: true }, label: { type: 'string', default: '' }, note: { type: 'string' } })
     },
-    outlet: { tier: 'root', tag: 'x-rt-outlet', shape: shapeOf({}) },
+    app: { tier: 'root', tag: 'x-rt-app', shape: shapeOf({}) },
     picker: { tier: 'root', tag: 'x-rt-picker', shape: shapeOf({ current: { type: 'string', runtime: true, exposed: true, default: '' } }) }
 };
 
@@ -48,8 +48,8 @@ defineComponent({ tag: 'x-rt-input', template: '<i>input</i>' });
 defineComponent({ tag: 'x-rt-heading', template: '<h1>{{ $._text }}</h1>' });
 defineComponent({ tag: 'x-rt-modal', template: '<dialog>modal</dialog>' });
 defineComponent({ tag: 'x-rt-button', template: '<b>button</b>' });
-/** The test stand-in for the outlet component: it shows the screen containers put in it */
-defineComponent({ tag: 'x-rt-outlet', template: '<section><slot></slot></section>' });
+/** The test stand-in for the app component: the screens go in its layout host */
+defineComponent({ tag: 'x-rt-app', template: '<section layout-host=""></section>' });
 /** Computes its runtime property `count` on every mount, as a record view counts its records */
 defineComponent({
     tag: 'x-rt-counter',
@@ -166,14 +166,14 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('change')).toHaveLength(0);
     });
 
-    it('should lay the instance over the definition on load: the shell, a screen, the data and the route', async () => {
+    it('should lay the instance over the definition on load: a screen, the data and the route', async () => {
         // Arrange
         const document = {
             data: { name: 'Ada' },
-            app: panel({ hello: { component: 'label', '<-text': '$.data.name' }, view: { component: 'outlet' } }),
+            app: { component: 'app' },
             screens: {
                 home: { root: panel({ title: { component: 'badge', text: 'home' } }) },
-                about: { root: panel({ title: { component: 'badge', text: 'about' } }) }
+                about: { root: panel({ title: { component: 'badge', text: 'about' }, hello: { component: 'label', '<-text': '$.data.name' } }) }
             },
             start: 'home'
         } as unknown as AppDocument;
@@ -195,7 +195,7 @@ describe('startRuntime in Chromium', () => {
     it('should take a host write below a screen as a sync write and refuse one of the protected route', async () => {
         // Arrange
         const document = {
-            app: panel({ view: { component: 'outlet' } }),
+            app: { component: 'app' },
             screens: { home: { root: panel({ title: { component: 'badge', text: 'home' } }) }, about: { root: panel({}) } },
             start: 'home'
         } as unknown as AppDocument;
@@ -295,7 +295,7 @@ describe('startRuntime in Chromium', () => {
         // Arrange
         const document = {
             data: {},
-            app: panel({ view: { component: 'outlet' } }),
+            app: { component: 'app' },
             screens: { home: { root: panel({ rows: { component: 'counter' } }) } },
             start: 'home'
         } as unknown as AppDocument;
@@ -649,7 +649,7 @@ describe('startRuntime in Chromium', () => {
         it('should navigate with a navigate command message and run a component command on a node of a screen', () => {
             // Arrange
             const document = {
-                app: panel({ greeting: { component: 'heading' }, main: { component: 'outlet' } }),
+                app: { component: 'app' },
                 screens: {
                     home: { title: 'Home', root: panel({ who: { component: 'label', text: 'home' } }) },
                     detail: { title: 'Detail', params: { id: { type: 'string', required: true } }, root: panel({ dlg: { component: 'modal' } }) }
@@ -658,7 +658,7 @@ describe('startRuntime in Chromium', () => {
             } as unknown as AppDocument;
             send(message('load', { document }));
             const visible = (): string[] =>
-                Array.from((find(host, 'x-rt-outlet') as Element).querySelectorAll('[data-sui-screen]'))
+                Array.from((find(host, 'x-rt-app') as Element).shadowRoot?.querySelector('[layout-host]')?.querySelectorAll('[data-sui-screen]') ?? [])
                     .filter((element) => !(element as HTMLElement).hidden)
                     .map((element) => element.getAttribute('data-sui-screen') as string);
 
@@ -680,10 +680,10 @@ describe('startRuntime in Chromium', () => {
         it('should switch the language of every screen with a locale message, a hidden one and one mounted later included', async () => {
             // Arrange
             const document = {
-                app: panel({ greeting: { component: 'heading' }, main: { component: 'outlet' } }),
+                app: { component: 'app' },
                 screens: {
                     home: { root: panel({ title: { component: 'heading' } }) },
-                    detail: { root: panel({ name: { component: 'heading', _text: 'Detail' } }), locales: { de: { children: { name: { _text: 'Einzelheit' } } } } }
+                    detail: { root: panel({ greeting: { component: 'heading' }, name: { component: 'heading', _text: 'Detail' } }), locales: { de: { children: { name: { _text: 'Einzelheit' } } } } }
                 },
                 start: 'home'
             } as unknown as AppDocument;
