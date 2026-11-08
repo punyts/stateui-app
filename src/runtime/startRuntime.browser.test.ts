@@ -291,6 +291,27 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('error')).toHaveLength(0);
     });
 
+    it('should neither post nor restore a runtime property of a node on a screen', async () => {
+        // Arrange
+        const document = {
+            data: {},
+            app: panel({ view: { component: 'outlet' } }),
+            screens: { home: { root: panel({ rows: { component: 'counter' } }) } },
+            start: 'home'
+        } as unknown as AppDocument;
+
+        // Act
+        send(message('load', { document }));
+        await tick();
+        send(message('write', { writes: [{ path: '$.screens.home.children.rows.count', value: 0 }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('count:3');
+        expect(ofType('change').map((posted) => (posted['change'] as { path: string }).path)).not.toContain('$.screens.home.children.rows.count');
+        expect(ofType('error')).toHaveLength(0);
+    });
+
     it('should put a snapshot property the document does not set on its node, and skip a node that is gone', async () => {
         // Arrange
         const document: AppDocument = { data: {}, app: panel({ rows: { component: 'counter' } }) };
