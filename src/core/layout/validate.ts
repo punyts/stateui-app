@@ -4,7 +4,7 @@ import type { ComponentLibrary } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
 import { fitsProperty, nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
-import { RESERVED_KEYS } from '../types.js';
+import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
 import type { DocumentValidationContext } from '../validate/types.js';
 import { layoutError } from './errors.js';
@@ -105,7 +105,10 @@ function checkLayout(node: Node, path: string, shape: Shape | undefined, errors:
     }
 }
 
-/** Checks each placement field against the parent's declared placement shape, or else the placement of its layout type */
+/**
+ * Checks each placement field against the parent's declared placement shape, or else the placement of its layout type.
+ * A placement links as a whole (`<-placement`); a link to one field (`<-x`) is an unknown field
+ */
 function checkFields(placement: JsonObject, at: string, parent: Parent, type: LayoutType | undefined, errors: BuildError[]): void {
     const declared = parent.shape?.placement;
     for (const [name, value] of Object.entries(placement)) {
@@ -126,7 +129,9 @@ function checkFields(placement: JsonObject, at: string, parent: Parent, type: La
 
 function checkPlacement(node: Node, path: string, parent: Parent | undefined, errors: BuildError[]): void {
     const at = `${path}.${RESERVED_KEYS.placement}`;
-    const present = Object.hasOwn(node, RESERVED_KEYS.placement);
+    // A linked placement (`<-placement`) takes its fields from the store: only where it sits is checked
+    const linked = Object.hasOwn(node, `${PREFIXES.link}${RESERVED_KEYS.placement}`);
+    const present = Object.hasOwn(node, RESERVED_KEYS.placement) && !linked;
     const declared = parent?.shape?.placement;
     const value = node[RESERVED_KEYS.placement] as JsonValue | undefined;
 
@@ -137,6 +142,7 @@ function checkPlacement(node: Node, path: string, parent: Parent | undefined, er
     const placement = (present ? value : {}) as JsonObject;
 
     if (parent !== undefined && declared !== undefined) {
+        if (linked) return;
         checkFields(placement, at, parent, undefined, errors);
         for (const [name, property] of Object.entries(declared)) {
             if (property.required && !Object.hasOwn(placement, name)) {
@@ -145,7 +151,7 @@ function checkPlacement(node: Node, path: string, parent: Parent | undefined, er
         }
         return;
     }
-    if (!present) return;
+    if (!present && !linked) return;
 
     if (parent === undefined) {
         // A composed component's own root carries a default placement for where it is used; only the app root has none
@@ -160,7 +166,7 @@ function checkPlacement(node: Node, path: string, parent: Parent | undefined, er
     }
     // An invalid parent layout is reported by the layout validator; the child is not checked against it
     const type = layoutTypeOf(parent.node);
-    if (type !== undefined) checkFields(placement, at, parent, type, errors);
+    if (type !== undefined && !linked) checkFields(placement, at, parent, type, errors);
 }
 
 /**

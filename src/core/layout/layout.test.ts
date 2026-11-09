@@ -204,6 +204,21 @@ describe('placement validator', () => {
         expect(tabs()).toEqual(['SUI-LAYOUT-REQUIRED']);
     });
 
+    it('should accept a placement linked as a whole and check only where it sits', () => {
+        const linked = { component: 'text', '<-placement': '$.data.spot' };
+        const check = (app: Record<string, unknown>): string[] =>
+            validateDocument({ app, data: { spot: { x: '1px' } } }, LIBRARY).errors.map((error) => error.code);
+
+        expect(check({ component: 'panel', layout: { type: 'adhoc' }, children: { a: linked } })).toEqual([]);
+        expect(check({ component: 'tabs', children: { a: linked } })).toEqual([]);
+        expect(check({ component: 'panel', children: { a: linked } })).toEqual(['SUI-LAYOUT-PARENT']);
+        expect(check(linked)).toEqual(['SUI-LAYOUT-ROOT']);
+    });
+
+    it('should reject a link to one placement field', () => {
+        expect(codes(panel({ type: 'adhoc' }, { '<-x': '$.data.x' }))).toContain('SUI-LAYOUT-FIELD');
+    });
+
     it('should check placements inside a composed component against its own layout', () => {
         const composed = {
             card: { component: 'panel', layout: { type: 'grid' }, children: { a: { component: 'text', placement: { region: 'n' } } } }

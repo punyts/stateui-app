@@ -240,6 +240,22 @@ describe('layout sheets in Chromium', () => {
             expect(after.left).toBeGreaterThan(before.left);
         });
 
+        it('should place a child by a placement linked to data and follow the data', () => {
+            // Arrange
+            const app = { component: 'panel', layout: { type: 'adhoc' }, children: { a: { component: 'box', '<-placement': '$.data.spot' } } };
+            const mounted = mountApp(host, { app, data: { spot: { x: '10px', y: '20px', width: '50px', z: 3 } } } as AppDocument, library);
+            apps.push(mounted);
+            const style = (): CSSStyleDeclaration => getComputedStyle(findAll(host, 'x-lay-box')[0] as Element);
+            expect(mounted.errors).toEqual([]);
+            expect([style().left, style().top, style().width, style().zIndex]).toEqual(['10px', '20px', '50px', '3']);
+
+            // Act
+            mounted.store?.set('$.data.spot', { x: '70px', y: '0', width: '80px', z: 5 });
+
+            // Assert
+            expect([style().left, style().top, style().width, style().zIndex]).toEqual(['70px', '0px', '80px', '5']);
+        });
+
         it('should rearrange when the layout type changes', () => {
             // Arrange
             const { app, boxes, layout } = start(panel({ type: 'column' }, four()), 600);

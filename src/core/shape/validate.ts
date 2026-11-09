@@ -269,6 +269,8 @@ export function validateNode(shape: Shape, node: Node, statePath: string, contex
         }
         if (key.startsWith(PREFIXES.link)) {
             const target = key.slice(PREFIXES.link.length);
+            // A linked placement is the tree's, checked by the `placement` validator
+            if (target === RESERVED_KEYS.placement) continue;
             present.add(target);
             linked.add(target);
             const linkedProperty = Object.hasOwn(shape.properties, target) ? shape.properties[target] : undefined;
