@@ -23,7 +23,7 @@ const KIND_WORDS: Readonly<Record<PartKind, string>> = {
 };
 
 /** The unit kinds of a logic document, in the order the assembled `logic` lists them */
-const UNIT_KINDS = ['machines', 'rules', 'tables', 'computes'] as const;
+const UNIT_KINDS = ['machines', 'rules', 'tables', 'computes', 'effects'] as const;
 
 class Assembler {
     readonly errors: AssembleError[] = [];

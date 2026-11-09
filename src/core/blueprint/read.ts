@@ -10,7 +10,7 @@ const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'lo
 const USES_KEYS = ['themes', 'data', 'logic'];
 const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
-const LOGIC_KEYS = ['machines', 'rules', 'tables', 'computes'];
+const LOGIC_KEYS = ['machines', 'rules', 'tables', 'computes', 'effects'];
 const PERSONA_SCOPE = 'persona';
 
 export interface ReadBlueprintResult {

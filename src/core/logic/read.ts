@@ -4,8 +4,8 @@ import { isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { captureNames, compilePattern, expressionPaths, fillCaptures, isStatePath, mayTouch, writeSteps } from './pattern.js';
 import { MAX_TABLE_CELLS, compileTable } from './table.js';
-import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS, MAX_DELAY } from './types.js';
-import type { LogicCommand, LogicCompute, LogicDocument, LogicFunctions, LogicMachine, LogicRule, LogicTable, LogicTableInput, LogicTableRow, LogicTransition, LogicTrigger } from './types.js';
+import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS, MAX_DELAY, MAX_EFFECT_CACHE } from './types.js';
+import type { LogicCommand, LogicCompute, LogicDocument, LogicEffect, LogicFunctions, LogicMachine, LogicRule, LogicTable, LogicTableInput, LogicTableRow, LogicTransition, LogicTrigger } from './types.js';
 import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions, withCaptures } from './values.js';
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
@@ -17,7 +17,8 @@ const RULE_KEYS = ['when', 'do'];
 const TABLE_KEYS = ['inputs', 'outputs', 'rows'];
 const INPUT_KEYS = ['path', 'value', 'values', 'breaks'];
 const COMPUTE_KEYS = ['inputs', 'run', 'outputs'];
-const UNIT_KEYS = ['machines', 'rules', 'tables', 'computes'] as const;
+const EFFECT_KEYS = ['request', 'run', 'status', 'records', 'window', 'value', 'cache'];
+const UNIT_KEYS = ['machines', 'rules', 'tables', 'computes', 'effects'] as const;
 const TRIGGER_KEYS = ['path', 'result', 'is', 'was', 'if', 'after', 'debounce'];
 const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -468,6 +469,51 @@ class Reader {
         return this.errors.length === before ? (value as unknown as LogicCompute) : undefined;
     }
 
+    /** A path of an effect: a state path or node reference without captures or templates */
+    private effectPath(text: JsonValue | undefined, at: string): void {
+        if (typeof text === 'string' && text.includes('{')) {
+            this.shape(at, 'an effect path has no captures ("{name}") or templates');
+            return;
+        }
+        this.tablePath(text, at, []);
+    }
+
+    effect(value: JsonValue, path: string): LogicEffect | undefined {
+        if (!isObject(value)) {
+            this.shape(path, 'an effect must be an object { "request", "run", "status", "records", "window", "value", "cache" }');
+            return undefined;
+        }
+        const before = this.errors.length;
+        this.unknownKeys(value, EFFECT_KEYS, path);
+        this.effectPath(value['request'], `${path}.request`);
+        this.effectPath(value['status'], `${path}.status`);
+        const run = value['run'];
+        if (typeof run !== 'string' || run.trim() === '') this.shape(`${path}.run`, '"run" must be the name of an effect function the host registers');
+        else if (this.options.functions && !Object.hasOwn(this.options.functions.effects ?? {}, run)) {
+            this.warnings.push(buildError('SUI-LOGIC-FUNCTION', { path: `${path}.run`, name: run, statePath: `${path}.run` }));
+        }
+        const records = value['records'];
+        if (records !== undefined) {
+            if (!isObject(records)) this.shape(`${path}.records`, '"records" must be { "into", "key" }: the data map the records merge into and their primary key field');
+            else {
+                this.unknownKeys(records, ['into', 'key'], `${path}.records`);
+                this.effectPath(records['into'], `${path}.records.into`);
+                if (typeof records['into'] === 'string' && records['into'].startsWith('$.') && !records['into'].startsWith('$.data.') && !records['into'].startsWith('$.server.')) {
+                    this.shape(`${path}.records.into`, 'the records merge into a data map ("$.data.<name>", or "$.server.<name>" to keep them on the app server in Full mode)');
+                }
+                if (typeof records['key'] !== 'string' || !INPUT_NAME.test(records['key'])) this.shape(`${path}.records.key`, '"key" must be the name of the field that holds a record\'s primary key');
+            }
+        }
+        if (value['window'] !== undefined) this.effectPath(value['window'], `${path}.window`);
+        if (value['value'] !== undefined) this.effectPath(value['value'], `${path}.value`);
+        const cache = value['cache'];
+        if (cache !== undefined && (typeof cache !== 'number' || !Number.isInteger(cache) || cache < 0 || cache > MAX_EFFECT_CACHE)) {
+            this.shape(`${path}.cache`, `"cache" must be a whole number of answers from 0 to ${MAX_EFFECT_CACHE}`);
+        }
+        if (cache !== undefined && cache !== 0 && records === undefined) this.shape(`${path}.cache`, 'a cache refills the window from the records map, so it needs "records"');
+        return this.errors.length === before ? (value as unknown as LogicEffect) : undefined;
+    }
+
     table(value: JsonValue, path: string): LogicTable | undefined {
         if (!isObject(value)) {
             this.shape(path, 'a table must be an object { "inputs", "outputs", "rows" }');
@@ -589,14 +635,14 @@ function sharedResultNames(root: JsonObject): string[] {
 }
 
 /**
- * Reads the `logic` root of a document: the keyed maps `machines`, `rules`, `tables` and `computes`. Reports `SUI-LOGIC-SHAPE` (an unknown
+ * Reads the `logic` root of a document: the keyed maps `machines`, `rules`, `tables`, `computes` and `effects`. Reports `SUI-LOGIC-SHAPE` (an unknown
  * key, a wrong type, a missing field), `SUI-LOGIC-COMMAND` (an unknown command), `SUI-LOGIC-PATH` (a path that is not
  * under `$.app`, `$.data` or `$.server`, a capture the trigger does not have, or a node reference that does not
  * resolve), `SUI-LOGIC-STATE` (a `from` or `to` that is neither the machine's `initial` nor the `to` of a transition)
  * and `SUI-LOGIC-EXPRESSION` (an expression that does not compile), each with its state path. A table's rows are
  * compiled: `SUI-LOGIC-GAP` (a combination no row covers), `SUI-LOGIC-UNREACHABLE` and `SUI-LOGIC-SIZE` (warnings),
  * and `SUI-LOGIC-CYCLE` for tables and computes that feed each other; `SUI-LOGIC-FUNCTION` (a warning) for a compute
- * unit whose function `options.functions` does not have. The result keeps only the units without errors, so an engine
+ * unit or effect whose function `options.functions` does not have. The result keeps only the units without errors, so an engine
  * never runs a broken one
  */
 export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadLogicResult {
@@ -629,9 +675,12 @@ export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadL
             } else if (key === 'tables') {
                 const table = reader.table(entry, path);
                 if (table) (logic.tables ??= {})[name] = table;
-            } else {
+            } else if (key === 'computes') {
                 const compute = reader.compute(entry, path);
                 if (compute) (logic.computes ??= {})[name] = compute;
+            } else {
+                const effect = reader.effect(entry, path);
+                if (effect) (logic.effects ??= {})[name] = effect;
             }
         }
     }

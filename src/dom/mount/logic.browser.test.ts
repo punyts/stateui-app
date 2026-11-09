@@ -104,6 +104,26 @@ describe('browser logic', () => {
         expect(app.store!.get('$.app.children.count.text')).toBe('****');
     });
 
+    it('should run effects the host passes as logicFunctions', async () => {
+        // Arrange
+        host = document_().body.appendChild(document_().createElement('div'));
+        const logic = {
+            effects: { load: { request: '$.data.qty', run: 'load', status: '$.data.stats.status', value: '$.data.stats.count' } }
+        };
+        app = mountApp(host, documentWith(logic), library, {}, {
+            logicFunctions: { effects: { load: (request) => Promise.resolve({ value: Number(request) * 10 }) } }
+        });
+        await flush();
+
+        // Act
+        app.store!.set('$.data.qty', 3);
+        await flush();
+
+        // Assert
+        expect(app.store!.get('$.data.stats.count')).toBe(30);
+        expect(app.store!.get('$.data.stats.status.state')).toBe('ready');
+    });
+
     it('should skip writes that carry an origin, such as sync writes', async () => {
         const mounted = mount(documentWith(COUNT), 'persisted');
 

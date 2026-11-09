@@ -157,6 +157,72 @@ export type LogicComputeFunction = (inputs: Readonly<Record<string, JsonValue>>)
 /** A function expressions may call by its name, next to the built-in ones (`LOGIC_FUNCTIONS`) */
 export type LogicExpressionFunction = (...args: JsonValue[]) => JsonValue;
 
+/** The most answers an effect keeps in its token cache */
+export const MAX_EFFECT_CACHE = 200;
+
+/**
+ * An effect: async work that turns a request in state into a result in state. Writing a value at `request` starts
+ * it; the request's canonical hash is its token, so equal requests share a token. `status` gets
+ * `LogicEffectStatus`; the answer's records merge into `records.into` by their `records.key` field, and fill the record
+ * view at `window` by position. Paths are state paths or node references
+ */
+export interface LogicEffect {
+    request: string;
+    /** The name the host registered the effect function under */
+    run: string;
+    status: string;
+    /** The data map the answer's records merge into, and the field that holds each record's primary key */
+    records?: { into: string; key: string };
+    /** The record view whose records (by position from the answer's `first`) and `total` the answer writes */
+    window?: string;
+    /** Where the answer's `value` is written */
+    value?: string;
+    /** How many answers to keep in memory, by token; a request with a kept token refills the window with no call */
+    cache?: number;
+}
+
+/** What an effect function answers: records from `first` in the server's order, the total, or a value */
+export interface LogicEffectAnswer {
+    first?: number;
+    records?: JsonValue[];
+    total?: number;
+    value?: JsonValue;
+}
+
+/** An effect function: gets a copy of the request and a signal that aborts when a newer request replaces it */
+export type LogicEffectFunction = (request: JsonValue, options: { signal: AbortSignal }) => Promise<LogicEffectAnswer>;
+
+/** An effect request the host answers when no function is registered under its `run` name (the MCP agent) */
+export interface LogicEffectRequest {
+    /** The effect's name in the document */
+    name: string;
+    run: string;
+    token: string;
+    request: JsonValue;
+}
+
+/** What an effect writes at its `status` path */
+export interface LogicEffectStatus {
+    /** The token of the request it is about; absent when idle with no request */
+    token?: string;
+    state: 'idle' | 'loading' | 'ready' | 'error';
+    total?: number;
+    reason?: string;
+    /** ISO time */
+    at: string;
+}
+
+/** An effect as `LogicEngine.effects` reports it */
+export interface LogicEffectInfo {
+    name: string;
+    /** The token of the request it last acted on */
+    token?: string;
+    /** True while a call is running */
+    running: boolean;
+    /** How many answers its cache holds */
+    cached: number;
+}
+
 /**
  * The code a host supplies for the logic, by name: documents never hold code, they name these. One module shared by the
  * browser host (`mountApp`'s `logicFunctions`) and the app server
@@ -166,6 +232,8 @@ export interface LogicFunctions {
     compute?: Readonly<Record<string, LogicComputeFunction>>;
     /** Functions expressions call; a name of a built-in function is refused */
     expressions?: Readonly<Record<string, LogicExpressionFunction>>;
+    /** Async functions that `effects` run */
+    effects?: Readonly<Record<string, LogicEffectFunction>>;
 }
 
 /** The `logic` root of a document */
@@ -174,6 +242,7 @@ export interface LogicDocument {
     rules?: Record<string, LogicRule>;
     tables?: Record<string, LogicTable>;
     computes?: Record<string, LogicCompute>;
+    effects?: Record<string, LogicEffect>;
 }
 
 /** A change the engine looks up: a value written at a path, or a delete when `value` is absent */
@@ -191,7 +260,7 @@ export interface LogicWrite {
 }
 
 /** What a failure, a trace event or a refusal names: a machine, a rule, a table, a guard rule, or a chain of them */
-export type LogicUnitKind = 'machine' | 'rule' | 'table' | 'compute' | 'guard' | 'chain';
+export type LogicUnitKind = 'machine' | 'rule' | 'table' | 'compute' | 'effect' | 'guard' | 'chain';
 
 /** A transition that failed or a change a guard refused, for `logic.failed` and the reporter */
 export interface LogicFailure {
@@ -253,6 +322,11 @@ export interface LogicHost {
     screens?(): RouteScreens | undefined;
     /** The compute and expression functions the host registered; without them a compute unit fails when it runs */
     functions?: LogicFunctions;
+    /**
+     * Answers an effect whose `run` has no registered function (the MCP server queues it for the agent); without it
+     * such an effect fails. `signal` aborts when a newer request replaces it
+     */
+    effect?(request: LogicEffectRequest, signal: AbortSignal): Promise<LogicEffectAnswer>;
     /** Runs a named server procedure (Full mode); without it every `call` is rejected */
     call?(name: string, payload: JsonValue): Promise<LogicAnswer>;
     /**
@@ -306,7 +380,7 @@ export interface LogicTraceEvent {
 export interface LogicTraceRun {
     /** ISO time */
     at: string;
-    cause: 'change' | 'result' | 'timer' | 'answer' | 'start' | 'guard';
+    cause: 'change' | 'result' | 'timer' | 'answer' | 'start' | 'guard' | 'effect';
     /** The paths of the changes (or the result name) that started it */
     changes: string[];
     events: LogicTraceEvent[];

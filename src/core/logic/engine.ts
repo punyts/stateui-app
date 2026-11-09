@@ -1,5 +1,6 @@
 import type { JsonValue } from '../types.js';
 import { runCommand } from './commands.js';
+import { createEffectRunner } from './effects.js';
 import type { CommandContext } from './commands.js';
 import { PathIndex } from './pathIndex.js';
 import { captureNames, compilePattern, expressionPaths, fillCaptures, matchPattern, mayTouch, pathSteps, writeSteps } from './pattern.js';
@@ -17,6 +18,7 @@ import type {
     LogicCommand,
     LogicCompute,
     LogicDocument,
+    LogicEffectInfo,
     LogicFailure,
     LogicHost,
     LogicMachine,
@@ -127,7 +129,9 @@ export interface LogicEngine {
     trace(): LogicTraceRun[];
     /** Forgets the trace */
     clearTrace(): void;
-    /** Cancels every timer and ignores call answers that arrive later */
+    /** Each effect: the token it last acted on, whether a call is running, and how many answers its cache holds */
+    effects(): LogicEffectInfo[];
+    /** Cancels every timer and running effect, and ignores call and effect answers that arrive later */
     stop(): void;
 }
 
@@ -276,9 +280,9 @@ function buildUnits(logic: LogicDocument, resolve?: (reference: string) => strin
 
 /** Where a unit runs in a logic document, and the state paths it reads and writes */
 export interface LogicUnitPlace {
-    readonly kind: 'machine' | 'rule' | 'table' | 'compute' | 'guard';
+    readonly kind: 'machine' | 'rule' | 'table' | 'compute' | 'effect' | 'guard';
     readonly name: string;
-    /** 1-based place in the order a chain looks units up; absent for a guard, which is asked before a change commits */
+    /** 1-based place in the order a chain looks units up; absent for a guard, which is asked before a change commits, and an effect, which runs after a chain */
     readonly position?: number;
     /** Trigger paths, table input paths and `from` paths of commands */
     readonly reads: readonly string[];
@@ -302,6 +306,12 @@ export function logicRunOrder(logic: LogicDocument): LogicUnitPlace[] {
     const { units, guards } = buildUnits(logic);
     return [
         ...chainOrder(units).map((unit, index) => ({ kind: unit.kind, name: unit.name, position: index + 1, reads: unique(readPaths(unit)), writes: unique(writePaths(unit)) })),
+        ...Object.entries(logic.effects ?? {}).map(([name, effect]) => ({
+            kind: 'effect' as const,
+            name,
+            reads: [effect.request],
+            writes: unique([effect.status, ...(effect.records ? [effect.records.into] : []), ...(effect.window === undefined ? [] : [effect.window]), ...(effect.value === undefined ? [] : [effect.value])])
+        })),
         ...guards.map((guard) => ({ kind: 'guard' as const, name: guard.name, reads: guard.trigger.path === undefined ? [] : [guard.trigger.path], writes: [] }))
     ];
 }
@@ -415,6 +425,63 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     guards.push(...built.guards);
 
     const ordered = chainOrder(units);
+
+    /** The changes looked up since the effects last settled, for the window rows of changed records */
+    const touched: LogicChange[] = [];
+    let settling = false;
+    const effectNames = Object.keys(logic.effects ?? {});
+    const effects =
+        effectNames.length === 0
+            ? undefined
+            : createEffectRunner(logic.effects ?? {}, {
+                  host,
+                  failed,
+                  stopped: () => stopped,
+                  now: () => new Date().toISOString(),
+                  apply: (name, writes, label) => applyEffect(name, writes, label)
+              });
+    /**
+     * After a run: the effects start, cancel or answer from their cache for requests that changed, and window rows
+     * follow changed records; what they write is looked up again, a few rounds at most. Never inside a chain
+     */
+    const settle = (): void => {
+        if (!effects || settling || stopped) return;
+        settling = true;
+        try {
+            for (let round = 0; round < 4; round += 1) {
+                const batch = touched.splice(0);
+                effects.settle(batch);
+                if (touched.length === 0) break;
+            }
+        } finally {
+            touched.length = 0;
+            settling = false;
+        }
+    };
+    /** Commits an effect's writes and looks them up as a chain of their own */
+    const applyEffect = (name: string, writes: LogicWrite[], label: string): string | undefined => {
+        if (stopped || writes.length === 0) return undefined;
+        const before = writes.map((write) => host.get(write.path));
+        try {
+            host.commit(writes);
+        } catch (error) {
+            const reason = (error as Error).message;
+            failed({ kind: 'effect', name, reason });
+            return reason;
+        }
+        const changes = writes.map((write, index) => (before[index] === undefined ? write : { ...write, previous: before[index] }));
+        traced('effect', [label], () => {
+            note({ kind: 'effect', name, outcome: 'fired', writes: writes.slice(0, MAX_TRACE_WRITES).map((write) => write.path) });
+            const results: Results = [];
+            chain(changes, new Set(), results);
+            drain(results);
+        });
+        if (!settling) {
+            settle();
+            arm();
+        }
+        return undefined;
+    };
 
     /** The trigger paths of every transition, so a change reaches only the transitions whose paths can match it */
     const triggers = new PathIndex<{ unit: string; index: number }>();
@@ -837,6 +904,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         let pending = start;
         for (let depth = 0; pending.length > 0; depth += 1) {
             depthNow = depth;
+            if (effects) touched.push(...pending);
             if (depth === MAX_CHAIN_DEPTH) {
                 failed({ kind: 'chain', name: [...fired].map((id) => id.slice(id.indexOf(':') + 1)).join(', '), reason: `the chain is deeper than ${MAX_CHAIN_DEPTH}` });
                 return;
@@ -944,6 +1012,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             drain(results);
         });
         arm();
+        settle();
     };
 
     /** Sends a `call` to the host and gives its machine the answer as the named result */
@@ -1000,6 +1069,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             ...kinds((unit) => !unit.machine && !unit.declared),
             ...kinds((unit) => unit.declared?.table !== undefined),
             ...kinds((unit) => unit.declared?.compute !== undefined),
+            ...effectNames,
             ...guards.map((rule) => rule.name)
         ],
         start(options = {}) {
@@ -1015,6 +1085,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             }
             if (options.derive !== false) derive();
             arm();
+            settle();
         },
         derive,
         changes(changes) {
@@ -1028,6 +1099,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 }
             );
             arm();
+            settle();
         },
         guard,
         refusal,
@@ -1035,8 +1107,10 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         clearTrace() {
             runs.length = 0;
         },
+        effects: () => effects?.info() ?? [],
         stop() {
             stopped = true;
+            effects?.stop();
             for (const cancel of debounced.values()) cancel();
             for (const { cancels } of armed.values()) for (const cancel of cancels) cancel();
             debounced.clear();

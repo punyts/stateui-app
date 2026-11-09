@@ -10,8 +10,8 @@ import type { JsonObject, JsonValue } from '../types.js';
 import { readLogic } from './read.js';
 import type { LogicDocument } from './types.js';
 
-const MODULE_KEYS = ['needs', 'params', 'machines', 'rules', 'tables', 'computes'];
-const UNIT_KINDS = ['machines', 'rules', 'tables', 'computes'] as const;
+const MODULE_KEYS = ['needs', 'params', 'machines', 'rules', 'tables', 'computes', 'effects'];
+const UNIT_KINDS = ['machines', 'rules', 'tables', 'computes', 'effects'] as const;
 const NEED_KEYS = ['model'];
 
 /** The separator between a module's name and the name of one of its units (and of its `as` results) once instantiated */
@@ -81,9 +81,15 @@ function eachString(value: JsonValue | undefined, path: string, key: string, vis
     else if (isObject(value)) for (const [name, item] of Object.entries(value)) eachString(item, `${path}.${name}`, name, visit);
 }
 
-/** True when a path is a state path a table reads or writes: an input, its `path` or `values.keys`, an output, `rows.from` */
-function isTablePath(path: string): boolean {
-    return /\.tables\.[^.]+\.(?:inputs\.[^.]+(?:\.path|\.values\.keys)?|outputs\.[^.]+|rows\.from)$/.test(path);
+/**
+ * True when a path is a state path a table, compute unit or effect reads or writes: an input, its `path` or
+ * `values.keys`, an output, `rows.from`; an effect's request, status, records map, window and value
+ */
+function isUnitPath(path: string): boolean {
+    return (
+        /\.(?:tables|computes)\.[^.]+\.(?:inputs\.[^.]+(?:\.path|\.values\.keys)?|outputs\.[^.]+|rows\.from)$/.test(path) ||
+        /\.effects\.[^.]+\.(?:request|status|window|value|records\.into)$/.test(path)
+    );
 }
 
 /** The node, needs and param references of the units, and the commands that run once per instance */
@@ -92,7 +98,7 @@ function checkUnits(units: JsonObject, needs: readonly string[], params: readonl
     eachString(units, '$', '', (text, path, key) => {
         const node = NODE_PATH.exec(text);
         if (node) errors.push(buildError('SUI-MODULE-NODE', { path, target: `$.${node[1] as string}`, statePath: path }));
-        else if (text.startsWith('^') && (PATH_KEYS.includes(key) || isTablePath(path))) {
+        else if (text.startsWith('^') && (PATH_KEYS.includes(key) || isUnitPath(path))) {
             errors.push(buildError('SUI-MODULE-NODE', { path, target: text, statePath: path }));
         }
         for (const match of text.matchAll(DATA_PATH)) {

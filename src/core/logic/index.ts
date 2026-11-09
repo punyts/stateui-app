@@ -6,6 +6,7 @@ export { createLogicEngine, logicRunOrder } from './engine.js';
 export type { LogicEngine, LogicUnitPlace } from './engine.js';
 export { captureNames, compilePattern, expressionPaths, fillCaptures, isStatePath, matchPattern, pathSteps } from './pattern.js';
 export { MAX_TABLE_CELLS, OTHER_VALUE, compileTable, tableColumns } from './table.js';
+export { canonicalJson, requestToken } from './effects.js';
 export type { CompiledTable, TableColumn, TableProblem } from './table.js';
 export type { PathPattern, PatternMatch, PatternStep } from './pattern.js';
 export { MODULE_UNIT_SEPARATOR, instantiateModule, readModule } from './modules.js';
@@ -21,6 +22,7 @@ export {
     LOGIC_ORIGIN,
     MAX_CHAIN_DEPTH,
     MAX_DELAY,
+    MAX_EFFECT_CACHE,
     NOTIFY_PREFIX
 } from './types.js';
 export type {
@@ -41,6 +43,12 @@ export type {
     LogicComputeFunction,
     LogicExpressionFunction,
     LogicFunctions,
+    LogicEffect,
+    LogicEffectAnswer,
+    LogicEffectFunction,
+    LogicEffectInfo,
+    LogicEffectRequest,
+    LogicEffectStatus,
     LogicTableRow,
     LogicTraceEvent,
     LogicTraceOutcome,
