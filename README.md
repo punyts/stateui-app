@@ -409,8 +409,11 @@ throws to fail. The dispatcher does not search closed shadow roots.
 
 ## Logic
 
-The `logic` root of a document holds **machines**, **rules** and decision **tables** that act on state changes with built-in commands, so a
-Save button saves and a count follows its records without an agent in the loop.
+The `logic` root of a document holds **machines** and **rules** that act on state changes with built-in commands, lookup
+**tables** and **computes** that derive values, and **effects** that do async work, so a Save button saves, a count follows
+its records and a list pages through a server without an agent in the loop. Logic has three tiers: tables for quick
+lookups, `{{ }}` expressions for small scripts, and code the host registers (`mountApp`'s `logicFunctions`, the app
+server's `logicFunctions`) for the rest. A cell sets a value in state; listeners (rules, tables, computes, effects) react.
 
 ```json
 "logic": {
@@ -430,7 +433,7 @@ Save button saves and a count follows its records without an agent in the loop.
   "rules": {
     "count": { "when": { "path": "$.data.contacts" }, "do": [ { "command": "set", "target": "$.data.stats.count", "value": "{{ size($.data.contacts) }}" } ] },
     "noDrafts": { "when": { "path": "$.data.contacts.{id}", "if": "$trigger.name == 'draft'" }, "do": [ { "command": "reject", "reason": "Draft is not a name" } ] },
-    "window": { "when": { "path": "$.app.children.contacts.window" }, "do": [ { "command": "query", "from": "$.data.contacts", "sort": "name", "window": "$trigger", "into": "^contacts" } ] }
+    "window": { "when": { "path": "$.screens.main.children.contacts.window" }, "do": [ { "command": "query", "from": "$.data.contacts", "sort": "name", "window": "$trigger", "into": "^contacts" } ] }
   }
 }
 ```
@@ -443,13 +446,37 @@ Save button saves and a count follows its records without an agent in the loop.
   that long after the machine entered the state; an `after` transition that stays in its state repeats.
 - **Machines.** The current state is the value at `state` (`initial` is written when it has none). The first
   transition of the current state whose trigger matches fires; `from` absent matches any state, `to` absent keeps it.
-- **Tables.** `tables.<name>` has `when`, `inputs` (names to values, read once and named `$<name>` in the rows) and
-  `rows` of `{ match?, if?, do }`. The first row whose `match` (input names to values) and `if` hold runs its
-  commands; a row with neither is the default and must be last. A table fires once per chain.
+- **Tables.** `tables.<name>` is a lookup table that only writes values: `inputs` (a path, or `{ path | value, values |
+  breaks }`; `values` is a list with `"*"` for any other value, or `{ keys: <data map> }`; `breaks` are ascending numbers
+  that split a number into buckets), `outputs` (names to the paths they write) and `rows` (conditions for inputs and
+  values for outputs; the first matching row wins). A change to an input runs the table, per record when its paths
+  capture `{id}`, and only outputs that change are written. A missing input skips the table; a value outside its domain
+  fails. Every combination needs a row (`SUI-LOGIC-GAP`; a last row with no conditions is the default), a row that never
+  wins is a warning (`SUI-LOGIC-UNREACHABLE`), and tables and computes that feed each other are `SUI-LOGIC-CYCLE`.
+  `rows: { "from": "$.data.rates" }` reads the rows from a data map that users edit, ordered by their `order`.
+  `lookup('name', inputs...)` in an expression gives the outputs of the winning row.
   ```json
-  "shipping": { "when": { "path": "$.data.order" }, "inputs": { "country": "$.data.order.country", "total": "$.data.order.total" },
-    "rows": [ { "match": { "country": "NL" }, "if": "$total >= 50", "do": [ { "command": "set", "target": "$.data.order.shipping", "value": 0 } ] },
-              { "do": [ { "command": "set", "target": "$.data.order.shipping", "value": 5 } ] } ] }
+  "shipping": { "inputs": { "country": { "path": "$.data.order.country", "values": ["NL", "*"] }, "total": { "path": "$.data.order.total", "breaks": [50] } },
+    "outputs": { "fee": "$.data.order.shipping" },
+    "rows": [ { "country": "NL", "total": ">=50", "fee": 0 }, { "fee": 5 } ] }
+  ```
+- **Computes.** `computes.<name>` (`{ inputs, run, outputs }`) runs a synchronous function of the host's `compute`
+  functions on its inputs (by name) and writes the fields of its answer to the outputs, in the chain like a table. An
+  unregistered `run` is the warning `SUI-LOGIC-FUNCTION`; the host's `expressions` functions are callable from `{{ }}`.
+- **Effects.** `effects.<name>` (`{ request, run, status, records?: { into, key }, window?, value?, cache? }`) runs an
+  async function of the host's `effects` (`(request, { signal }) => Promise<{ first?, records?, total?, value? }>`)
+  whenever the value at `request` changes. The request's token is a hash of its value (`requestToken`), so equal
+  requests share it; a new token aborts the running call and drops its answer. `status` holds `{ token, state:
+  loading | ready | error, total?, reason?, at }`. An answer commits at once: its records merge into the data map
+  `records.into` (under `$.data` or `$.server`) by their `key`, the `window` (a list node or a data path) gets them keyed
+  by position from `first` with its `total`, and `value` goes to `value`. A later change to a record rewrites the window
+  rows that show it. `cache: n` keeps the last n answers by token, so going back to a page refills the window from the
+  records map with no call. Removing the request makes the status `idle`. With no function registered the host's
+  `effect(request, signal)` answers (the MCP server asks its agent); with neither, the status is an error. Effects run
+  after a chain settles, never inside one, and `engine.effects()` reports each one's token, running call and cache size.
+  ```json
+  "fetchOrders": { "request": "$.data.orders.request", "run": "orders.fetch", "status": "$.data.orders.status",
+    "records": { "into": "$.data.orders.records", "key": "id" }, "window": "^orderList", "cache": 20 }
   ```
 - **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
   `save-data` (a record into a data map, with a new key or `key`), `delete-data`, `pull-data` (a record into a form),
