@@ -112,7 +112,9 @@ export function generateSharedSheet(leaves: readonly TokenLeaf[] = DEFAULT_LEAVE
     }
     const dependent = densityDependentLeaves(leaves);
     for (const density of ARTICULATION_LISTS.density) rules.push(densityRule(density, dependent));
-    rules.push(':host([hidden]) {\n    display: none;\n}');
+    // Important: the component's own sheet comes after this one, and a rule there such as `:host([element=span])` has
+    // the same specificity, so without it a hidden host would still show
+    rules.push(':host([hidden]) {\n    display: none !important;\n}');
     rules.push(FOCUS_RULE);
     rules.push(FORCED_COLORS_RULE);
     return `${rules.join('\n')}\n`;

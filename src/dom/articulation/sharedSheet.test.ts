@@ -55,9 +55,9 @@ describe('generateSharedSheet', () => {
         }
     });
 
-    it('should remove a hidden host from layout', () => {
+    it('should remove a hidden host from layout, over a display rule of the component sheet', () => {
         // Assert
-        expect(sheet).toContain(':host([hidden]) {\n    display: none;\n}');
+        expect(sheet).toContain(':host([hidden]) {\n    display: none !important;\n}');
     });
 
     it('should have no rule for variant', () => {
