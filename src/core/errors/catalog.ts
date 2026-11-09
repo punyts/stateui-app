@@ -218,6 +218,7 @@ export const ERROR_CATALOG = {
         template: 'Table at {path} has {actual} cells, more than {limit}, so its rows are matched in order and gaps are not checked',
         severity: 'warning'
     },
+    'SUI-LOGIC-FUNCTION': { template: 'Logic at {path} runs the function "{name}", which the host has not registered, so it fails when it runs', severity: 'warning' },
     'SUI-LOGIC-CYCLE': { template: 'Logic at {path} feeds itself ({name}), so it would never settle' },
     'SUI-LOGIC-TEXT-PATH': {
         template: 'Value {target} at {path} is a text template, so it gives the path as text; use a record source (the key record with the path) to read the value there',

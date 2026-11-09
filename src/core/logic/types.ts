@@ -136,11 +136,44 @@ export interface LogicTable {
     rows: LogicTableRow[] | { from: string };
 }
 
+/** An input of a compute unit: a state path or node reference (`{name}` steps capture), or one `{{ … }}` expression */
+export type LogicComputeInput = Pick<LogicTableInput, 'path' | 'value'>;
+
+/**
+ * A compute unit: a function the host registers (`LogicFunctions.compute`), run like a table. A change to an input runs
+ * it (per record when its input paths capture); it gets the input values by name and returns the output values by name,
+ * and the outputs that differ from state are written
+ */
+export interface LogicCompute {
+    inputs: Record<string, LogicComputeInput | string>;
+    /** The name the host registered the function under */
+    run: string;
+    outputs: Record<string, string>;
+}
+
+/** A compute function: the input values by name (absent for an input with no value) to output values by name */
+export type LogicComputeFunction = (inputs: Readonly<Record<string, JsonValue>>) => Readonly<Record<string, JsonValue>>;
+
+/** A function expressions may call by its name, next to the built-in ones (`LOGIC_FUNCTIONS`) */
+export type LogicExpressionFunction = (...args: JsonValue[]) => JsonValue;
+
+/**
+ * The code a host supplies for the logic, by name: documents never hold code, they name these. One module shared by the
+ * browser host (`mountApp`'s `logicFunctions`) and the app server
+ */
+export interface LogicFunctions {
+    /** Synchronous, side-effect-free functions that `computes` units run */
+    compute?: Readonly<Record<string, LogicComputeFunction>>;
+    /** Functions expressions call; a name of a built-in function is refused */
+    expressions?: Readonly<Record<string, LogicExpressionFunction>>;
+}
+
 /** The `logic` root of a document */
 export interface LogicDocument {
     machines?: Record<string, LogicMachine>;
     rules?: Record<string, LogicRule>;
     tables?: Record<string, LogicTable>;
+    computes?: Record<string, LogicCompute>;
 }
 
 /** A change the engine looks up: a value written at a path, or a delete when `value` is absent */
@@ -158,12 +191,12 @@ export interface LogicWrite {
 }
 
 /** What a failure, a trace event or a refusal names: a machine, a rule, a table, a guard rule, or a chain of them */
-export type LogicUnitKind = 'machine' | 'rule' | 'table' | 'guard' | 'chain';
+export type LogicUnitKind = 'machine' | 'rule' | 'table' | 'compute' | 'guard' | 'chain';
 
 /** A transition that failed or a change a guard refused, for `logic.failed` and the reporter */
 export interface LogicFailure {
     kind: LogicUnitKind;
-    /** The machine, rule, table or guard name; for a chain, the names that fired in it */
+    /** The machine, rule, table, compute or guard name; for a chain, the names that fired in it */
     name: string;
     /** The machine's state when the transition fired */
     from?: string;
@@ -218,6 +251,8 @@ export interface LogicHost {
     schedule?(ms: number, run: () => void): () => void;
     /** The document's screens, which `navigate` moves `$.route` between; without it every `navigate` fails */
     screens?(): RouteScreens | undefined;
+    /** The compute and expression functions the host registered; without them a compute unit fails when it runs */
+    functions?: LogicFunctions;
     /** Runs a named server procedure (Full mode); without it every `call` is rejected */
     call?(name: string, payload: JsonValue): Promise<LogicAnswer>;
     /**

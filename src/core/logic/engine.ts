@@ -6,15 +6,16 @@ import { captureNames, compilePattern, expressionPaths, fillCaptures, matchPatte
 import type { PathPattern, PatternMatch } from './pattern.js';
 import { columnIndex, compileTable, inputObject, lookupRow, tableColumns } from './table.js';
 import type { CompiledTable } from './table.js';
-import { LogicError, condition, resolvePath, resolveValue } from './values.js';
+import { LOGIC_FUNCTIONS, LogicError, condition, resolvePath, resolveValue } from './values.js';
 import type { Scope } from './values.js';
 import { WorkingCopy, covers, placed, within } from './working.js';
 import { MAX_CHAIN_DEPTH } from './types.js';
 import { ROUTE_PATH } from '../route/index.js';
-import { isObject } from '../resolve/merge.js';
+import { cloneJson, isObject } from '../resolve/merge.js';
 import type {
     LogicChange,
     LogicCommand,
+    LogicCompute,
     LogicDocument,
     LogicFailure,
     LogicHost,
@@ -38,7 +39,7 @@ const MAX_TRACE_RUNS = 25;
 const MAX_TRACE_EVENTS = 200;
 const MAX_TRACE_WRITES = 20;
 
-/** An input of a table as the engine reads it */
+/** An input of a table or compute unit as the engine reads it */
 interface TableInputPlan {
     name: string;
     input: LogicTableInput;
@@ -46,9 +47,14 @@ interface TableInputPlan {
     pattern?: PathPattern;
 }
 
-/** A table as the engine runs it: its inputs, its captures and its compiled rows */
-interface TablePlan {
-    table: LogicTable;
+/**
+ * A unit that declares its inputs and outputs, as the engine runs it: a table (its compiled rows) or a compute unit
+ * (the function it runs); its inputs, its captures, its outputs
+ */
+interface DeclaredPlan {
+    table?: LogicTable;
+    compute?: LogicCompute;
+    outputs: Readonly<Record<string, string>>;
     inputs: TableInputPlan[];
     /** The names its input paths capture, so it runs per record; empty for a table that runs once */
     captures: string[];
@@ -69,7 +75,7 @@ interface Unit {
     kind: Exclude<LogicUnitKind, 'guard' | 'chain'>;
     name: string;
     machine?: LogicMachine;
-    table?: TablePlan;
+    declared?: DeclaredPlan;
     transitions: LogicTransition[];
     patterns: (PathPattern | undefined)[];
 }
@@ -151,13 +157,13 @@ function unitCommands(unit: { transitions: readonly LogicTransition[] }): LogicC
  * The state paths a unit can write, as written (`$.data.bag.{id}.total`): its commands' targets, its machine's state
  * path, a table's outputs. Node references (`^name`) resolve at run time and are left out
  */
-function writePaths(unit: { machine?: LogicMachine; transitions: readonly LogicTransition[]; table?: TablePlan }): string[] {
+function writePaths(unit: { machine?: LogicMachine; transitions: readonly LogicTransition[]; declared?: DeclaredPlan }): string[] {
     const paths = unitCommands(unit).flatMap((command) => {
         if (command.command === 'navigate') return [ROUTE_PATH];
         return NOT_WRITES.has(command.command) ? [] : WRITE_KEYS.flatMap((key) => (typeof command[key] === 'string' ? [command[key] as string] : []));
     });
     if (unit.machine) paths.push(unit.machine.state);
-    if (unit.table) paths.push(...Object.values(unit.table.table.outputs));
+    if (unit.declared) paths.push(...Object.values(unit.declared.outputs));
     return paths.filter((path) => path.startsWith('$.'));
 }
 
@@ -166,7 +172,7 @@ function writePaths(unit: { machine?: LogicMachine; transitions: readonly LogicT
  * after the other units whose commands can write under its trigger paths, so a rule over `$.data.bag` that sums line
  * totals sees the totals a table writes in the same step. Units that depend on each other in a cycle keep document order
  */
-function chainOrder<T extends { id: string; machine?: LogicMachine; table?: TablePlan; transitions: readonly LogicTransition[]; patterns: readonly (PathPattern | undefined)[] }>(units: readonly T[]): T[] {
+function chainOrder<T extends { id: string; machine?: LogicMachine; declared?: DeclaredPlan; transitions: readonly LogicTransition[]; patterns: readonly (PathPattern | undefined)[] }>(units: readonly T[]): T[] {
     const writes = new Map(units.map((unit) => [unit.id, writePaths(unit).map(writeSteps)]));
     const before = new Map(
         units.map((unit) => [
@@ -196,13 +202,18 @@ function chainOrder<T extends { id: string; machine?: LogicMachine; table?: Tabl
     return order;
 }
 
-/** The patterns a table runs on: one per input path or path an input's value expression reads, then its data sources */
-function tablePlan(table: LogicTable, resolve?: (reference: string) => string | undefined): { plan: TablePlan; patterns: (PathPattern | undefined)[] } {
+/**
+ * The plan of a table or compute unit, and the patterns it runs on: one per input path or path an input's value
+ * expression reads, then the data a table's rows and values come from
+ */
+function declaredPlan(unit: { table: LogicTable } | { compute: LogicCompute }, resolve?: (reference: string) => string | undefined): { plan: DeclaredPlan; patterns: (PathPattern | undefined)[] } {
+    const table = 'table' in unit ? unit.table : undefined;
+    const declared = 'table' in unit ? unit.table : unit.compute;
     const statePath = (path: string): string | undefined => (path.startsWith('^') ? resolve?.(path) : path);
     const inputs: TableInputPlan[] = [];
     const patterns: (PathPattern | undefined)[] = [];
     const captures: string[] = [];
-    for (const [name, raw] of Object.entries(table.inputs)) {
+    for (const [name, raw] of Object.entries(declared.inputs)) {
         const input = inputObject(raw);
         const path = input.path === undefined ? undefined : statePath(input.path);
         const pattern = path === undefined ? undefined : compilePattern(path);
@@ -215,7 +226,7 @@ function tablePlan(table: LogicTable, resolve?: (reference: string) => string | 
     }
     const inputTriggers = patterns.length;
     const sources = [
-        ...(Array.isArray(table.rows) ? [] : [table.rows.from]),
+        ...(table === undefined || Array.isArray(table.rows) ? [] : [table.rows.from]),
         ...inputs.flatMap(({ input }) => (isObject(input.values as JsonValue) ? [(input.values as { keys: string }).keys] : []))
     ];
     for (const source of sources) {
@@ -223,8 +234,17 @@ function tablePlan(table: LogicTable, resolve?: (reference: string) => string | 
         patterns.push(path === undefined ? undefined : compilePattern(path));
     }
     const fromData = sources.length > 0;
-    const compiled = fromData ? undefined : compileTable(table, table.rows as LogicTableRow[]).compiled;
-    return { plan: { table, inputs, captures, inputTriggers, ...(compiled === undefined ? {} : { compiled }), stale: fromData }, patterns };
+    const compiled = table === undefined || fromData ? undefined : compileTable(table, table.rows as LogicTableRow[]).compiled;
+    const plan: DeclaredPlan = {
+        ...('table' in unit ? { table: unit.table } : { compute: unit.compute }),
+        outputs: declared.outputs,
+        inputs,
+        captures,
+        inputTriggers,
+        ...(compiled === undefined ? {} : { compiled }),
+        stale: fromData
+    };
+    return { plan, patterns };
 }
 
 /** The units and guards of a logic document, in document order (machines, rules, tables) */
@@ -244,15 +264,19 @@ function buildUnits(logic: LogicDocument, resolve?: (reference: string) => strin
         units.push({ id: `rule:${name}`, kind: 'rule', name, transitions: [{ when: rule.when, do: rule.do }], patterns: [compiled] });
     }
     for (const [name, table] of Object.entries(logic.tables ?? {})) {
-        const { plan, patterns } = tablePlan(table, resolve);
-        units.push({ id: `table:${name}`, kind: 'table', name, table: plan, transitions: patterns.map((item) => ({ when: item === undefined ? {} : { path: item.source } })), patterns });
+        const { plan, patterns } = declaredPlan({ table }, resolve);
+        units.push({ id: `table:${name}`, kind: 'table', name, declared: plan, transitions: patterns.map((item) => ({ when: item === undefined ? {} : { path: item.source } })), patterns });
+    }
+    for (const [name, compute] of Object.entries(logic.computes ?? {})) {
+        const { plan, patterns } = declaredPlan({ compute }, resolve);
+        units.push({ id: `compute:${name}`, kind: 'compute', name, declared: plan, transitions: patterns.map((item) => ({ when: item === undefined ? {} : { path: item.source } })), patterns });
     }
     return { units, guards };
 }
 
 /** Where a unit runs in a logic document, and the state paths it reads and writes */
 export interface LogicUnitPlace {
-    readonly kind: 'machine' | 'rule' | 'table' | 'guard';
+    readonly kind: 'machine' | 'rule' | 'table' | 'compute' | 'guard';
     readonly name: string;
     /** 1-based place in the order a chain looks units up; absent for a guard, which is asked before a change commits */
     readonly position?: number;
@@ -295,7 +319,7 @@ const DERIVE_COMMANDS: ReadonlySet<string> = new Set(['set', 'merge', 'copy', 'q
  * change), and every command is `set`, `merge`, `copy` or `query`. A machine never is
  */
 function derivesOnly(unit: Unit): boolean {
-    if (unit.table) return true;
+    if (unit.declared) return true;
     if (unit.machine) return false;
     if (unit.transitions.some((transition) => transition.when.path === undefined || transition.when.was !== undefined || transition.when.after !== undefined)) return false;
     return unitCommands(unit).every((command) => DERIVE_COMMANDS.has(command.command));
@@ -436,8 +460,10 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
      * Compiles a table again from the data its rows or values come from. A version that does not compile, or leaves a
      * combination without a row, fails the table, which keeps its last good version
      */
-    const recompile = (unit: Unit, plan: TablePlan): void => {
+    const recompile = (unit: Unit, plan: DeclaredPlan): void => {
         plan.stale = false;
+        if (!plan.table) return;
+        const table = plan.table;
         const read = (path: string): JsonValue | undefined => host.get(path.startsWith('^') ? (host.resolve?.(path) ?? path) : path);
         const keys = (name: string): JsonValue[] | undefined => {
             const values = plan.inputs.find((input) => input.name === name)?.input.values;
@@ -446,9 +472,9 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             return isObject(map) ? Object.keys(map) : [];
         };
         let rows: LogicTableRow[];
-        if (Array.isArray(plan.table.rows)) rows = plan.table.rows;
+        if (Array.isArray(table.rows)) rows = table.rows;
         else {
-            const map = read(plan.table.rows.from);
+            const map = read(table.rows.from);
             const records = isObject(map) ? Object.entries(map) : [];
             // rows in `order` when the records have it, else in key order
             const order = (record: JsonValue): number => (isObject(record) && typeof record['order'] === 'number' ? record['order'] : Number.POSITIVE_INFINITY);
@@ -460,7 +486,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                     return row;
                 });
         }
-        const { compiled, problems } = compileTable(plan.table, rows, tableColumns(plan.table.inputs, keys));
+        const { compiled, problems } = compileTable(table, rows, tableColumns(table.inputs, keys));
         const problem = problems.find((item) => item.code === 'shape' || item.code === 'gap');
         if (!compiled || problem) {
             const reason = problem?.code === 'gap' ? `no row for ${problem.message}` : `${problem?.at ?? 'rows'}: ${problem?.message ?? 'the rows do not compile'}`;
@@ -495,7 +521,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     };
 
     /** The capture sets of every record a table runs for: the records its first capturing input path has */
-    const allRecords = (plan: TablePlan): Record<string, string>[] => {
+    const allRecords = (plan: DeclaredPlan): Record<string, string>[] => {
         if (plan.captures.length === 0) return [{}];
         const pattern = plan.inputs.find((input) => input.pattern && captureNames(input.pattern).length > 0)?.pattern as PathPattern;
         const literal: string[] = [];
@@ -513,7 +539,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
      * commit. Returns whether it looked a row up, and its writes as changes
      */
     const fireTable = (unit: Unit, changes: readonly LogicChange[], all = false): { ran: boolean; changes: LogicChange[] } => {
-        const plan = unit.table as TablePlan;
+        const plan = unit.declared as DeclaredPlan;
         let every = all;
         const records = new Map<string, Record<string, string>>();
         unit.patterns.forEach((pattern, index) => {
@@ -542,7 +568,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         });
         if (plan.stale) recompile(unit, plan);
         const compiled = plan.compiled;
-        if (!compiled) return { ran: false, changes: [] };
+        if (plan.table && !compiled) return { ran: false, changes: [] };
         const runFor = every ? allRecords(plan) : [...records.values()];
         if (runFor.length === 0) return { ran: false, changes: [] };
 
@@ -555,23 +581,32 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                     const value = inputValue(input, scope);
                     if (value !== undefined) values[input.name] = value;
                 }
-                const found = tableLookup(compiled, values);
                 const at = plan.captures.length === 0 ? {} : { path: plan.captures.map((name) => `${name}=${captures[name] ?? ''}`).join(', ') };
-                if (typeof found !== 'number') {
-                    if (found.fail !== undefined) unitFailed(unit, { reason: found.fail });
-                    else note({ kind: unit.kind, name: unit.name, outcome: 'condition', ...at, reason: found.skip as string });
-                    continue;
+                let found = -1;
+                let results: Readonly<Record<string, JsonValue>>;
+                if (plan.compute) {
+                    results = runCompute(plan.compute, values);
+                } else {
+                    const looked = tableLookup(compiled as CompiledTable, values);
+                    if (typeof looked !== 'number') {
+                        if (looked.fail !== undefined) unitFailed(unit, { reason: looked.fail });
+                        else note({ kind: unit.kind, name: unit.name, outcome: 'condition', ...at, reason: looked.skip as string });
+                        continue;
+                    }
+                    found = looked;
+                    const withInputs: Scope = { ...scope, inputs: values };
+                    const outputs = ((compiled as CompiledTable).rows[found] as CompiledTable['rows'][number]).outputs;
+                    results = Object.fromEntries(Object.entries(outputs).map(([name, output]) => [name, resolveValue(output, withInputs, host)]));
                 }
-                const withInputs: Scope = { ...scope, inputs: values };
                 const writes: string[] = [];
-                for (const [name, output] of Object.entries((compiled.rows[found] as CompiledTable['rows'][number]).outputs)) {
-                    const target = resolvePath(plan.table.outputs[name] as string, scope, host);
-                    const value = resolveValue(output, withInputs, host);
+                for (const [name, value] of Object.entries(results)) {
+                    if (!Object.hasOwn(plan.outputs, name) || value === undefined) continue;
+                    const target = resolvePath(plan.outputs[name] as string, scope, host);
                     if (deepEqual(copy.get(target), value)) continue;
                     copy.set(target, value);
                     writes.push(target);
                 }
-                note({ kind: unit.kind, name: unit.name, outcome: writes.length > 0 ? 'fired' : 'unchanged', ...at, row: found, writes: writes.slice(0, MAX_TRACE_WRITES) });
+                note({ kind: unit.kind, name: unit.name, outcome: writes.length > 0 ? 'fired' : 'unchanged', ...at, ...(found < 0 ? {} : { row: found }), writes: writes.slice(0, MAX_TRACE_WRITES) });
             } catch (error) {
                 unitFailed(unit, { reason: (error as Error).message });
             }
@@ -589,9 +624,9 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
 
     /** `lookup(name, ...inputs)`: the outputs of a table's winning row for the given input values, in input order; null when no row wins */
     const lookup = (name: unknown, ...args: unknown[]): JsonValue => {
-        const unit = units.find((item) => item.table && item.name === name);
-        if (!unit?.table) throw new LogicError(`lookup: "${String(name)}" is not a table`);
-        const plan = unit.table;
+        const unit = units.find((item) => item.declared?.table && item.name === name);
+        if (!unit?.declared) throw new LogicError(`lookup: "${String(name)}" is not a table`);
+        const plan = unit.declared;
         if (plan.stale) recompile(unit, plan);
         if (!plan.compiled) return null;
         const values: Record<string, JsonValue> = {};
@@ -605,7 +640,22 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         for (const [output, value] of Object.entries((plan.compiled.rows[found] as CompiledTable['rows'][number]).outputs)) outputs[output] = resolveValue(value, scope, host);
         return outputs;
     };
-    const functions: Readonly<Record<string, (...args: unknown[]) => unknown>> = { lookup };
+    /** Runs a compute unit's function; throws for a name the host did not register or a result that is not an object */
+    const runCompute = (compute: LogicCompute, values: Readonly<Record<string, JsonValue>>): Readonly<Record<string, JsonValue>> => {
+        const run = host.functions?.compute?.[compute.run];
+        if (!run) throw new LogicError(`the host registered no compute function "${compute.run}"`);
+        const result = run(cloneJson(values as JsonValue) as Record<string, JsonValue>) as JsonValue;
+        if (!isObject(result)) throw new LogicError(`compute function "${compute.run}" returned ${result === null ? 'null' : typeof result}, not an object of outputs`);
+        return result;
+    };
+
+    /** The functions expressions get next to the built-in ones: `lookup` and the host's expression functions (not those named like a built-in) */
+    const functions: Record<string, (...args: unknown[]) => unknown> = {};
+    for (const [name, run] of Object.entries(host.functions?.expressions ?? {})) {
+        if (Object.hasOwn(LOGIC_FUNCTIONS, name) || name === 'lookup') failed({ kind: 'compute', name, reason: `"${name}" is a built-in function, so the host's function of that name is not used` });
+        else functions[name] = (...args) => run(...(args.map((arg) => cloneJson((arg ?? null) as JsonValue)) as JsonValue[]));
+    }
+    functions['lookup'] = lookup;
 
     /**
      * The first transition of the unit's current state that one of the changes triggers. A trigger fires only when the
@@ -801,7 +851,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                     if (path !== undefined) note({ kind: unit.kind, name: unit.name, outcome: 'already-fired', path });
                     continue;
                 }
-                if (unit.table) {
+                if (unit.declared) {
                     const ran = fireTable(unit, pending);
                     if (ran.ran) fired.add(unit.id);
                     next.push(...ran.changes);
@@ -923,7 +973,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             units.map((unit) => unit.name),
             () => {
                 for (const unit of units) {
-                    if (unit.table) {
+                    if (unit.declared) {
                         fireTable(unit, [], true);
                         continue;
                     }
@@ -947,8 +997,9 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     return {
         names: [
             ...kinds((unit) => unit.machine !== undefined),
-            ...kinds((unit) => !unit.machine && !unit.table),
-            ...kinds((unit) => unit.table !== undefined),
+            ...kinds((unit) => !unit.machine && !unit.declared),
+            ...kinds((unit) => unit.declared?.table !== undefined),
+            ...kinds((unit) => unit.declared?.compute !== undefined),
             ...guards.map((rule) => rule.name)
         ],
         start(options = {}) {

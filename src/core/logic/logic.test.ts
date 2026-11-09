@@ -16,7 +16,7 @@ import {
     readLogic,
     resolveValue
 } from './index.js';
-import type { LogicDocument, LogicFailure, LogicHost, LogicWrite } from './index.js';
+import type { LogicComputeFunction, LogicDocument, LogicFailure, LogicHost, LogicWrite } from './index.js';
 
 function shapeOf(properties: Record<string, unknown>, events: string[] = [], commands: string[] = []): Shape {
     const result = parseShape({ summary: 'Test', properties, events, commands }, 'test.state.json');
@@ -1282,6 +1282,185 @@ describe('createLogicEngine: lookup tables', () => {
         ]);
         expect(result.errors[0]?.message).toContain('tables.a → tables.b → tables.a');
         expect(Object.keys(result.logic.tables ?? {})).toEqual(['c']);
+    });
+});
+
+describe('createLogicEngine: compute functions', () => {
+    const TAX: LogicDocument = Object.freeze({
+        computes: {
+            tax: {
+                inputs: { amount: '$.data.lines.{id}.amount', rate: { value: '{{ $.data.rate }}' } },
+                run: 'tax',
+                outputs: { tax: '$.data.lines.{id}.tax', gross: '$.data.lines.{id}.gross' }
+            }
+        }
+    }) as LogicDocument;
+    const tax: LogicComputeFunction = ({ amount, rate }) => {
+        const net = typeof amount === 'number' ? amount : 0;
+        const share = Math.round(net * (typeof rate === 'number' ? rate : 0) * 100) / 100;
+        return { tax: share, gross: net + share };
+    };
+
+    it('should run the function per record and write only the outputs that change', () => {
+        // Arrange
+        const memory = memoryHost({ data: { rate: 0.2, lines: { a: { amount: 10 }, b: { amount: 5 } } } }, { functions: { compute: { tax } } });
+        const engine = createLogicEngine(TAX, memory.host);
+        engine.start();
+        const before = memory.commits.length;
+
+        // Act
+        userChange(memory, engine, '$.data.lines.a.amount', 20);
+
+        // Assert
+        expect(memory.get('$.data.lines')).toEqual({ a: { amount: 20, tax: 4, gross: 24 }, b: { amount: 5, tax: 1, gross: 6 } });
+        expect(memory.commits.slice(before)).toEqual([[
+            { path: '$.data.lines.a.tax', value: 4 },
+            { path: '$.data.lines.a.gross', value: 24 }
+        ]]);
+        expect(engine.names).toEqual(['tax']);
+        expect(engine.trace().at(-1)?.events).toEqual([expect.objectContaining({ kind: 'compute', name: 'tax', outcome: 'fired', path: 'id=a' })]);
+        expect(memory.failures).toEqual([]);
+    });
+
+    it('should run every record when an input that does not capture changes', () => {
+        // Arrange
+        const memory = memoryHost({ data: { rate: 0.2, lines: { a: { amount: 10 }, b: { amount: 5 } } } }, { functions: { compute: { tax } } });
+        const engine = createLogicEngine(TAX, memory.host);
+        engine.start();
+
+        // Act
+        userChange(memory, engine, '$.data.rate', 0.1);
+
+        // Assert
+        expect(memory.get('$.data.lines')).toEqual({ a: { amount: 10, tax: 1, gross: 11 }, b: { amount: 5, tax: 0.5, gross: 5.5 } });
+    });
+
+    it('should fail and write nothing when the function is not registered, throws or returns no object', () => {
+        // Arrange
+        const thrower: LogicComputeFunction = () => {
+            throw new Error('boom');
+        };
+        const cases: [LogicHost['functions'], string][] = [
+            [undefined, 'the host registered no compute function "tax"'],
+            [{ compute: { tax: thrower } }, 'boom'],
+            [{ compute: { tax: () => 3 as never } }, 'compute function "tax" returned number, not an object of outputs']
+        ];
+        for (const [functions, reason] of cases) {
+            const memory = memoryHost({ data: { rate: 0.2, lines: { a: { amount: 10 } } } }, functions ? { functions } : {});
+            const engine = createLogicEngine(TAX, memory.host);
+
+            // Act
+            engine.start();
+
+            // Assert
+            expect(memory.get('$.data.lines.a')).toEqual({ amount: 10 });
+            expect(memory.failures).toEqual([expect.objectContaining({ kind: 'compute', name: 'tax', reason: expect.stringContaining(reason) })]);
+        }
+    });
+
+    it('should give the function a copy of the inputs and ignore outputs it does not declare', () => {
+        // Arrange
+        const seen: unknown[] = [];
+        const memory = memoryHost({ data: { rate: 0.5, lines: { a: { amount: 2 } } } }, {
+            functions: {
+                compute: {
+                    tax: (inputs) => {
+                        seen.push(inputs);
+                        (inputs as Record<string, unknown>)['amount'] = 99;
+                        return { tax: 1, other: 7 };
+                    }
+                }
+            }
+        });
+        const engine = createLogicEngine(TAX, memory.host);
+
+        // Act
+        engine.start();
+
+        // Assert
+        expect(seen).toEqual([{ amount: 99, rate: 0.5 }]);
+        expect(memory.get('$.data.lines.a')).toEqual({ amount: 2, tax: 1 });
+    });
+
+    it('should let expressions call the host functions, but not one named like a built-in', () => {
+        // Arrange
+        const logic: LogicDocument = { rules: { label: { when: { path: '$.data.name' }, do: [{ command: 'set', target: '$.data.label', value: '{{ shout($.data.name) }}' }] } } };
+        const memory = memoryHost({ data: {} }, {
+            functions: { expressions: { shout: (text) => `${String(text).toUpperCase()}!`, round: () => 0 } }
+        });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.name', 'ann');
+
+        // Assert
+        expect(memory.get('$.data.label')).toBe('ANN!');
+        expect(memory.failures).toEqual([{ kind: 'compute', name: 'round', reason: `"round" is a built-in function, so the host's function of that name is not used` }]);
+    });
+
+    it('should run a compute unit after the table that feeds it', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            computes: { gross: { inputs: { net: '$.data.net' }, run: 'double', outputs: { out: '$.data.gross' } } },
+            tables: { net: { inputs: { kind: { path: '$.data.kind', values: ['a', '*'] } }, outputs: { net: '$.data.net' }, rows: [{ kind: 'a', net: 10 }, { net: 1 }] } }
+        };
+        const memory = memoryHost({ data: {} }, { functions: { compute: { double: ({ net }) => ({ out: typeof net === 'number' ? net * 2 : null }) } } });
+        const engine = createLogicEngine(logic, memory.host);
+        engine.start();
+
+        // Act
+        userChange(memory, engine, '$.data.kind', 'a');
+
+        // Assert
+        expect(memory.get('$.data.gross')).toBe(20);
+        expect(engine.names).toEqual(['net', 'gross']);
+    });
+});
+
+describe('readLogic: compute units', () => {
+    it('should read a compute unit and warn about a function the host has not registered', () => {
+        // Arrange
+        const logic = { computes: { tax: { inputs: { a: '$.data.a' }, run: 'tax', outputs: { b: '$.data.b' } } } } as unknown as JsonValue;
+
+        // Act
+        const known = readLogic(logic, { functions: { compute: { tax: () => ({}) } } });
+        const unknown = readLogic(logic, { functions: {} });
+
+        // Assert
+        expect(known.errors).toEqual([]);
+        expect(Object.keys(known.logic.computes ?? {})).toEqual(['tax']);
+        expect(unknown.errors.map((error) => [error.code, error.severity, error.statePath])).toEqual([['SUI-LOGIC-FUNCTION', 'warning', '$.logic.computes.tax.run']]);
+        expect(Object.keys(unknown.logic.computes ?? {})).toEqual(['tax']);
+    });
+
+    it('should refuse table domains, a missing run and an unknown key', () => {
+        // Arrange
+        const logic = {
+            computes: { tax: { inputs: { a: { path: '$.data.a', values: [1, 2] } }, run: '', outputs: { b: '$.data.b' }, rows: [] } }
+        } as unknown as JsonValue;
+
+        // Act
+        const result = readLogic(logic);
+
+        // Assert
+        expect(result.errors.map((error) => error.statePath)).toEqual(expect.arrayContaining(['$.logic.computes.tax.inputs.a', '$.logic.computes.tax.run', '$.logic.computes.tax.rows']));
+        expect(result.logic.computes).toBeUndefined();
+    });
+
+    it('should report a compute unit and a table that feed each other', () => {
+        // Arrange
+        const logic = {
+            computes: { c: { inputs: { x: '$.data.x' }, run: 'f', outputs: { y: '$.data.y' } } },
+            tables: { t: { inputs: { y: '$.data.y' }, outputs: { x: '$.data.x' }, rows: [{ x: '{{ $y }}' }] } }
+        } as unknown as JsonValue;
+
+        // Act
+        const result = readLogic(logic);
+
+        // Assert
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-LOGIC-CYCLE', 'SUI-LOGIC-CYCLE']);
+        expect(result.logic.computes).toEqual({});
+        expect(result.logic.tables).toEqual({});
     });
 });
 

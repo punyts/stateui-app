@@ -10,8 +10,8 @@ import type { JsonObject, JsonValue } from '../types.js';
 import { readLogic } from './read.js';
 import type { LogicDocument } from './types.js';
 
-const MODULE_KEYS = ['needs', 'params', 'machines', 'rules', 'tables'];
-const UNIT_KINDS = ['machines', 'rules', 'tables'] as const;
+const MODULE_KEYS = ['needs', 'params', 'machines', 'rules', 'tables', 'computes'];
+const UNIT_KINDS = ['machines', 'rules', 'tables', 'computes'] as const;
 const NEED_KEYS = ['model'];
 
 /** The separator between a module's name and the name of one of its units (and of its `as` results) once instantiated */

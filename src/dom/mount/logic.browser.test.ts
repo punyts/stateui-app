@@ -81,6 +81,29 @@ describe('browser logic', () => {
         expect(origins).toEqual([LOGIC_ORIGIN]);
     });
 
+    it('should run compute units and expression functions the host passes as logicFunctions', async () => {
+        // Arrange
+        host = document_().body.appendChild(document_().createElement('div'));
+        const logic = {
+            computes: { double: { inputs: { qty: '$.data.qty' }, run: 'double', outputs: { out: '$.data.stats.count' } } },
+            rules: { label: { when: { path: '$.data.stats.count' }, do: [{ command: 'set', target: '^count.text', value: '{{ stars($.data.stats.count) }}' }] } }
+        };
+        app = mountApp(host, documentWith(logic), library, {}, {
+            logicFunctions: {
+                compute: { double: ({ qty }) => ({ out: typeof qty === 'number' ? qty * 2 : 0 }) },
+                expressions: { stars: (count) => '*'.repeat(Number(count)) }
+            }
+        });
+
+        // Act
+        app.store!.set('$.data.qty', 2);
+        await flush();
+
+        // Assert
+        expect(app.store!.get('$.data.stats.count')).toBe(4);
+        expect(app.store!.get('$.app.children.count.text')).toBe('****');
+    });
+
     it('should skip writes that carry an origin, such as sync writes', async () => {
         const mounted = mount(documentWith(COUNT), 'persisted');
 

@@ -342,7 +342,8 @@ export function mountApp(
                       raise: (name, payload) => {
                           if (!disposed) dispatcher.raise(name as AppEventName, payload);
                       },
-                      emit: (name, payload) => hooks.onEmit?.(name, payload)
+                      emit: (name, payload) => hooks.onEmit?.(name, payload),
+                      ...(options.logicFunctions ? { functions: options.logicFunctions } : {})
                   });
     } catch (error) {
         report.error('mountApp could not start the logic', { reason: String(error) });

@@ -1,7 +1,7 @@
 import { report } from '@punyts/core';
 import type { Store } from '@punyts/state';
 import { LOGIC_FAILED_EVENT, LOGIC_ORIGIN, NOTIFY_PREFIX, createLogicEngine, createLogicIndex, readLogic } from '../../core/logic/index.js';
-import type { LogicChange, LogicHost, LogicWrite } from '../../core/logic/index.js';
+import type { LogicChange, LogicFunctions, LogicHost, LogicWrite } from '../../core/logic/index.js';
 import type { ResolvedTree } from '../../core/on/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
@@ -24,6 +24,8 @@ export interface BrowserLogicOptions {
     raise(name: string, payload: JsonValue): void;
     /** Sends an app event to the server, as the `emit` command does */
     emit?(name: string, payload: JsonValue): void;
+    /** The compute and expression functions the host registered */
+    functions?: LogicFunctions;
 }
 
 /** A plain copy of what the store holds, which may be a proxy */
@@ -59,7 +61,7 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
             return typeof screen === 'string' ? screen : undefined;
         }
     });
-    const { logic } = readLogic(document.logic, { resolve: index.resolve });
+    const { logic } = readLogic(document.logic, { resolve: index.resolve, ...(options.functions ? { functions: options.functions } : {}) });
 
     /**
      * While a guard looks at a change the store already holds, the value the change replaced: a guard judges what
@@ -76,6 +78,7 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
     };
 
     const host: LogicHost = {
+        ...(options.functions ? { functions: options.functions } : {}),
         get: (path) => (beforeChange?.has(path) ? beforeChange.get(path) : plain(store.get(path))),
         commit(writes: readonly LogicWrite[]) {
             const before = writes.map((write) => plain(store.get(write.path)));
