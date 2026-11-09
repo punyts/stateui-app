@@ -160,6 +160,7 @@ describe('generateLayoutSheet', () => {
         expect(sheet).toContain('[layout=adhoc] > sui-node > * {\n    position: absolute;\n}');
         expect(sheet).toContain('left: attr(x type(<length-percentage>));');
         expect(sheet).toContain('height: attr(height type(<length-percentage>));');
+        expect(sheet).toContain('[layout=adhoc] > sui-node > [z] {\n        z-index: attr(z type(<integer>));\n    }');
     });
 });
 

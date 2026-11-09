@@ -23,6 +23,8 @@ const COUNT: FieldSpec = { type: 'integer', min: 1, max: 12 };
 const COLLAPSE: FieldSpec = { type: 'enum', values: COLLAPSE_BELOW };
 const GROW: FieldSpec = { type: 'number', min: 0, max: 12 };
 const LENGTH: FieldSpec = { type: 'dimension' };
+/** The stacking order of an `adhoc` child: a higher `z` is drawn over a lower one */
+const STACK: FieldSpec = { type: 'integer', min: 0, max: 999 };
 
 /** Each layout type with its container settings and child placement fields */
 export const LAYOUTS: Readonly<Record<LayoutType, LayoutDefinition>> = {
@@ -33,7 +35,7 @@ export const LAYOUTS: Readonly<Record<LayoutType, LayoutDefinition>> = {
         placement: { col: COUNT, row: COUNT, span: COUNT, rowSpan: COUNT }
     },
     region: { settings: { gap: GAP, collapseBelow: COLLAPSE }, placement: { region: { type: 'enum', values: REGIONS } } },
-    adhoc: { settings: {}, placement: { x: LENGTH, y: LENGTH, width: LENGTH, height: LENGTH } }
+    adhoc: { settings: {}, placement: { x: LENGTH, y: LENGTH, width: LENGTH, height: LENGTH, z: STACK } }
 };
 
 /** True when the name is one of the layout types */

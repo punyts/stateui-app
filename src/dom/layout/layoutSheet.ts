@@ -188,6 +188,8 @@ export function generateLayoutSheet(type: LayoutType): string {
             const placed = fields.map(([attribute, property]) =>
                 indent(block(item(type, attribute), [`${property}: attr(${attribute} type(<length-percentage>))`]))
             );
+            // `z` is the stacking order: a window a person brings to the front gets the highest
+            placed.push(indent(block(item(type, 'z'), ['z-index: attr(z type(<integer>))'])));
             rules.push(
                 block(container(type), ['position: relative']),
                 block(item(type), ['position: absolute']),

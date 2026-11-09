@@ -54,7 +54,7 @@ describe('layout lists', () => {
         expect(names('adhoc', 'settings')).toEqual([]);
         expect(names('grid', 'placement')).toEqual(['col', 'row', 'span', 'rowSpan']);
         expect(names('region', 'placement')).toEqual(['region']);
-        expect(names('adhoc', 'placement')).toEqual(['x', 'y', 'width', 'height']);
+        expect(names('adhoc', 'placement')).toEqual(['x', 'y', 'width', 'height', 'z']);
     });
 
     it.each([
@@ -90,7 +90,7 @@ describe('layout validator', () => {
         [{ type: 'row', gap: 'none', align: 'center', wrap: true, collapseBelow: 'sm' }, { grow: 2 }],
         [{ type: 'grid', cols: 3, rows: 12, gap: 'lg', collapseBelow: 'xl' }, { col: 1, row: 2, span: 2, rowSpan: 3 }],
         [{ type: 'region', gap: 'sm', collapseBelow: 'md' }, { region: 'nw' }],
-        [{ type: 'adhoc' }, { x: '4px', y: '0', width: '50%', height: '2rem' }]
+        [{ type: 'adhoc' }, { x: '4px', y: '0', width: '50%', height: '2rem', z: 3 }]
     ])('should accept the layout %j', (layout, placement) => {
         expect(codes(panel(layout, placement))).toEqual([]);
     });
