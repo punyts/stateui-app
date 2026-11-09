@@ -24,8 +24,10 @@ export interface Scope {
     /** The record a `query` filter looks at; its key is `key` */
     record?: JsonValue;
     captures: Readonly<Record<string, string>>;
-    /** The inputs of a decision table, read when it fired */
+    /** The inputs of a lookup table, read when it runs; its output values read them as `$name` */
     inputs?: Readonly<Record<string, JsonValue>>;
+    /** Functions the engine adds to the expression library (`lookup`, and the host's expression functions) */
+    functions?: Readonly<Record<string, (...args: unknown[]) => unknown>>;
 }
 
 function entries(value: unknown): unknown[] {
@@ -140,9 +142,9 @@ function setIn(target: Record<string, unknown>, steps: readonly string[], value:
  */
 export function evaluate(text: string, scope: Scope): unknown {
     const expression = compileExpression(withCaptures(text, scope.captures));
-    const context: Record<string, unknown> = { ...LOGIC_FUNCTIONS };
+    const context: Record<string, unknown> = { ...LOGIC_FUNCTIONS, ...scope.functions };
     for (const [name, key] of Object.entries(scope.captures)) context[`${name}`] = key;
-    for (const [name, input] of Object.entries(scope.inputs ?? {})) context[`${name}`] = input;
+    for (const [name, input] of Object.entries(scope.inputs ?? {})) context[`$${name}`] = input;
     if (scope.trigger !== undefined) context['$trigger'] = scope.trigger;
     if (scope.previous !== undefined) context['$previous'] = scope.previous;
     if (scope.result !== undefined) context['$result'] = scope.result;

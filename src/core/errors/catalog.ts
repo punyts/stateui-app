@@ -212,6 +212,13 @@ export const ERROR_CATALOG = {
     },
     'SUI-LOGIC-STATE': { template: 'State "{name}" at {path} is not a state of machine "{other}"' },
     'SUI-LOGIC-EXPRESSION': { template: 'Expression at {path} does not compile: {name}' },
+    'SUI-LOGIC-GAP': { template: 'Table at {path} has no row for {name}' },
+    'SUI-LOGIC-UNREACHABLE': { template: 'Row {path} never wins: the rows above it cover every value it matches', severity: 'warning' },
+    'SUI-LOGIC-SIZE': {
+        template: 'Table at {path} has {actual} cells, more than {limit}, so its rows are matched in order and gaps are not checked',
+        severity: 'warning'
+    },
+    'SUI-LOGIC-CYCLE': { template: 'Logic at {path} feeds itself ({name}), so it would never settle' },
     'SUI-LOGIC-TEXT-PATH': {
         template: 'Value {target} at {path} is a text template, so it gives the path as text; use a record source (the key record with the path) to read the value there',
         severity: 'warning'

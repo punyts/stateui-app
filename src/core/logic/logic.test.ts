@@ -411,12 +411,6 @@ describe('createLogicEngine', () => {
                 },
                 thanks: { when: { result: 'saved', is: 'accepted' }, do: [{ command: 'set', target: '$.data.lastSaved', value: '$result.key' }] },
                 sorry: { when: { result: 'saved', is: 'rejected' }, do: [{ command: 'set', target: '$.data.error', value: '$result.reason' }] }
-            },
-            tables: {
-                status: {
-                    when: { result: 'saved' },
-                    rows: [{ if: "$result.status == 'accepted'", do: [{ command: 'set', target: '$.data.status', value: 'ok' }] }, { do: [{ command: 'set', target: '$.data.status', value: 'failed' }] }]
-                }
             }
         };
         const memory = memoryHost({ ...BASE, data: { contacts: {} } });
@@ -428,7 +422,6 @@ describe('createLogicEngine', () => {
         // Assert
         expect(readLogic(logic).errors).toEqual([]);
         expect(memory.get('$.data.lastSaved')).toBe('c1');
-        expect(memory.get('$.data.status')).toBe('ok');
         expect(memory.get('$.data.error')).toBeUndefined();
         expect(memory.failures).toEqual([]);
     });
@@ -577,9 +570,9 @@ describe('createLogicEngine', () => {
             },
             tables: {
                 line: {
-                    when: { path: '$.data.bag.{id}.qty' },
                     inputs: { qty: '$.data.bag.{id}.qty', price: '$.data.bag.{id}.price' },
-                    rows: [{ do: [{ command: 'set', target: '$.data.bag.{id}.line', value: '{{ qty * price }}' }] }]
+                    outputs: { line: '$.data.bag.{id}.line' },
+                    rows: [{ line: '{{ $qty * $price }}' }]
                 }
             }
         };
@@ -1000,54 +993,228 @@ describe('createLogicEngine: $previous and was', () => {
     });
 });
 
-describe('createLogicEngine: decision tables', () => {
+describe('createLogicEngine: lookup tables', () => {
     const SHIPPING: LogicDocument = Object.freeze({
         tables: {
             shipping: {
-                when: { path: '$.data.order' },
-                inputs: { country: '$.data.order.country', total: '$.data.order.total' },
+                inputs: {
+                    country: { path: '$.data.order.country', values: ['NL', 'BE', '*'] },
+                    total: { path: '$.data.order.total', breaks: [50, 100] }
+                },
+                outputs: { fee: '$.data.order.shipping', days: '$.data.order.eta' },
                 rows: [
-                    { match: { country: 'NL' }, if: '$total >= 50', do: [{ command: 'set', target: '$.data.order.shipping', value: 0 }] },
-                    { match: { country: 'NL' }, do: [{ command: 'set', target: '$.data.order.shipping', value: 5 }] },
-                    { do: [{ command: 'set', target: '$.data.order.shipping', value: '{{ $total / 10 }}' }] }
+                    { country: 'NL', total: '>=50', fee: 0, days: 1 },
+                    { country: ['NL', 'BE'], fee: 5, days: 2 },
+                    { fee: '{{ $total / 10 }}', days: 4 }
                 ]
             }
         }
     }) as LogicDocument;
 
-    it('should run the first row that its inputs match, and the default otherwise', () => {
+    it('should write the outputs of the first row that matches, and the default otherwise', () => {
         // Arrange
         const memory = memoryHost({ data: { order: {} } });
         const engine = createLogicEngine(SHIPPING, memory.host);
 
         // Act / Assert
         userChange(memory, engine, '$.data.order', { country: 'NL', total: 60 });
-        expect(memory.get('$.data.order.shipping')).toBe(0);
-        userChange(memory, engine, '$.data.order', { country: 'NL', total: 20 });
-        expect(memory.get('$.data.order.shipping')).toBe(5);
+        expect([memory.get('$.data.order.shipping'), memory.get('$.data.order.eta')]).toEqual([0, 1]);
+        userChange(memory, engine, '$.data.order.total', 20);
+        expect([memory.get('$.data.order.shipping'), memory.get('$.data.order.eta')]).toEqual([5, 2]);
         userChange(memory, engine, '$.data.order', { country: 'DE', total: 80 });
-        expect(memory.get('$.data.order.shipping')).toBe(8);
+        expect([memory.get('$.data.order.shipping'), memory.get('$.data.order.eta')]).toEqual([8, 4]);
         expect(engine.names).toEqual(['shipping']);
-    });
-
-    it('should fire a table once per chain, so its own write does not loop', () => {
-        const memory = memoryHost({ data: { order: {} } });
-        const engine = createLogicEngine(SHIPPING, memory.host);
-
-        userChange(memory, engine, '$.data.order', { country: 'NL', total: 20 });
-
-        expect(memory.commits).toHaveLength(1);
         expect(memory.failures).toEqual([]);
     });
 
-    it('should report the errors of a table', () => {
+    it('should write only the outputs that change, and nothing when none does', () => {
+        // Arrange
+        const memory = memoryHost({ data: { order: { country: 'NL', total: 20 } } });
+        const engine = createLogicEngine(SHIPPING, memory.host);
+        engine.start();
+        const before = memory.commits.length;
+
+        // Act: BE gives the same row as NL below 50
+        userChange(memory, engine, '$.data.order.country', 'BE');
+
+        // Assert
+        expect(memory.commits.length).toBe(before);
+        expect(engine.trace().at(-1)?.events).toEqual([expect.objectContaining({ kind: 'table', name: 'shipping', outcome: 'unchanged', row: 1, writes: [] })]);
+    });
+
+    it('should run in the derive pass at start', () => {
+        // Arrange
+        const memory = memoryHost({ data: { order: { country: 'BE', total: 120 } } });
+        const engine = createLogicEngine(SHIPPING, memory.host);
+
+        // Act
+        engine.start();
+
+        // Assert
+        expect(memory.get('$.data.order.shipping')).toBe(5);
+        expect(engine.trace()[0]?.events[0]).toEqual(expect.objectContaining({ outcome: 'fired', row: 1, writes: ['$.data.order.shipping', '$.data.order.eta'] }));
+    });
+
+    it('should skip a table while an input has no value, and fail on a value its input does not list', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            tables: {
+                size: {
+                    inputs: { kind: { path: '$.data.kind', values: ['a', 'b'] } },
+                    outputs: { label: '$.data.label' },
+                    rows: [{ kind: 'a', label: 'A' }, { kind: 'b', label: 'B' }]
+                }
+            }
+        };
+        const memory = memoryHost({ data: {} });
+        const engine = createLogicEngine(logic, memory.host);
+        engine.start();
+
+        // Act
+        userChange(memory, engine, '$.data.kind', 'c');
+
+        // Assert
+        expect(memory.get('$.data.label')).toBeUndefined();
+        expect(memory.failures).toEqual([{ kind: 'table', name: 'size', reason: 'input "kind" is "c", which is not one of its values' }]);
+    });
+
+    it('should run per record for the records whose inputs changed', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            tables: {
+                band: {
+                    inputs: { qty: { path: '$.data.lines.{id}.qty', breaks: [10] }, price: '$.data.lines.{id}.price' },
+                    outputs: { total: '$.data.lines.{id}.total', bulk: '$.data.lines.{id}.bulk' },
+                    rows: [
+                        { qty: '<10', total: '{{ $qty * $price }}', bulk: false },
+                        { total: '{{ $qty * $price * 0.9 }}', bulk: true }
+                    ]
+                }
+            }
+        };
+        const memory = memoryHost({ data: { lines: { a: { qty: 1, price: 10 }, b: { qty: 20, price: 1 } } } });
+        const engine = createLogicEngine(logic, memory.host);
+        engine.start();
+        const before = memory.commits.length;
+
+        // Act
+        userChange(memory, engine, '$.data.lines.a.qty', 12);
+
+        // Assert
+        expect(memory.get('$.data.lines.a')).toEqual({ qty: 12, price: 10, total: 108, bulk: true });
+        expect(memory.get('$.data.lines.b')).toEqual({ qty: 20, price: 1, total: 18, bulk: true });
+        expect(memory.commits.slice(before)).toEqual([[
+            { path: '$.data.lines.a.total', value: 108 },
+            { path: '$.data.lines.a.bulk', value: true }
+        ]]);
+    });
+
+    it('should run before a rule that reads its outputs, and run once per chain', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            rules: { notice: { when: { path: '$.data.order.shipping', is: 0 }, do: [{ command: 'set', target: '$.data.free', value: true }] } },
+            tables: SHIPPING.tables as NonNullable<LogicDocument['tables']>
+        };
+        const memory = memoryHost({ data: { order: {} } });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.order', { country: 'NL', total: 70 });
+
+        // Assert
+        expect(memory.get('$.data.free')).toBe(true);
+        expect(memory.commits).toHaveLength(2);
+        expect(memory.failures).toEqual([]);
+    });
+
+    it('should take an input from a value expression', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            tables: {
+                cart: {
+                    inputs: { empty: { value: '{{ size($.data.cart) == 0 }}', values: [true, false] } },
+                    outputs: { message: '$.data.message' },
+                    rows: [{ empty: true, message: 'Your cart is empty' }, { message: '' }]
+                }
+            }
+        };
+        const memory = memoryHost({ data: { cart: {} } });
+        const engine = createLogicEngine(logic, memory.host);
+        engine.start();
+        expect(memory.get('$.data.message')).toBe('Your cart is empty');
+
+        // Act
+        userChange(memory, engine, '$.data.cart.p1', 1);
+
+        // Assert
+        expect(memory.get('$.data.message')).toBe('');
+    });
+
+    it('should give the outputs of the winning row to lookup in expressions', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            tables: SHIPPING.tables as NonNullable<LogicDocument['tables']>,
+            rules: { quote: { when: { path: '$.data.ask' }, do: [{ command: 'set', target: '$.data.quote', value: "{{ lookup('shipping', $trigger, 30) }}" }] } }
+        };
+        const memory = memoryHost({ data: { order: {} } });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.ask', 'DE');
+
+        // Assert
+        expect(memory.get('$.data.quote')).toEqual({ fee: 3, days: 4 });
+        expect(memory.get('$.data.order.shipping')).toBeUndefined();
+    });
+
+    it('should take rows and input values from data, compile again when they change and keep the last good rows', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            tables: {
+                rate: {
+                    inputs: { country: { path: '$.data.order.country', values: { keys: '$.data.countries' } } },
+                    outputs: { fee: '$.data.order.fee' },
+                    rows: { from: '$.data.rates' }
+                }
+            }
+        };
+        const memory = memoryHost({
+            data: {
+                countries: { NL: true, BE: true },
+                rates: { r2: { order: 2, fee: 9 }, r1: { order: 1, country: 'NL', fee: 1 } },
+                order: { country: 'NL' }
+            }
+        });
+        const engine = createLogicEngine(logic, memory.host);
+        engine.start();
+        expect(memory.get('$.data.order.fee')).toBe(1);
+
+        // Act: a rate edited in data
+        userChange(memory, engine, '$.data.rates.r1.fee', 2);
+        // Assert
+        expect(memory.get('$.data.order.fee')).toBe(2);
+
+        // Act: a version with a gap fails and keeps the last good rows
+        userChange(memory, engine, '$.data.rates.r2.country', 'NL');
+        // Assert
+        expect(memory.failures).toEqual([{ kind: 'table', name: 'rate', reason: 'no row for country "BE"; the last good rows stay in use' }]);
+        userChange(memory, engine, '$.data.order.country', 'BE');
+        expect(memory.get('$.data.order.fee')).toBe(9);
+    });
+
+    it('should report the problems of a table', () => {
         // Arrange
         const logic = {
             tables: {
                 t: {
-                    when: { path: '$.data.x' },
-                    inputs: { trigger: '$.data.y', a: '$.data.z' },
-                    rows: [{ do: [{ command: 'set', target: '$.data.w', value: 1 }] }, { match: { b: 1 }, do: [] }]
+                    inputs: { trigger: '$.data.y', a: { path: '$.data.a', values: ['x', 'y'] }, p: '$.data.p' },
+                    outputs: { out: '$.data.out' },
+                    rows: [{ a: 'x', out: 1 }, { a: 'z', out: 2 }, { p: 1, out: 3 }, { b: 1 }]
+                },
+                gap: {
+                    inputs: { a: { path: '$.data.a', values: ['x', 'y'] } },
+                    outputs: { out: '$.data.out' },
+                    rows: [{ a: 'x', out: 1 }]
                 }
             }
         };
@@ -1056,10 +1223,65 @@ describe('createLogicEngine: decision tables', () => {
         const result = readLogic(logic);
 
         // Assert
-        expect(result.errors.map((error) => error.statePath)).toEqual(
-            expect.arrayContaining(['$.logic.tables.t.inputs.trigger', '$.logic.tables.t.rows.0', '$.logic.tables.t.rows.1.match.b', '$.logic.tables.t.rows.1.do'])
+        expect(result.errors.map((error) => [error.code, error.statePath])).toEqual(
+            expect.arrayContaining([
+                ['SUI-LOGIC-SHAPE', '$.logic.tables.t.inputs.trigger'],
+                ['SUI-LOGIC-GAP', '$.logic.tables.gap.rows']
+            ])
         );
+        expect(result.errors.find((error) => error.code === 'SUI-LOGIC-GAP')?.message).toContain('a "y"');
         expect(result.logic).toEqual({});
+    });
+
+    it('should warn about a row that never wins and a table too large to compile', () => {
+        // Arrange
+        const breaks = Array.from({ length: 70 }, (_, index) => index);
+        const logic = {
+            tables: {
+                late: {
+                    inputs: { a: { path: '$.data.a', values: ['x', '*'] } },
+                    outputs: { out: '$.data.out' },
+                    rows: [{ out: 1 }, { a: 'x', out: 2 }]
+                },
+                big: {
+                    inputs: { a: { path: '$.data.a', breaks }, b: { path: '$.data.b', breaks } },
+                    outputs: { out: '$.data.big' },
+                    rows: [{ out: 1 }]
+                }
+            }
+        };
+
+        // Act
+        const result = readLogic(logic);
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LOGIC-UNREACHABLE', '$.logic.tables.late.rows.1'],
+            ['SUI-LOGIC-SIZE', '$.logic.tables.big.inputs']
+        ]);
+        expect(Object.keys(result.logic.tables ?? {})).toEqual(['late', 'big']);
+    });
+
+    it('should report tables that feed each other in a cycle', () => {
+        // Arrange
+        const logic = {
+            tables: {
+                a: { inputs: { x: '$.data.x' }, outputs: { y: '$.data.y' }, rows: [{ y: '{{ $x }}' }] },
+                b: { inputs: { y: '$.data.y' }, outputs: { x: '$.data.x' }, rows: [{ x: '{{ $y }}' }] },
+                c: { inputs: { y: '$.data.y' }, outputs: { z: '$.data.z' }, rows: [{ z: 1 }] }
+            }
+        };
+
+        // Act
+        const result = readLogic(logic);
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LOGIC-CYCLE', '$.logic.tables.a'],
+            ['SUI-LOGIC-CYCLE', '$.logic.tables.b']
+        ]);
+        expect(result.errors[0]?.message).toContain('tables.a → tables.b → tables.a');
+        expect(Object.keys(result.logic.tables ?? {})).toEqual(['c']);
     });
 });
 

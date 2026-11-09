@@ -52,11 +52,11 @@ export const LOGIC_COMMAND_KEYS = [
     'reason'
 ] as const;
 
-/** What starts a transition: a change at a path, or a named result of an earlier command (of the same machine, or of a rule or table) */
+/** What starts a transition: a change at a path, or a named result of an earlier command (of the same machine, or of a rule) */
 export interface LogicTrigger {
     /** A state path with `*` (one segment) and `{name}` (one segment, captured) steps */
     path?: string;
-    /** The `as` name of a `save-data` or `delete-data` command: of the same machine for a transition, of a rule or table for a rule or table */
+    /** The `as` name of a `save-data` or `delete-data` command: of the same machine for a transition, of a rule for a rule */
     result?: string;
     /** The value at the path, or the result status (`accepted`, `rejected`), must equal this */
     is?: JsonValue;
@@ -107,18 +107,33 @@ export interface LogicRule {
     do: LogicCommand[];
 }
 
-/** A row of a decision table: every `match` input equals its literal and `if` is true; neither makes it the default */
-export interface LogicRow {
-    match?: Record<string, JsonValue>;
-    if?: string;
-    do: LogicCommand[];
+/**
+ * An input of a lookup table: a state value read when the table runs. With `values` or `breaks` it is a key input, one
+ * dimension of the table's cells, which rows match on; without them it is a plain input, which only the outputs read
+ */
+export interface LogicTableInput {
+    /** A state path or node reference; `{name}` steps capture, so the table runs per record */
+    path?: string;
+    /** A `{{ … }}` expression instead of a path; it runs when a state path it reads changes */
+    value?: string;
+    /** The values it takes, `"*"` for any other; or `{ keys }`, the keys of a data map */
+    values?: JsonValue[] | { keys: string };
+    /** Ascending numbers that split it into buckets: `[50, 100]` is below 50, 50 up to 100, and 100 and above */
+    breaks?: number[];
 }
 
-/** A decision table: one trigger, named inputs read when it fires (`$name`), and rows of which the first match runs */
+/** A row of a lookup table: key input names to conditions, and output names to values */
+export type LogicTableRow = Record<string, JsonValue>;
+
+/**
+ * A lookup table: inputs (a path alone is a plain input), outputs (names to the state paths they write) and rows, or
+ * `{ from }`, a data map whose records are the rows. A change to an input path runs it; the first row whose conditions
+ * hold for every key input wins, and its outputs are written. Its rows are compiled into a lookup by key input
+ */
 export interface LogicTable {
-    when: LogicTrigger;
-    inputs?: Record<string, JsonValue>;
-    rows: LogicRow[];
+    inputs: Record<string, LogicTableInput | string>;
+    outputs: Record<string, string>;
+    rows: LogicTableRow[] | { from: string };
 }
 
 /** The `logic` root of a document */

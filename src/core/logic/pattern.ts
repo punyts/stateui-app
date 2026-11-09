@@ -106,6 +106,36 @@ export function matchPattern(pattern: PathPattern, path: string, value?: JsonVal
     return matches;
 }
 
+/**
+ * The steps of a written path (`$.data.bag.{id}.total`), with `null` for a step that is only known when it runs (a
+ * capture, `*` or a `{{ }}` template)
+ */
+export function writeSteps(path: string): (string | null)[] {
+    return path
+        .replace(/\{\{[\s\S]*?\}\}/g, '{}')
+        .slice(2)
+        .split('.')
+        .map((step) => (step === '*' || step.includes('{') ? null : step));
+}
+
+/** True when a write at `steps` can change a value at, below or above the pattern's path */
+export function mayTouch(pattern: PathPattern, steps: readonly (string | null)[]): boolean {
+    const shared = Math.min(pattern.steps.length, steps.length);
+    for (let index = 0; index < shared; index += 1) {
+        const step = pattern.steps[index] as PatternStep;
+        const key = steps[index];
+        if (step.kind === 'literal' && key !== null && key !== step.text) return false;
+    }
+    return true;
+}
+
+const EXPRESSION_PATH = /\$\.(?:[A-Za-z0-9_-]+|\{[A-Za-z_][A-Za-z0-9_]*\}|\*)(?:\.(?:[A-Za-z0-9_-]+|\{[A-Za-z_][A-Za-z0-9_]*\}|\*))*/g;
+
+/** The state paths an expression reads (`$.data.cart`, `$.data.lines.{id}.qty`), as written */
+export function expressionPaths(text: string): string[] {
+    return [...new Set([...text.matchAll(EXPRESSION_PATH)].map((match) => match[0]))];
+}
+
 /** Puts captured keys into a path or pattern: `$.data.tasks.{task}.done` with `task: "t1"` */
 export function fillCaptures(text: string, captures: Readonly<Record<string, string>>): string {
     return text.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (whole, name: string) =>

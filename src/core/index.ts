@@ -248,7 +248,9 @@ export {
     matchPattern,
     queryRecords,
     readLogic,
-    readModule
+    readModule,
+    MAX_TABLE_CELLS,
+    compileTable
 } from './logic/index.js';
 export type {
     LogicAnswer,
@@ -265,9 +267,10 @@ export type {
     LogicIndexScreens,
     LogicMachine,
     LogicResult,
-    LogicRow,
     LogicRule,
     LogicTable,
+    LogicTableInput,
+    LogicTableRow,
     LogicTraceEvent,
     LogicTraceOutcome,
     LogicTraceRun,

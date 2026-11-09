@@ -81,9 +81,9 @@ function eachString(value: JsonValue | undefined, path: string, key: string, vis
     else if (isObject(value)) for (const [name, item] of Object.entries(value)) eachString(item, `${path}.${name}`, name, visit);
 }
 
-/** True when a path lies under a table's `inputs` */
-function isInput(path: string): boolean {
-    return /\.inputs\.[^.]+$/.test(path);
+/** True when a path is a state path a table reads or writes: an input, its `path` or `values.keys`, an output, `rows.from` */
+function isTablePath(path: string): boolean {
+    return /\.tables\.[^.]+\.(?:inputs\.[^.]+(?:\.path|\.values\.keys)?|outputs\.[^.]+|rows\.from)$/.test(path);
 }
 
 /** The node, needs and param references of the units, and the commands that run once per instance */
@@ -92,7 +92,7 @@ function checkUnits(units: JsonObject, needs: readonly string[], params: readonl
     eachString(units, '$', '', (text, path, key) => {
         const node = NODE_PATH.exec(text);
         if (node) errors.push(buildError('SUI-MODULE-NODE', { path, target: `$.${node[1] as string}`, statePath: path }));
-        else if (text.startsWith('^') && (PATH_KEYS.includes(key) || isInput(path))) {
+        else if (text.startsWith('^') && (PATH_KEYS.includes(key) || isTablePath(path))) {
             errors.push(buildError('SUI-MODULE-NODE', { path, target: text, statePath: path }));
         }
         for (const match of text.matchAll(DATA_PATH)) {
@@ -128,12 +128,6 @@ function checkUnits(units: JsonObject, needs: readonly string[], params: readonl
     }
     for (const [name, rule] of Object.entries(isObject(units['rules']) ? units['rules'] : {})) {
         if (isObject(rule)) commandsOf(rule['do'], `$.rules.${name}.do`);
-    }
-    for (const [name, table] of Object.entries(isObject(units['tables']) ? units['tables'] : {})) {
-        if (!isObject(table) || !Array.isArray(table['rows'])) continue;
-        table['rows'].forEach((row, index) => {
-            if (isObject(row)) commandsOf(row['do'], `$.tables.${name}.rows.${index}.do`);
-        });
     }
 }
 

@@ -4,13 +4,15 @@ export { createLogicIndex } from './documentIndex.js';
 export type { LogicIndex, LogicIndexScreens } from './documentIndex.js';
 export { createLogicEngine, logicRunOrder } from './engine.js';
 export type { LogicEngine, LogicUnitPlace } from './engine.js';
-export { captureNames, compilePattern, fillCaptures, isStatePath, matchPattern, pathSteps } from './pattern.js';
+export { captureNames, compilePattern, expressionPaths, fillCaptures, isStatePath, matchPattern, pathSteps } from './pattern.js';
+export { MAX_TABLE_CELLS, OTHER_VALUE, compileTable, tableColumns } from './table.js';
+export type { CompiledTable, TableColumn, TableProblem } from './table.js';
 export type { PathPattern, PatternMatch, PatternStep } from './pattern.js';
 export { MODULE_UNIT_SEPARATOR, instantiateModule, readModule } from './modules.js';
 export type { InstantiateModuleOptions, InstantiateModuleResult, ReadModuleResult } from './modules.js';
 export { queryRecords } from './query.js';
 export type { RecordQuery, RecordQueryResult } from './query.js';
-export { readLogic } from './read.js';
+export { readLogic, tableReads } from './read.js';
 export type { ReadLogicOptions, ReadLogicResult } from './read.js';
 export {
     LOGIC_COMMANDS,
@@ -31,9 +33,10 @@ export type {
     LogicHost,
     LogicMachine,
     LogicResult,
-    LogicRow,
     LogicRule,
     LogicTable,
+    LogicTableInput,
+    LogicTableRow,
     LogicTraceEvent,
     LogicTraceOutcome,
     LogicTraceRun,

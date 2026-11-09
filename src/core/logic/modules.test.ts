@@ -81,9 +81,9 @@ function run(logic: LogicDocument, initial: JsonObject) {
 const LINE_TABLE: LogicDocument = Object.freeze({
     tables: {
         line: {
-            when: { path: '$.data.bag.{id}.qty' },
             inputs: { qty: '$.data.bag.{id}.qty', price: '$.data.bag.{id}.price' },
-            rows: [{ do: [{ command: 'set', target: '$.data.bag.{id}.line', value: '{{ qty * price }}' }] }]
+            outputs: { line: '$.data.bag.{id}.line' },
+            rows: [{ line: '{{ $qty * $price }}' }]
         }
     }
 }) as LogicDocument;

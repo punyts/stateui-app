@@ -19,9 +19,9 @@ const BAG = deepFreeze({
     },
     tables: {
         lines: {
-            when: { path: '$.data.bag.{id}.qty' },
-            inputs: { price: '$.data.prices.{id}' },
-            rows: [{ do: [{ command: 'set', target: '$.data.bag.{id}.lineTotal', value: '{{ $value * $inputs.price }}' }] }]
+            inputs: { qty: '$.data.bag.{id}.qty', price: '$.data.prices.{id}' },
+            outputs: { lineTotal: '$.data.bag.{id}.lineTotal' },
+            rows: [{ lineTotal: '{{ $qty * $price }}' }]
         }
     }
 }) as unknown as LogicDocument;
