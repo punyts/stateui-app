@@ -1,6 +1,7 @@
 import type { JsonValue } from '../types.js';
 import { runCommand } from './commands.js';
 import type { CommandContext } from './commands.js';
+import { PathIndex } from './pathIndex.js';
 import { compilePattern, matchPattern, pathSteps } from './pattern.js';
 import type { PathPattern, PatternMatch } from './pattern.js';
 import { LogicError, condition, resolveValue } from './values.js';
@@ -287,7 +288,8 @@ function previousAt(at: string, change: LogicChange, current: JsonValue | undefi
 /**
  * The logic runner over a host: a browser store or an app server's authority.
  *
- * A change is looked up against every machine, rule and table, in that order and each in document order, except that a
+ * A change is looked up in an index of the trigger paths (`PathIndex`), which gives the transitions whose paths can
+ * match it; those units are tried in chain order: machines, rules and tables, each in document order, except that a
  * unit comes after the units whose commands can write under its trigger paths (see `chainOrder`). A machine
  * considers only the transitions of its current state (or with no `from`) and fires the first that matches; a rule
  * is one transition; a table fires the first of its rows that matches its inputs. The commands of a transition run
@@ -348,6 +350,29 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
 
     const ordered = chainOrder(units);
 
+    /** The trigger paths of every transition, so a change reaches only the transitions whose paths can match it */
+    const triggers = new PathIndex<{ unit: string; index: number }>();
+    for (const unit of units) {
+        unit.patterns.forEach((pattern, index) => {
+            if (pattern) triggers.add(pattern, { unit: unit.id, index });
+        });
+    }
+    const guardIndex = new PathIndex<Guard>();
+    for (const rule of guards) guardIndex.add(rule.pattern, rule);
+
+    /** The transitions, by unit id, whose trigger paths can match one of the changes */
+    const reached = (changes: readonly LogicChange[]): Map<string, Set<number>> => {
+        const found = new Set<{ unit: string; index: number }>();
+        for (const change of changes) triggers.find(change.path, found);
+        const byUnit = new Map<string, Set<number>>();
+        for (const { unit, index } of found) {
+            let indexes = byUnit.get(unit);
+            if (!indexes) byUnit.set(unit, (indexes = new Set()));
+            indexes.add(index);
+        }
+        return byUnit;
+    };
+
     /** Debounce timers by unit and transition index; `after` timers by machine, with the state they were armed for */
     const debounced = new Map<string, () => void>();
     const armed = new Map<string, { state: string | undefined; cancels: (() => void)[] }>();
@@ -382,7 +407,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
      * The first transition of the unit's current state that one of the changes triggers. A trigger fires only when the
      * value at its path changed, and not when the path went away with its parent; the trace notes why nothing fired
      */
-    const findHit = (unit: Unit, changes: readonly LogicChange[]): Hit | undefined => {
+    const findHit = (unit: Unit, changes: readonly LogicChange[], only?: ReadonlySet<number>): Hit | undefined => {
         const state = stateOf(unit);
         let miss: Omit<LogicTraceEvent, 'depth' | 'kind' | 'name'> | undefined;
         const missed = (outcome: LogicTraceEvent['outcome'], path: string, reason?: string): void => {
@@ -390,7 +415,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         };
         for (const [index, transition] of unit.transitions.entries()) {
             const compiled = unit.patterns[index];
-            if (!compiled) continue;
+            if (!compiled || (only !== undefined && !only.has(index))) continue;
             for (const change of changes) {
                 const matches = matchPattern(compiled, change.path, host.get(change.path));
                 if (matches.length === 0) continue;
@@ -457,7 +482,9 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
 
     /** The guard that refuses a change; a guard sees only changes of the value at its path, not removed parents */
     const refusal = (change: LogicChange): { name: string; reason: string } | undefined => {
+        const reach = guardIndex.find(change.path);
         for (const rule of guards) {
+            if (!reach.has(rule)) continue;
             const proposed = new WorkingCopy((path) => host.get(path));
             if (change.value === undefined) proposed.delete(change.path);
             else proposed.set(change.path, change.value);
@@ -571,13 +598,16 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 return;
             }
             const next: LogicChange[] = [];
+            const reach = reached(pending);
             for (const unit of ordered) {
+                const transitions = reach.get(unit.id);
+                if (!transitions) continue;
                 if (fired.has(unit.id)) {
                     const path = current ? touches(unit, pending) : undefined;
                     if (path !== undefined) note({ kind: unit.kind, name: unit.name, outcome: 'already-fired', path });
                     continue;
                 }
-                const hit = findHit(unit, pending);
+                const hit = findHit(unit, pending, transitions);
                 if (!hit) continue;
                 fired.add(unit.id);
                 if (hit.transition.when.debounce !== undefined) {
