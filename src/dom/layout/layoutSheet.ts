@@ -75,6 +75,17 @@ function rowShrinkRules(): string[] {
     ];
 }
 
+/**
+ * `height` on a child of a column, row or grid: its block size, read from the attribute. In a column it does not
+ * shrink, so the height asked for is the height drawn
+ */
+function heightRules(type: LayoutType): string[] {
+    const declarations = ['block-size: attr(height type(<length-percentage>))', ...(type === 'column' ? ['flex-shrink: 0'] : [])];
+    return [`@supports (block-size: attr(height type(<length-percentage>))) {
+${indent(block(item(type, 'height'), declarations))}
+}`];
+}
+
 /** `[col="1"]` through `[col="12"]` and the other integer fields of a grid */
 function gridPlacementRules(): string[] {
     const rules: string[] = [];
@@ -140,7 +151,7 @@ export function generateLayoutSheet(type: LayoutType): string {
     const rules: string[] = [];
     switch (type) {
         case 'column':
-            rules.push(block(container(type), ['display: flex', 'flex-direction: column', `gap: ${DEFAULT_GAP}`]), ...alignRules(type), ...gapRules(type), ...growRules(type));
+            rules.push(block(container(type), ['display: flex', 'flex-direction: column', `gap: ${DEFAULT_GAP}`]), ...alignRules(type), ...gapRules(type), ...growRules(type), ...heightRules(type));
             break;
         case 'row':
             rules.push(
@@ -149,6 +160,7 @@ export function generateLayoutSheet(type: LayoutType): string {
                 ...alignRules(type),
                 ...gapRules(type),
                 ...growRules(type),
+                ...heightRules(type),
                 ...rowShrinkRules(),
                 rowNarrowRules()
             );
@@ -162,7 +174,8 @@ export function generateLayoutSheet(type: LayoutType): string {
                     `gap: ${DEFAULT_GAP}`
                 ]),
                 ...gapRules(type),
-                ...gridPlacementRules()
+                ...gridPlacementRules(),
+                ...heightRules(type)
             );
             break;
         case 'region':
@@ -192,6 +205,8 @@ export function generateLayoutSheet(type: LayoutType): string {
             placed.push(indent(block(item(type, 'z'), ['z-index: attr(z type(<integer>))'])));
             rules.push(
                 block(container(type), ['position: relative']),
+                // `clip`: what reaches past the area (a window dragged low) is cut at its edge
+                block(container(type, 'clip'), ['overflow: clip']),
                 block(item(type), ['position: absolute']),
                 `@supports (left: attr(x type(<length-percentage>))) {\n${placed.join('\n')}\n}`
             );

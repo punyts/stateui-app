@@ -51,8 +51,10 @@ describe('layout lists', () => {
         expect(names('row', 'settings')).toEqual(['gap', 'align', 'wrap', 'collapseBelow']);
         expect(names('grid', 'settings')).toEqual(['cols', 'rows', 'gap', 'collapseBelow']);
         expect(names('region', 'settings')).toEqual(['gap', 'collapseBelow']);
-        expect(names('adhoc', 'settings')).toEqual([]);
-        expect(names('grid', 'placement')).toEqual(['col', 'row', 'span', 'rowSpan']);
+        expect(names('adhoc', 'settings')).toEqual(['clip']);
+        expect(names('column', 'placement')).toEqual(['grow', 'height']);
+        expect(names('row', 'placement')).toEqual(['grow', 'height']);
+        expect(names('grid', 'placement')).toEqual(['col', 'row', 'span', 'rowSpan', 'height']);
         expect(names('region', 'placement')).toEqual(['region']);
         expect(names('adhoc', 'placement')).toEqual(['x', 'y', 'width', 'height', 'z']);
     });
@@ -69,6 +71,22 @@ describe('layout lists', () => {
         [4, false]
     ])('should check the dimension %j as %s', (value, expected) => {
         expect(fitsField({ type: 'dimension' }, value)).toBe(expected);
+    });
+
+    it.each([
+        ['320px', true],
+        ['50%', true],
+        ['calc(100vh - 60px)', true],
+        ['min(480px, 60vh)', true],
+        ['clamp(200px, 40vh, 600px)', true],
+        ['100vh', false],
+        ['{scale.space.3}', false],
+        ['calc({space.gap.md} * 2)', false],
+        ['4em', false],
+        [' 4px', false],
+        [320, false]
+    ])('should check the size %j as %s', (value, expected) => {
+        expect(fitsField({ type: 'size' }, value)).toBe(expected);
     });
 
     it.each([
@@ -123,12 +141,12 @@ describe('layout validator', () => {
         expect(errors[0]?.message).toBe('Unknown layout setting "wrap" at $.app.layout.wrap: the column layout takes "type", "gap", "align"');
     });
 
-    it('should say an adhoc layout takes only its type', () => {
+    it('should say which settings an adhoc layout takes', () => {
         // Arrange and Act
         const errors = validateDocument({ app: { component: 'panel', layout: { type: 'adhoc', gap: 'md' } } }, LIBRARY).errors;
 
         // Assert
-        expect(errors[0]?.message).toBe('Unknown layout setting "gap" at $.app.layout.gap: the adhoc layout takes only "type"');
+        expect(errors[0]?.message).toBe('Unknown layout setting "gap" at $.app.layout.gap: the adhoc layout takes "type", "clip"');
     });
 
     it('should reject a layout on a component whose shape does not support it', () => {
@@ -164,9 +182,27 @@ describe('placement validator', () => {
         [{ type: 'region' }, { region: 'middle' }],
         [{ type: 'column' }, { grow: 13 }],
         [{ type: 'adhoc' }, { x: 'calc(1px + 2px)' }],
-        [{ type: 'adhoc' }, { width: '{scale.space.3}' }]
+        [{ type: 'adhoc' }, { width: '{scale.space.3}' }],
+        [{ type: 'column' }, { height: '100vh' }],
+        [{ type: 'grid' }, { height: 320 }]
     ])('should reject a placement value outside its list for %j', (layout, placement) => {
         expect(codes(panel(layout, placement))).toEqual(['SUI-LAYOUT-PLACEMENT']);
+    });
+
+    it.each([
+        [{ type: 'column' }, { height: 'calc(100vh - 60px)' }],
+        [{ type: 'row' }, { grow: 1, height: '240px' }],
+        [{ type: 'grid' }, { col: 1, height: '50%' }]
+    ])('should accept a height on a child of %j', (layout, placement) => {
+        expect(codes(panel(layout, placement))).toEqual([]);
+    });
+
+    it('should accept clip on an adhoc layout and only a boolean', () => {
+        const clipped = validateDocument({ app: { component: 'panel', layout: { type: 'adhoc', clip: true } } }, LIBRARY).errors;
+        const wrong = validateDocument({ app: { component: 'panel', layout: { type: 'adhoc', clip: 'yes' } } }, LIBRARY).errors;
+
+        expect(clipped).toEqual([]);
+        expect(wrong.map((error) => error.code)).toEqual(['SUI-LAYOUT-VALUE']);
     });
 
     it('should reject a placement that is not an object', () => {

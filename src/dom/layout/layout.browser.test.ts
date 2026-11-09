@@ -256,6 +256,40 @@ describe('layout sheets in Chromium', () => {
             expect([style().left, style().top, style().width, style().zIndex]).toEqual(['70px', '0px', '80px', '5']);
         });
 
+        it.each([
+            ['column', '120px', 120],
+            ['row', '90px', 90],
+            ['grid', 'calc(50px + 25px)', 75]
+        ] as const)('should give a child of a %s the height its placement asks for', (type, height, pixels) => {
+            // Arrange and Act
+            const { boxes } = start(panel({ type }, { a: box({ height }), b: box() }), 600);
+
+            // Assert
+            expect(Math.round(rect(boxes()[0] as Element).height)).toBe(pixels);
+        });
+
+        it('should follow the viewport with a height in vh', () => {
+            // Arrange and Act
+            const { boxes } = start(panel({ type: 'column' }, { a: box({ height: 'calc(50vh - 10px)' }) }), 600);
+
+            // Assert
+            expect(Math.round(rect(boxes()[0] as Element).height)).toBe(Math.round(window.innerHeight / 2 - 10));
+        });
+
+        it('should cut what reaches past an adhoc area only when clip is set', () => {
+            // Arrange
+            const children = { a: box({ x: '0px', y: '0px', width: '50px', height: '400px' }) };
+            const { app, layout } = start(panel({ type: 'adhoc' }, children), 600);
+            const before = getComputedStyle(layout()).overflow;
+
+            // Act
+            app.store?.set('$.app.layout.clip', true);
+
+            // Assert
+            expect(before).toBe('visible');
+            expect(getComputedStyle(layout()).overflow).toBe('clip');
+        });
+
         it('should rearrange when the layout type changes', () => {
             // Arrange
             const { app, boxes, layout } = start(panel({ type: 'column' }, four()), 600);

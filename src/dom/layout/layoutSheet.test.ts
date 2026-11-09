@@ -67,7 +67,7 @@ describe('generateLayoutSheet', () => {
             '[layout=row]:has(> sui-node > [grow]:not([grow="0"])) > sui-node > :is(:not([grow]), [grow="0"]) {\n    flex-shrink: 0;\n}'
         );
         expect(sheet).toContain('[layout=row] > sui-node > [grow]:not([grow="0"]) {\n    min-width: 0;\n}');
-        expect(generateLayoutSheet('column')).not.toContain('flex-shrink');
+        expect(generateLayoutSheet('column')).not.toContain(':is(:not([grow]), [grow="0"])');
     });
 
     it('should wrap a row and cap its items at the row width below the sm breakpoint', () => {
@@ -161,6 +161,16 @@ describe('generateLayoutSheet', () => {
         expect(sheet).toContain('left: attr(x type(<length-percentage>));');
         expect(sheet).toContain('height: attr(height type(<length-percentage>));');
         expect(sheet).toContain('[layout=adhoc] > sui-node > [z] {\n        z-index: attr(z type(<integer>));\n    }');
+        expect(sheet).toContain('[layout-host][layout=adhoc][layout-clip] {\n    overflow: clip;\n}');
+    });
+
+    it.each(['column', 'row', 'grid'] as const)('should size a child of a %s by its height attribute', (type) => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet(type);
+
+        // Assert
+        expect(sheet).toContain(`[layout=${type}] > sui-node > [height] {\n        block-size: attr(height type(<length-percentage>));`);
+        expect(sheet.includes('flex-shrink: 0;\n    }\n}')).toBe(type === 'column');
     });
 });
 

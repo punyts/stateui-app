@@ -87,13 +87,13 @@ The sheet also draws focus: `:host(:focus-visible)` and `:focus-visible` inside 
 
 | Type | Container settings | Child placement |
 |------|--------------------|-----------------|
-| `column` | `gap`, `align` | `grow` |
-| `row` | `gap`, `align`, `wrap`, `collapseBelow` | `grow` |
-| `grid` | `cols`, `rows`, `gap`, `collapseBelow` | `col`, `row`, `span`, `rowSpan` |
+| `column` | `gap`, `align` | `grow`, `height` |
+| `row` | `gap`, `align`, `wrap`, `collapseBelow` | `grow`, `height` |
+| `grid` | `cols`, `rows`, `gap`, `collapseBelow` | `col`, `row`, `span`, `rowSpan`, `height` |
 | `region` | `gap`, `collapseBelow` | `region` (`n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`, `center`) |
-| `adhoc` | none | `x`, `y`, `width`, `height`, `z` (stacking order, 0 to 999) |
+| `adhoc` | `clip` | `x`, `y`, `width`, `height`, `z` (stacking order, 0 to 999) |
 
-Allowed values: `gap` is `none`, `sm`, `md` or `lg` (default `md`; a container with no `layout` stacks its children as a column with the `md` gap); `align` is `start`, `center`, `end` or `stretch`; `wrap` is boolean (below the `sm` breakpoint every row wraps, and no row item is wider than its row); `cols`, `rows`, `col`, `row`, `span` and `rowSpan` are integers 1 to 12; `grow` is a number 0 to 12; `collapseBelow` is `sm`, `md`, `lg` or `xl`; `x`, `y`, `width` and `height` are literal dimensions (`4px`, `1.5rem`, `50%`, `0`), never `calc()` or a token reference.
+Allowed values: `gap` is `none`, `sm`, `md` or `lg` (default `md`; a container with no `layout` stacks its children as a column with the `md` gap); `align` is `start`, `center`, `end` or `stretch`; `wrap` is boolean (below the `sm` breakpoint every row wraps, and no row item is wider than its row); `cols`, `rows`, `col`, `row`, `span` and `rowSpan` are integers 1 to 12; `grow` is a number 0 to 12; `collapseBelow` is `sm`, `md`, `lg` or `xl`; `x`, `y`, `width` and `height` of `adhoc` are literal dimensions (`4px`, `1.5rem`, `50%`, `0`), never `calc()` or a token reference; `clip` is boolean and cuts what reaches past the `adhoc` area (`overflow: clip`), so a window dragged low does not cover what follows. The `height` of a child of a `column`, `row` or `grid` is its block size: a dimension or a math function of dimensions (`calc(100vh - 60px)`, `min(480px, 60vh)`, `clamp(…)`), where viewport lengths may appear, never a token reference. It gives a height to what has none of its own: a record view (a list, a table, a tree), which takes its host's height, and an `adhoc` area, whose children are absolutely positioned. In a column it does not shrink.
 
 A placement can be linked as a whole: `"<-placement": "$.data.desk.spot"` takes every field from the store, and a write to the linked object moves the child, so a window manager keeps placements in data and the document links each window to its record. Only where the linked placement sits is checked (`SUI-LAYOUT-PARENT`, `SUI-LAYOUT-ROOT`); its fields are not, since they come from the store. A link to one field (`placement: { "<-x": … }`) is `SUI-LAYOUT-FIELD`: the node reads its placement as one object, and a field link inside it is not followed.
 
@@ -107,7 +107,7 @@ A component whose shape sets `"layout": true` marks the element that holds its c
 
 **Shrinking.** In a `row` with at least one growing item (`grow` 1 or more), the growing items take the squeeze when the row runs short of space and the other items keep their content width, so a label, a badge or an amount beside a growing text is never cut. A `row` with no growing item shrinks every item, as plain flex does.
 
-Limits: `grow` has rules for whole numbers 0 to 12 only; `adhoc` placement (`x`, `y`, `width`, `height`) uses typed `attr()`, so it needs a browser that supports it (Chromium 133 and later), and the `adhoc` container needs its own height because its children are absolutely positioned; empty tracks of a `region` layout still take the gap.
+Limits: `grow` has rules for whole numbers 0 to 12 only; `adhoc` placement (`x`, `y`, `width`, `height`) uses typed `attr()`, so it needs a browser that supports it (Chromium 133 and later), and the `adhoc` container needs its own height because its children are absolutely positioned (give it a `height` in its parent's placement); empty tracks of a `region` layout still take the gap.
 
 ## Convention scan
 
@@ -767,7 +767,7 @@ Code is in `src/runtime/`. `protocol` holds the closed set of messages and the v
 
 `runtime-bundle/` builds the one script the preview page loads (E7.2); it is not part of `dist/` output of `tsc` and not exported as code.
 - `entry.ts` bundles StateUI, this package, `@punyts/stateui-components` (registered with `register(window)`, its `catalog.json` turned into the library with `libraryFromCatalog`) and every component locale overlay (`<name>.locale.<code>.json`, through the virtual module `virtual:component-overlays`, passed as `componentOverlays`). It reads the per-load nonce from the URL fragment (`page.html#<nonce>`, 16 to 128 of `A-Za-z0-9_-`) and calls `startRuntime(window, window.parent, nonce, library, { componentOverlays })`. Without a well-formed nonce nothing starts.
-- `npm run build:runtime-bundle` type-checks the folder, bundles with esbuild (one minified classic script, `iife`, ES2022) and writes `dist/runtime-bundle/<hash>.js` and `manifest.json` (`{ hash, script }`), removing the files of earlier builds. `<hash>` is the first 16 hex digits of the SHA-256 of the script, so the name changes when the source does. The package export `@punyts/stateui-app/runtime-bundle/*` maps to that folder; the ai-minion API reads the manifest through it. It needs `@punyts/stateui-components` built, so it is not part of `npm run build`: the API build runs it.
+- `npm run build:runtime-bundle` type-checks the folder, bundles with esbuild (one minified classic script, `iife`, ES2022) and writes `dist/runtime-bundle/<hash>.js` and `manifest.json` (`{ hash, script, components }`, the last the catalog component names it was built with), removing the files of earlier builds. `<hash>` is the first 16 hex digits of the SHA-256 of the script, so the name changes when the source does. The package export `@punyts/stateui-app/runtime-bundle/*` maps to that folder; the ai-minion API reads the manifest through it. It needs `@punyts/stateui-components` built, so it is not part of `npm run build`: the API build runs it.
 - `buildRuntimeBundle({ entry, outDir })` (`build.ts`) is the function behind the script.
 
 ## Search

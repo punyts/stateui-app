@@ -8,6 +8,11 @@ function isLiteralDimension(value: JsonValue): boolean {
     return validateTokenValue('dimension', value);
 }
 
+/** A size: a dimension or a math function of dimensions (viewport lengths allowed inside it), with no reference */
+function isSize(value: JsonValue): boolean {
+    return typeof value === 'string' && value === value.trim() && !/[{}]/.test(value) && validateTokenValue('dimension', value);
+}
+
 /** True when the value is allowed by the spec */
 export function fitsField(spec: FieldSpec, value: JsonValue): boolean {
     switch (spec.type) {
@@ -21,5 +26,7 @@ export function fitsField(spec: FieldSpec, value: JsonValue): boolean {
             return typeof value === 'number' && Number.isFinite(value) && value >= spec.min && value <= spec.max;
         case 'dimension':
             return isLiteralDimension(value);
+        case 'size':
+            return isSize(value);
     }
 }

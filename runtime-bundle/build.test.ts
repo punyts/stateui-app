@@ -64,4 +64,14 @@ describe('buildRuntimeBundle', () => {
         expect(manifest.script).toMatch(/^[0-9a-f]{16}\.js$/);
         expect(manifest.script).toBe(`${manifest.hash}.js`);
     });
+
+    it('should list the catalog components the bundle was built with, sorted', async () => {
+        // Act
+        const manifest = await bundleOf('window.name = "one";', 'out');
+
+        // Assert
+        expect(manifest.components).toContain('window');
+        expect(manifest.components).toContain('tree');
+        expect(manifest.components).toEqual([...manifest.components].sort());
+    });
 });
