@@ -33,6 +33,14 @@ const MODES = ['standalone', 'persisted', 'full'];
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 const NAME = /^[A-Za-z][A-Za-z0-9_.:-]*$/;
 const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+/** A key chord: at least one modifier, in the order mod, shift, alt, and a letter or a digit */
+export const KEY_CHORD = /^(mod\+)?(shift\+)?(alt\+)?[a-z0-9]$/;
+/** The most key chords a `load` names */
+export const MAX_KEYS = 16;
+
+function isKeyChord(value: unknown): value is string {
+    return typeof value === 'string' && KEY_CHORD.test(value) && value.includes('+');
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -173,14 +181,15 @@ function isFileData(m: Record<string, unknown>): boolean {
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
-        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks']) &&
+        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks', 'keys']) &&
         (m['mode'] === undefined || MODES.includes(m['mode'] as string)) &&
         isJsonObject(m['document']) &&
         isRecord(m['document']['app']) &&
         (m['state'] === undefined || (isRecord(m['state']) && isStateSnapshot(m['state']))) &&
         (m['instance'] === undefined || isInstance(m['instance'])) &&
         (m['icons'] === undefined || isIconsMap(m['icons'])) &&
-        (m['chunks'] === undefined || isChunks(m['chunks'])),
+        (m['chunks'] === undefined || isChunks(m['chunks'])) &&
+        (m['keys'] === undefined || (Array.isArray(m['keys']) && m['keys'].length <= MAX_KEYS && m['keys'].every(isKeyChord))),
     write: (m) =>
         hasOnlyKeys(m, ['writes', 'icons']) &&
         Array.isArray(m['writes']) &&
@@ -204,6 +213,7 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
     error: (m) => hasOnlyKeys(m, ['errors']) && Array.isArray(m['errors']) && m['errors'].length > 0 && m['errors'].length <= MAX_ERRORS && m['errors'].every(isProtocolError),
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
+    key: (m) => hasOnlyKeys(m, ['key']) && isKeyChord(m['key']),
     file: (m) =>
         hasOnlyKeys(m, ['requestId', 'name', 'size', 'mediaType', 'data']) &&
         isPositiveInteger(m['requestId']) &&

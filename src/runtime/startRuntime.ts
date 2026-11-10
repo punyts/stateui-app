@@ -209,6 +209,8 @@ export function startRuntime(
     let passwordData = new Set<string>();
     let postedErrors = 0;
     let disposed = false;
+    /** The key chords the host handles itself (`LoadMessage.keys`) */
+    let hostKeys: ReadonlySet<string> = new Set();
 
     function post(message: { type: OutboundMessage['type'] } & Record<string, unknown>, transfer?: Transferable[]): boolean {
         const full = { v: PROTOCOL_VERSION, nonce, ...message };
@@ -376,6 +378,7 @@ export function startRuntime(
 
     function load(message: LoadMessage): void {
         teardown();
+        hostKeys = new Set(message.keys ?? []);
         passwordData = passwordDataPaths(message.document);
         themeOverlays = buildOverlayCatalog(message.document.themes).overlays;
         const unregister = registerMountStep(STEP_NAME, {
@@ -582,7 +585,18 @@ export function startRuntime(
         postErrors([buildError('SUI-RUN-BINDING', { component: 'runtime', path: '$', statePath: '$' })]);
     }
 
+    /** A chord the host named goes to the host, and not to the app */
+    function onKey(event: KeyboardEvent): void {
+        if (hostKeys.size === 0 || event.key.length !== 1) return;
+        const chord = `${event.ctrlKey || event.metaKey ? 'mod+' : ''}${event.shiftKey ? 'shift+' : ''}${event.altKey ? 'alt+' : ''}${event.key.toLowerCase()}`;
+        if (!hostKeys.has(chord)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        post({ type: 'key', key: chord });
+    }
+
     win.addEventListener('message', onMessage);
+    win.addEventListener('keydown', onKey as EventListener, true);
     win.addEventListener('error', onFailure);
     win.addEventListener('unhandledrejection', onFailure);
 
@@ -592,6 +606,7 @@ export function startRuntime(
             if (disposed) return;
             disposed = true;
             win.removeEventListener('message', onMessage);
+            win.removeEventListener('keydown', onKey as EventListener, true);
             win.removeEventListener('error', onFailure);
             win.removeEventListener('unhandledrejection', onFailure);
             teardown();

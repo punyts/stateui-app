@@ -152,6 +152,32 @@ describe('startRuntime in Chromium', () => {
         expect(postMessage.mock.calls[0]?.[1]).toBe('*');
     });
 
+    it('should post a key chord the host named instead of letting the app see it, and let other keys through', () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ hello: { component: 'label', text: 'hi' } }) };
+        send(message('load', { document, keys: ['mod+shift+e'] }));
+        const seen: string[] = [];
+        const listen = (event: KeyboardEvent): void => void seen.push(event.key);
+        host.addEventListener('keydown', listen);
+        const press = (init: KeyboardEventInit): KeyboardEvent => {
+            const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+            host.dispatchEvent(event);
+            return event;
+        };
+
+        // Act
+        const chord = press({ key: 'E', ctrlKey: true, shiftKey: true });
+        const mac = press({ key: 'E', metaKey: true, shiftKey: true });
+        const other = press({ key: 'e', ctrlKey: true });
+        host.removeEventListener('keydown', listen);
+
+        // Assert
+        expect(ofType('key').map((posted) => posted['key'])).toEqual(['mod+shift+e', 'mod+shift+e']);
+        expect(chord.defaultPrevented && mac.defaultPrevented).toBe(true);
+        expect(other.defaultPrevented).toBe(false);
+        expect(seen).toEqual(['e']);
+    });
+
     it('should put the state over the document and the icons into $.runtime.icons before rendering', async () => {
         // Arrange
         const document: AppDocument = { data: { name: 'Ada' }, app: panel({ hello: { component: 'label', '<-text': '$.data.name' } }) };

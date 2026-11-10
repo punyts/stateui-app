@@ -11,7 +11,7 @@ export const PROTOCOL_VERSION = 1;
 export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'key'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -126,6 +126,12 @@ export interface LoadMessage extends Envelope<'load'> {
     icons?: IconsMap;
     /** The chunk scripts the host serves (`RuntimeChunks`); without `3d` a scene shows its `_fallback` */
     chunks?: RuntimeChunks;
+    /**
+     * Key chords the host handles itself while the app has the keyboard, such as `mod+shift+e` (`mod` is Ctrl, or Cmd
+     * on a Mac). Each names one or more modifiers (`mod`, `shift`, `alt`, in that order) and one key, a letter or a digit.
+     * The app never sees a chord the host names: the runtime posts `key` instead
+     */
+    keys?: string[];
 }
 
 /** Path writes for `$.data` and `$.app`, with the icons the new revision uses for the first time */
@@ -181,6 +187,11 @@ export interface ChangeMessage extends Envelope<'change'> {
 export interface EmitMessage extends Envelope<'emit'> {
     name: string;
     payload?: JsonValue;
+}
+
+/** The person pressed a key chord the `load` named in `keys`; the app did not see it */
+export interface KeyMessage extends Envelope<'key'> {
+    key: string;
 }
 
 export interface ErrorMessage extends Envelope<'error'> {
@@ -277,5 +288,6 @@ export type OutboundMessage =
     | FileMessage
     | FileCancelMessage
     | FileReadMessage
-    | FileReleaseMessage;
+    | FileReleaseMessage
+    | KeyMessage;
 export type RuntimeMessage = InboundMessage | OutboundMessage;

@@ -24,6 +24,7 @@ export type {
     IconsMap,
     InboundMessage,
     InboundType,
+    KeyMessage,
     LoadMessage,
     LocaleMessage,
     MessageType,
@@ -42,5 +43,5 @@ export type {
     ThemeMessage,
     WriteMessage
 } from './messages.js';
-export { isWritablePath, validateMessage } from './validate.js';
+export { isWritablePath, KEY_CHORD, MAX_KEYS, validateMessage } from './validate.js';
 export type { DropReason, ValidationResult } from './validate.js';

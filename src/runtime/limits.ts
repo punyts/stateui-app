@@ -104,6 +104,7 @@ export const MESSAGE_BYTE_LIMITS = {
     error: MAX_EVENT_BYTES,
     ping: MAX_SMALL_BYTES,
     pong: MAX_SMALL_BYTES,
+    key: MAX_SMALL_BYTES,
     file: MAX_FILE_JSON_BYTES,
     fileCancel: MAX_FILE_JSON_BYTES,
     fileProgress: MAX_FILE_JSON_BYTES,

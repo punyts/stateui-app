@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
         );
     });
 
@@ -157,5 +157,16 @@ describe('runtime message validator', () => {
         expect(isIconsMap({ star: { outline: [{ d: 'M0 0', onload: 'x' }] } })).toBe(false);
         expect(isIconsMap({ Star: { outline: [] } })).toBe(false);
         expect(isIconsMap({ star: { outline: [], extra: [] } })).toBe(false);
+    });
+
+    it('should take key chords with a modifier on load, and a key message that names one', () => {
+        const document = { app: { component: 'panel' } };
+        expect(validateMessage(base('load', { document, keys: ['mod+shift+e', 'alt+1', 'mod+k'] })).ok).toBe(true);
+        expect(validateMessage(base('key', { key: 'mod+shift+e' })).ok).toBe(true);
+        for (const keys of [['e'], ['shift+mod+e'], ['mod+shift+E'], ['mod+enter'], ['mod+ctrl+e'], 'mod+e', Array.from({ length: 17 }, () => 'mod+e')]) {
+            expect(validateMessage(base('load', { document, keys })).ok, JSON.stringify(keys)).toBe(false);
+        }
+        expect(validateMessage(base('key', { key: 'e' })).ok).toBe(false);
+        expect(validateMessage(base('key', { key: 'mod+e', extra: 1 })).ok).toBe(false);
     });
 });
