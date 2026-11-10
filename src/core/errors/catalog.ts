@@ -102,6 +102,9 @@ export const ERROR_CATALOG = {
     'SUI-ON-VALUE': { template: 'The value of command "{command}" at {path} is not a key of "{name}"' },
     'SUI-ON-SHAPE':{ template: '"on" entry at {path} must be one command object or a list of them' },
     'SUI-ON-TARGET': { template: 'Target {target} of "{event}" at {path} does not resolve' },
+    'SUI-ON-LINKED': {
+        template: 'Command "{command}" of "{event}" at {path} writes {target}, which the link "{key}" of the same node already saves; remove the command, or the two writes undo each other'
+    },
     'SUI-THEME-NAME': { template: 'Token name "{name}" at {path} must be lower-case letters and digits' },
     'SUI-THEME-REF': { template: 'Token at {path} has the reference {target}, which is not allowed: {name}' },
     'SUI-THEME-VALUE': { template: 'Token value at {path} is not a valid "{name}" value' },

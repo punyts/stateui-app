@@ -5,7 +5,7 @@ import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary, ResolveResult } from '../resolve/index.js';
 import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
-import { RESERVED_KEYS, isAppEvent } from '../types.js';
+import { PREFIXES, RESERVED_KEYS, isAppEvent } from '../types.js';
 import type { JsonValue } from '../types.js';
 import { parseTarget, readCommand, readEntry } from './parse.js';
 import { findProvider, findRowProvider, resolveTarget } from './resolveTarget.js';
@@ -33,6 +33,19 @@ function shapeOf(library: ComponentLibrary, component: string): Shape | undefine
 interface Scope {
     chain: readonly Frame[];
     owner: number | undefined;
+}
+
+/**
+ * The events a component raises after it wrote its own value (a checkbox's `checked`, a field's `value`): a link on
+ * that value has already saved the change when the `on` entry runs
+ */
+const VALUE_EVENTS: readonly string[] = ['change', 'input'];
+
+/** The node's own links, `<-key` to its target, for the targets written as text */
+function ownLinks(node: TreeNode): [key: string, target: string][] {
+    return Object.entries(node).flatMap(([key, value]): [string, string][] =>
+        key.startsWith(PREFIXES.link) && typeof value === 'string' ? [[key, value]] : []
+    );
 }
 
 /** What stands for the slot's `row` alias while validating: the alias only exists at run time */
@@ -131,6 +144,7 @@ class OnValidator {
         }
         if (command.command === 'set' || command.command === 'toggle') {
             this.checkWrite(command, event, scope, statePath);
+            this.checkLinked(command, event, scope, statePath);
             return;
         }
         this.checkComponentCommand(command, event, scope, statePath);
@@ -152,6 +166,28 @@ class OnValidator {
                 located.kind === 'outside' ||
                 (located.kind === 'property' && this.declares(located.node.component, located.property)));
         if (!ok) this.badTarget(command.target, event, chain, statePath);
+    }
+
+    /**
+     * A `set` or `toggle` on a value event that writes the target of one of the node's own links: the component wrote
+     * its value and the link saved it, so a toggle flips it back and a set overwrites the person's choice
+     * (`"<-checked": "$row.done"` with `toggle $row.done` on `change` never changes the record)
+     */
+    private checkLinked(command: OnCommand, event: string, scope: Scope, statePath: string): void {
+        if (!VALUE_EVENTS.includes(event) || command.target === undefined) return;
+        const self = scope.chain[scope.chain.length - 1] as Frame;
+        const linked = ownLinks(self.node).find(([, target]) => target === command.target);
+        if (linked === undefined) return;
+        this.errors.push(
+            buildError('SUI-ON-LINKED', {
+                command: command.command,
+                event,
+                path: self.path,
+                target: command.target,
+                key: linked[0],
+                statePath
+            })
+        );
     }
 
     /** `from` reads a value: a property a component declares, a path outside `$.app` or `$row.path`, never a node */
@@ -267,6 +303,8 @@ class OnValidator {
  * - `SUI-ON-EVENT`: the node's component does not declare the event; the root node (`$.app`) may also use the app
  *   events (`APP_EVENTS`: `sync.rejected`, `logic.failed`, and `notify.<name>`) the host raises
  * - `SUI-ON-COMMAND`: the target's component does not declare the command
+ * - `SUI-ON-LINKED`: a `set` or `toggle` on `change` or `input` writes the target of one of the node's own `<-` links,
+ *   which already saved the value the component wrote, so the two writes undo each other
  * - `SUI-ON-VALUE`: a literal `value` of a command the target's shape lists in `commandValues` is not a key of that map
  * - `SUI-ON-TARGET`: the target text is not a valid form (including dot climbing), the ancestor or a step does not
  *   exist, no ancestor provides the command for `$parent`, a component command targets a property or a path outside

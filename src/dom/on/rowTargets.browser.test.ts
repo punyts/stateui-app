@@ -199,6 +199,27 @@ describe('$row and relative targets in a row template in Chromium', () => {
         expect(store.get('$.data.orders.k1.customer')).toBe('Linus');
     });
 
+    it('should toggle a field of the $.data record through the aliases a list makes, on every press', () => {
+        // Arrange: the row points at the view's records, which alias the list's items, which link to the data map
+        const { store, button, onError } = mountRows({ press: { command: 'toggle', target: '$row.done' } });
+        const records = '$.runtime.nodes.app.children.orders.records';
+        store.link(`${OWNER}.items`, '$.data.orders');
+        store.link(records, `${OWNER}.items`, { allowMissing: true });
+        store.link(`${SLOT}.row`, `${records}.k1`);
+
+        // Act
+        const ticks: unknown[] = [];
+        for (let press = 0; press < 3; press += 1) {
+            raise(button, 'press');
+            ticks.push(store.get('$.data.orders.k1.done'));
+        }
+
+        // Assert
+        expect(onError).not.toHaveBeenCalled();
+        expect(ticks).toEqual([true, false, true]);
+        expect(store.get('$.data.orders.k2.done')).toBeUndefined();
+    });
+
     it('should hand a command aimed at $row to the node that owns the template, with the record path', () => {
         // Arrange
         const { owner, button, onError } = mountRows({ press: { command: 'delete', target: '$row', value: 'now' } });

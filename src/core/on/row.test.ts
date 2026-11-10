@@ -131,3 +131,70 @@ describe('validateOn inside and outside a row template', () => {
         expect(check(bad)).toEqual([['SUI-ON-TARGET', '$.app.children.orders.row.on.press']]);
     });
 });
+
+describe('validateOn with a link on the same target', () => {
+    const box = (extra: Record<string, unknown>): Node => ({ component: 'button', ...extra }) as Node;
+    const LINKED_LIBRARY: ComponentLibrary = {
+        ...LIBRARY,
+        button: {
+            tier: 'root',
+            tag: 'ui-button',
+            shape: shapeOf({ pressed: { type: 'boolean', default: false } }, ['press', 'change', 'input'])
+        }
+    };
+    const checkLinked = (app: Node): [string, string | undefined][] => {
+        const resolved = resolveNode(app, LINKED_LIBRARY);
+        expect(resolved.errors).toEqual([]);
+        return validateOn(resolved, LINKED_LIBRARY).map((error) => [error.code, error.statePath]);
+    };
+
+    it('should accept a toggle of $row.done on change when the node has no link to it', () => {
+        const app = records({ row: box({ on: { change: { command: 'toggle', target: '$row.done' } } }) });
+
+        expect(checkLinked(app)).toEqual([]);
+    });
+
+    it('should report a toggle or set on change or input of a target the node already links to', () => {
+        // Arrange
+        const app = records({
+            row: box({
+                '<-pressed': '$row.done',
+                on: {
+                    change: { command: 'toggle', target: '$row.done' },
+                    input: [{ command: 'set', target: '$.data.other', value: 1 }, { command: 'set', target: '$row.done', value: true }]
+                }
+            })
+        });
+        const plain: Node = {
+            component: 'panel',
+            children: { b: box({ '<-pressed': '$.data.done', on: { change: { command: 'toggle', target: '$.data.done' } } }) }
+        } as Node;
+
+        // Act and assert
+        expect(checkLinked(app)).toEqual([
+            ['SUI-ON-LINKED', '$.app.children.orders.row.on.change'],
+            ['SUI-ON-LINKED', '$.app.children.orders.row.on.input.1']
+        ]);
+        expect(checkLinked(plain)).toEqual([['SUI-ON-LINKED', '$.app.children.b.on.change']]);
+    });
+
+    it('should accept a toggle of a linked target on an event that is not a value change', () => {
+        const app = records({ row: box({ '<-pressed': '$row.fav', on: { press: { command: 'toggle', target: '$row.fav' } } }) });
+
+        expect(checkLinked(app)).toEqual([]);
+    });
+
+    it('should name the command, the event, the target and the link in the message', () => {
+        // Arrange
+        const app = records({ row: box({ '<-pressed': '$row.done', on: { change: { command: 'toggle', target: '$row.done' } } }) });
+        const resolved = resolveNode(app, LINKED_LIBRARY);
+
+        // Act
+        const [error] = validateOn(resolved, LINKED_LIBRARY);
+
+        // Assert
+        expect(error?.message).toBe(
+            'Command "toggle" of "change" at $.app.children.orders.row writes $row.done, which the link "<-pressed" of the same node already saves; remove the command, or the two writes undo each other'
+        );
+    });
+});

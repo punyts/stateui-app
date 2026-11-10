@@ -254,8 +254,271 @@ relative targets (`^name.path`, `.path`) inside a row template resolve against t
 against the slot's runtime path. `resolveTarget(target, chain, rootPath, rowPath?)` takes the row alias path (any marker
 when validating) and `findRowProvider` picks the owner for a command aimed at `$row`.
 
+A write to `$row.field` lands on the record itself, through every alias between the slot and the data: in a list whose
+`items` link to a `$.data` map, `{ "command": "toggle", "target": "$row.done" }` changes `$.data.tasks.<key>.done`. For a
+control that shows the field, prefer the link alone (`"<-checked": "$row.done"`): it shows the record's value and saves
+the change, and a slot that is recycled for another record shows that record's value. A control with the link and a
+command on the same target is `SUI-ON-LINKED`.
+
 `validateOn(resolveResult, library)` returns `SUI-ON-SHAPE` (an entry that is not a command object or a list of them),
-`SUI-ON-EVENT`, `SUI-ON-COMMAND`, `SUI-ON-VALUE` (a literal `value` of a command the target lists in `commandValues` that is not a key of that map, read from the node or its default; a `$` path or `{{ }}` value is not checked) and `SUI-ON-TARGET` errors with the state path. `parseTarget` and `resolveTarget` are
+`SUI-ON-EVENT`, `SUI-ON-COMMAND`, `SUI-ON-VALUE` (a literal `value` of a command the target lists in `commandValues` that is not a key of that map, read from the node or its default; a `# @punyts/stateui-app
+
+Component system and app documents built on `@punyts/stateui`.
+
+## Entry points
+- `@punyts/stateui-app`: everything.
+- `@punyts/stateui-app/core`: the DOM-free part; safe to import under plain Node.
+- `@punyts/stateui-app/protocol`: the runtime message types, limits and structural validator; no DOM and no StateUI, so the preview host can import it.
+- `@punyts/stateui-app/runtime`: `startRuntime` and the protocol (the code that runs inside the preview iframe).
+
+## Error catalog, types and limits
+All of it lives in `src/core/` and is exported from `@punyts/stateui-app/core`.
+
+- **Error catalog.** `ERROR_CATALOG` owns every stable code (`SUI-DOC`, `SUI-NODE`, `SUI-STATE`, `SUI-LINK`, `SUI-ON`, `SUI-LAYOUT`, `SUI-THEME`, `SUI-LOCALE`, `SUI-LOGIC`, `SUI-BLUEPRINT`, `SUI-MODEL`, `SUI-PATTERN`, `SUI-PRESET`, `SUI-MODULE`, `SUI-INSTANCE`, `SUI-USES`, `SUI-ROUTE`, `SUI-APP`, `SUI-BUILD`, `SUI-RUN`, `SUI-SYNC` families) and its message template. `buildError(code, details)` returns a plain, serialisable `{ code, message, severity?, statePath?, component?, file?, line?, column? }`. `severity` is `"error"` (the default when absent) or `"warning"`; `isValid(errors)` ignores warnings. Templates take paths and names only (see `TEMPLATE_PLACEHOLDERS`), never content or data values. `SUI-RUN-CAP` is for the component library's `drawRepeat`: its records are more than the renderer draws (`actual` records, `limit` the cap, `name` the renderer), so only the first are drawn. `SUI-RUN-FILE` ("The {component} at {path} cannot use its file: {reason}") is for a component of the library whose stored file (read with `ui-file-read`) is missing, cannot be read or does not decode; the reason is the read's code (`not_found`, `offline`, ...) or `not_an_image`, never the file id or name; `paintField` reports it for a background file (G2.9b). `SUI-RUN-3D` ("The {component} at {path} cannot draw in 3D: {reason}") is for the component library's `scene3d`: its renderer chunk did not load (the reason is the `Load3dError` code, `load_failed`, `script_error` or `timeout`, or `no_chunk` for a host that serves none), a browser without WebGL (`no_webgl`) or a WebGL context not restored within 5 s (`context_lost`), in which cases the scene shows its `_fallback` text, and a `model` file it cannot draw (`not_glb`, `draco`, `meshopt`, `ktx2`, `external_uri` or `invalid_glb`; the other nodes still draw). `SUI-RUN-DRAW` ("Shape at {path} cannot be drawn as written: {reason}") is for the component library's `drawing`: a shape whose resolved value it cannot draw (a link that delivers text where a number belongs), a node that is not a 2D shape, or a linked colour that is not a colour; the reason names the property or component, never the value.
+- **Types.** `AppDocument` (`theme`, `themes`, `appThemes`, `locale`, `data`, `app`, `screens`, `start`, `composed`, `locales`, `logic`; `DOCUMENT_KEYS`), `Node`, and the reserved vocabulary as constants: `RESERVED_KEYS` (`component`, `children`, `layout`, `placement`, `theme`, `on`) and `PREFIXES` (`_`, `<-`, `__`).
+- **Limits.** `checkLimits(document)` returns `SUI-DOC` errors for a document over `MAX_NODES` (2000, across `app` and every composed tree), `MAX_DEPTH` (32 node levels), `MAX_DOCUMENT_BYTES` (1 MiB) or `MAX_DATA_BYTES` (512 KiB, the `data` branch). The design names the limits without numbers; these values are the library's choice. A byte breach skips the node walk.
+
+## Shape format
+A component's `*.state.json` is its default state, its validation rules and its catalog entry. Code is in `src/core/shape/`, exported from `@punyts/stateui-app/core`.
+
+```json
+{
+    "summary": "A text input with a label",
+    "layout": false,
+    "events": ["change", "invalid"],
+    "commands": ["focus", "clear"],
+    "shared": { "tone": { "default": "accent" }, "size": {} },
+    "properties": {
+        "_label": { "type": "string", "kind": "content", "default": "Label" },
+        "width": { "type": "string", "values": ["narrow", "wide"], "default": "wide" },
+        "value": { "type": "string", "required": true, "validators": { "length": { "max": 40 } } },
+        "header": { "type": "node" },
+        "src": { "type": "url" }
+    }
+}
+```
+
+- **Top-level keys.** `shared` (see below), `summary` (required; one line, at most `MAX_SUMMARY_LENGTH` = 120 characters; served by `ui_components_list`), `properties`, `events` and `commands` (lists of lower camel-case names), `layout` (true when the component lays out children, so a node may carry `layout`), `commandValues` (commands whose `value` must be a key of one of the component's `map` properties, such as `{ "show": "messages" }`; each name must be a declared command and each property a `map`, or `SUI-BUILD-SHAPE`). Keys are rows in the `SHAPE_KEYS` table (and `PROPERTY_KEYS` for a property): name, JSON type and rule. `category` (one of `COMPONENT_CATEGORIES`: `layout`, `navigation`, `forms`, `data`, `feedback`, `overlays`, `content`, `conversation`, `graphics`; anything else is `SUI-BUILD-CATEGORY`, whose message names the list) and `purposes` (three to eight phrases of what the component is for, each non-empty, on one line and at most 60 characters; `checkPurposes` holds the rule, a break is `SUI-BUILD-PURPOSES`) are what search reads; both are optional in the shape and `requireSearchKeys` (under Building a component library) makes them required. `tokens` and `tokenGroup` are described under Component tokens. `placement` is described under Layouts and placement. `childComponents` (a list of component names) limits the components the `children` slot accepts; on a `node` property it limits that slot. A node of another component is `SUI-NODE-CHILD`, reported by `validateDocument` with the state path and the accepted names (a composed component counts as the root component it resolves to). A shape component (`tier: "shape"`) is accepted only by a slot whose `childComponents` names it (a drawing's or a scene's, which draw it); in a slot with no `childComponents`, or at the root of the app or a screen, it is `SUI-NODE-CHILD` and the message says the slot takes no shapes. A composed tree may have a shape at its root.
+- **Property keys.** `type` (required: `string`, `number`, `integer`, `boolean`, `array`, `object`, `any`, `url`, `icon`, `node`, `map`, or a list of them when several are allowed, as in `["array", "map"]`), `default`, `required`, `kind` (`content` is the only extra kind), `values` (allowed values), `validators`, `items`, `requiredWhen`, `runtime`, `exposed`, `reflect`, `row`. A `node` property is a slot and must hold an object with a `component` name.
+- **Maps (`type: "map"`, `items`).** `items` is `"string"` (every value is a string, e.g. a `_errors` content map) or a sub-shape: an object of properties each map value may hold (table `columns`, static `select` options). A map type needs `items` and no other type may have it. Nested `_` properties inside `items` must be kind `content` and every other nested property must not (`SUI-BUILD-KIND`). `validateNode` walks maps and reports each violation with the map key in the path, e.g. `$.app.children.t.columns.total._title`.
+- **`requiredWhen`.** `{ "property": "decorative", "equals": false }` or `{ "property": "iconPosition", "notEquals": "start" }` makes the property required while a sibling property (same table, not itself) has, or does not have, that value. The sibling's value is the node's value or its default; if the sibling or the property is a `<-` link the check is skipped. A missing value is `SUI-STATE-CONDITION`, naming both properties.
+- **`runtime: true`.** Only controllers write the property (`error`, `touched`, `status`). It needs a `default`, cannot be `required` and cannot sit inside map items. A node that sets it, by value or by `<-` link, is `SUI-STATE-RUNTIME`. The flag is on `PropertyShape.runtime` for the catalog.
+- **`exposed: true`.** Valid only with `runtime: true` (otherwise `SUI-BUILD-SHAPE`). An exposed property lives at `runtimePath(nodePath).<name>` and other nodes may link to it by node reference (see Links). `PropertyShape.exposed` is in the `shape` of the catalog entry, so the minion sees which runtime properties it may link to.
+- **`reflect: true`.** `<sui-node>` writes the property as a host attribute. Not allowed on `node`, `array`, `object`, `map` or `any`, or inside map items. `reflectedProperties(shape)` returns the names in shape order; it is the only source of the `reflect(componentName)` list the application gives `<sui-node>`.
+- **`icon` type.** The value is an icon name: lower-case letters, digits and `-` (the empty string means no icon). `validateNode(shape, node, statePath, { isIconName })` also asks the caller's function (the server reads `icons.json`) and reports a rejected name as `SUI-STATE-INVALID`; without it the core knows no icon list.
+- **`row: true`.** Marks a `node` property, or a `node` field of a map item (table column `cell`, `descriptionList` item `node`), as a row template where `$row` links and `$row` `on` targets are legal. `validateNode` reports `$row` in a `<-` link or `on` entry of the node, or inside a slot value that is not a row property, as `SUI-LINK-ROW`. The tree walker calls `validateNode` on a template node itself with `{ insideRow: true }`, which turns the check off.
+- **Shared articulation (`shared`).** One vocabulary for all components, in `src/core/articulation/`: `tone` (neutral, accent, danger, warning, success, info), `variant` (solid, soft, outline, ghost, link), `size` (sm, md, lg), `density` (compact, comfortable, spacious), `elevation` (flat, raised, overlay), `textRole` (display, title, heading, body, label, caption, code). A shape lists the ones it supports in `shared`, each with an optional `default` from the list; `parseShape` expands each into a reflected string property with the list as its `values`. `hidden` (boolean, reflected) is added to every shape and is never declared. An unknown shared name or a `hidden` entry is `SUI-BUILD-SHAPE`, a default outside the list `SUI-BUILD-DEFAULT`. An own property may not use a shared name (a modal's width choice is `width`, a tab strip's look is `appearance`): `SUI-BUILD-SHAPE`. A node that sets a shared property the component does not support is `SUI-STATE-SHARED`, naming the supported ones; a value outside the list is `SUI-STATE-INVALID`. `attributeName(name)` gives the host attribute (`textRole` is `text-role`). `Shape.shared` lists the declared names; the catalog entry lists `shared` (with `hidden`) and `own` properties separately.
+- **Names.** A `_` name must have kind `content` and the reverse (`SUI-BUILD-KIND`). Names starting with `<-`, `$` or `__`, names that are not letters and digits, and the keys `component`, `layout`, `placement`, `theme` and `on` are `SUI-BUILD-NAME`.
+- **Validators** (a closed set, in `VALIDATORS`): `oneOf` (a list of values), `eachOf` (a non-empty list of values; array properties only: every entry of the array is one of them, an empty array passes; `paintField.tools` uses it), `pattern` (a regular expression of at most `MAX_PATTERN_LENGTH` = 200 characters; strings over `MAX_PATTERN_INPUT` = 10000 characters fail it), `regex` (a positive integer up to `MAX_PATTERN_LENGTH`: the value is itself a regular expression of at most that many characters that compiles and has no nested quantifier such as `(a+)+`; string properties only), `range` and `length` (`{ "min": n, "max": n }`, either bound optional; `length` takes non-negative integers). The graphics validators check the shape properties of a drawing or scene: `color` (`true`; a string: hex, `rgb()`, `rgba()`, `hsl()`, `hsla()`, a token reference `{group.name}` or a paint name `^[a-z][A-Za-z0-9_-]*$`, at most `MAX_COLOR_LENGTH` = 100 characters; only the syntax is checked here; `colorForm(value)` gives which of `literal`, `token` or `paint` a value is, a literal winning over a paint name so `transparent` is a colour, for the document check and the renderers' paint resolution), `pathData` (`true`; a string that `parsePathData` reads, not empty or blank, at most `MAX_PATH_DATA_LENGTH` = 4000 characters and `MAX_PATH_COMMANDS` = 2000 commands), `points` (`true`; an array of at most `MAX_POINTS` = 10000 `[x, y]` pairs of finite numbers; add `length` for an exact count), `vector` (`2` or `3`; an array of exactly that many finite numbers), `fields` (an object whose keys are only the listed fields, each `{ "type": "number" | "string" | "boolean" | "array" | "object", "values"?, "required"?, "validators"? }`, where `validators` may hold `color`, `pathData`, `points`, `vector`, `fields`, `fileRef`, `range` and `oneOf`, applying to the field type; `type` may also be a list of distinct types, such as `["number", "string"]` for `transition.duration`, and then `values` restricts only a value of a type its entries have and each validator checks only a value of a type it applies to) and `fileRef` (`{ "types": [media types], "dataUrl"?: true }`; an object `{ id, name, size, type }` with a UUID `id`, a non-negative integer `size` and a `type` in `types`, and with `dataUrl` also a `data:` URL of an image type in `types`; string or object properties; without `dataUrl` a `data:` URL is refused and any other string is left to the property's other validators, so `{ "color": true, "fileRef": {...} }` on `["string", "object"]` takes a colour or a file, as `paintField.background` does). A graphics validator passes a value of a type it does not apply to, for a property that lists several types (`["string", "object"]`). The catalog keeps every option, so `ui_component_get` shows the keys a `fields` object takes. An unknown validator is `SUI-BUILD-VALIDATOR`; options that are malformed or do not apply to the type are `SUI-BUILD-SHAPE`.
+- **URL rule.** A `url` property accepts only `data:` images (`png`, `jpeg`, `gif`, `webp`, `avif`, `bmp`, `svg+xml`), `https:` URLs with a host (no user info), `#` targets and relative targets. Other schemes (`http:` among them), `//host`, backslashes, spaces and control characters are refused. A `pattern` validator also applies to a `url` and narrows it further (`"^(?:data:|https:|$)"` for images, `"^(?!data:|https:)"` for in-app links).
+- **`parseShape(json, file)`** takes the file text or a parsed value and returns `{ shape, errors }`. It reports every problem (unknown keys are `SUI-BUILD-KEY`, a missing or bad summary is `SUI-BUILD-SUMMARY`, a default that does not fit is `SUI-BUILD-DEFAULT`, a bad pattern is `SUI-BUILD-PATTERN`) with the file; `shape` is set only when there are none.
+- **`buildDefaults(shape)`** returns a fresh default state: every property that has a `default`.
+- **`validateNode(shape, node, statePath)`** returns `SUI-STATE-*` violations with the state path: `SUI-STATE-UNKNOWN` (unknown property or a link to one), `SUI-STATE-SHARED` (an unsupported shared property), `SUI-STATE-REQUIRED`, `SUI-STATE-INVALID` (type, allowed values, validators, URL rule, icon name, slot not a node, map contents), `SUI-STATE-CONDITION`, `SUI-STATE-RUNTIME`, `SUI-LINK-ROW` and `SUI-NODE-NAME` (`$` or `__` keys). The optional fourth argument is `{ isIconName?, insideRow? }`. `<-name` links count as providing `name` and their value is not checked. `component`, `children`, `placement` (and its link `<-placement`), `theme` and `on` belong to the tree and are not checked here. Two codes exist for the icon component of `@punyts/stateui-components`, which raises them itself: `SUI-STATE-FILLED` (a warning: `filled` on an icon with no filled variant, so the outline is drawn) and `SUI-RUN-ICON` (an icon name found in neither the core set nor `$.runtime.icons`; reported through `@punyts/core`, nothing is drawn).
+
+### Component tokens
+
+A shape declares the knobs a minion may change as `tokens`: nested objects whose leaves are references to semantic tokens.
+
+```json
+{
+    "summary": "A button",
+    "tokens": {
+        "radius": "{radius.md}",
+        "padding": { "inline": "{space.inset.md}", "block": "{space.inset.sm}" },
+        "row": "calc({size.control.md} * {density.factor})"
+    }
+}
+```
+
+- **Group.** The tokens live under `tokenGroup`, a lower-case word (`^[a-z][a-z0-9]*$`, not a default group such as `color`). It defaults to the component name, taken from the shape file name (`button.state.json` gives `button`). A camelCase name (`record-list.state.json` is `recordList`) without `tokenGroup` is `SUI-BUILD-TOKENGROUP` naming the file, as is an unusable `tokenGroup`. Shapes of one family share a group (`field`, `control`).
+- **Defaults.** `inferComponentDefault(value)` checks each default with the value rules of Theme tokens: it must reference at least one semantic token (a literal, a primitive, a component token or an unknown path is `SUI-BUILD-TOKENDEF`), and the type is inferred from the referenced token (a `calc()` of dimensions and numbers with at least one dimension is a `dimension`). A token key that is not lower-case letters and digits is `SUI-BUILD-NAME`.
+- **`Shape.tokens`** lists `{ path, group, type, default }` per leaf, the path starting with the group (`button.padding.inline`); absent when the shape declares none.
+- **`collectComponentTokens(sources)`** takes `{ file, shape }` entries and returns `{ tokens, errors }`: the token set of the library sorted by path. Shapes that share a group must declare identical entries; otherwise each of them gets a `SUI-BUILD-TOKENCONFLICT` naming its file and the first file of the group, and its entries are left out.
+- **Lookup.** The paths and types join `validateTokens` (`componentTokens` option); the `theme` document validator reads them from the library's shapes, so a document or overlay may set `button.radius` only when a shape declares it. The catalog entry carries `tokens` (and `shape.tokens`).
+
+### Shared articulation stylesheet
+
+`generateSharedSheet()` (`src/dom/articulation/`) returns the CSS that turns the reflected attributes into local custom properties: `tone` gives `--tone`, `--tone-soft` and `--tone-on`; `size` gives `--control-height` and `--icon-size`; `elevation` gives `--surface` and `--shadow`; `textRole` (attribute `text-role`) gives `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `hidden` removes the host from layout. The build prepends it to every root component's CSS (a component with no `view.css` gets it alone; style error lines still match the component's file), so component CSS says `background: var(--tone)` and never repeats the tone table. `variant` has no rule here: the component's CSS decides how each variant paints the tone properties. `mountApp` reflects the shared names and `hidden` onto each node's element through `<sui-node>`, so no component code is involved.
+
+`density` on a container sets `--ui-density-factor` to the chosen multiplier (`density.compact`, `comfortable` or `spacious`) on that host and re-declares every semantic token whose default value uses `{density.factor}` (`space.inset`, `gap` and `stack`) from its default expression. A `var()` is resolved where the property is declared, so the re-declaration is what makes the `calc()` use the host's factor; everything below the container follows, so one `density` on a form changes every field. Limit: a node `theme` override of a `space` token is not carried into a nested density host, which re-declares `space.*` from the default expression.
+
+The sheet also draws focus: `:host(:focus-visible)` and `:focus-visible` inside every shadow root get `outline: var(--ui-focus-width) solid var(--ui-color-focus)` and `outline-offset: var(--ui-focus-offset)`, so components do not style focus themselves. Under `@media (forced-colors: active)` the local colours map to system colours (`--tone: ButtonText`, `--tone-soft: Canvas`, `--tone-on: CanvasText`, `--surface: Canvas`), shadows are removed (`--shadow: none`) and the focus outline is `Highlight`; the block comes after the tone and elevation rules and repeats their attribute selectors so it wins.
+
+### Layouts and placement
+
+`src/core/layout/` holds the closed list of layout types: `column`, `row`, `grid`, `region` and `adhoc`. A node sets `layout: { "type": "grid", "cols": 3 }`, and each child sets `placement`. Each type has its own settings and placement fields:
+
+| Type | Container settings | Child placement |
+|------|--------------------|-----------------|
+| `column` | `gap`, `align` | `grow`, `height` |
+| `row` | `gap`, `align`, `wrap`, `collapseBelow` | `grow`, `height` |
+| `grid` | `cols`, `rows`, `gap`, `collapseBelow` | `col`, `row`, `span`, `rowSpan`, `height` |
+| `region` | `gap`, `collapseBelow` | `region` (`n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`, `center`) |
+| `adhoc` | `clip` | `x`, `y`, `width`, `height`, `z` (stacking order, 0 to 999) |
+
+Allowed values: `gap` is `none`, `sm`, `md` or `lg` (default `md`; a container with no `layout` stacks its children as a column with the `md` gap); `align` is `start`, `center`, `end` or `stretch`; `wrap` is boolean (below the `sm` breakpoint every row wraps, and no row item is wider than its row); `cols`, `rows`, `col`, `row`, `span` and `rowSpan` are integers 1 to 12; `grow` is a number 0 to 12; `collapseBelow` is `sm`, `md`, `lg` or `xl`; `x`, `y`, `width` and `height` of `adhoc` are literal dimensions (`4px`, `1.5rem`, `50%`, `0`), never `calc()` or a token reference; `clip` is boolean and cuts what reaches past the `adhoc` area (`overflow: clip`), so a window dragged low does not cover what follows. The `height` of a child of a `column`, `row` or `grid` is its block size: a dimension or a math function of dimensions (`calc(100vh - 60px)`, `min(480px, 60vh)`, `clamp(…)`), where viewport lengths may appear, never a token reference. It gives a height to what has none of its own: a record view (a list, a table, a tree), which takes its host's height, and an `adhoc` area, whose children are absolutely positioned. In a column it does not shrink.
+
+A placement can be linked as a whole: `"<-placement": "$.data.desk.spot"` takes every field from the store, and a write to the linked object moves the child, so a window manager keeps placements in data and the document links each window to its record. Only where the linked placement sits is checked (`SUI-LAYOUT-PARENT`, `SUI-LAYOUT-ROOT`); its fields are not, since they come from the store. A link to one field (`placement: { "<-x": … }`) is `SUI-LAYOUT-FIELD`: the node reads its placement as one object, and a field link inside it is not followed.
+
+A component that has no `layout` can declare the placement its children carry with a `placement` key in its `*.state.json`: a table of properties like `properties`, where `_` properties are content (tabs: `_tab`, `icon`, `badge`). A shape cannot have both `"layout": true` and `placement`.
+
+`validateDocument` runs the `layout` and `placement` validators, which report `SUI-LAYOUT-TYPE`, `-SETTING`, `-VALUE`, `-FIELD`, `-PLACEMENT` and `-REQUIRED` for unknown or disallowed types, settings and fields, `SUI-LAYOUT-UNSUPPORTED` for a `layout` on a component whose shape does not support it, `SUI-LAYOUT-PARENT` for a `placement` under a parent that has neither a layout nor a placement shape (naming the parent), and `SUI-LAYOUT-ROOT` for a `placement` on the app root. An unknown setting's message names the settings of its layout type (`Unknown layout setting "wrap" at $.app.layout.wrap: the column layout takes "type", "gap", "align"`), and a `SUI-LOGIC-SHAPE` for an unknown key lists the keys allowed where it stands, so a writer picks the right key instead of guessing. Composed components are checked under `$.composed.<name>`. `validateNode` ignores `layout`; the layout validator reports it.
+
+A component whose shape sets `"layout": true` marks the element that holds its children with `<div layout-host="" />` in its view; the build rejects a layout-capable component without a `layout-host`, and a `layout-host` in a component that does not support `layout`, as `SUI-BUILD-TEMPLATE` naming the view file. `<sui-node>` writes `layout`, `layout-<setting>` attributes and `--layout-<setting>` custom properties on the `layout-host`, and `placement` as attributes (`region="nw"`, `col="2"`, `row-span="2"`) on each child. The build prepends one stylesheet per layout type (`generateLayoutSheets`, `src/dom/layout/`), generated from the closed lists, to every layout-capable component, so changing `layout` or `placement` in state rearranges the children with no component code. The `layout-host` sets `container-type: inline-size`, so keep it a block-level box: a host that sizes to its content collapses to zero width.
+
+**Breakpoints.** `BREAKPOINTS` is `sm` 480, `md` 768, `lg` 1024 and `xl` 1280 px of container width. A `grid`, `row` or `region` with `collapseBelow` stacks its children as one column in key order when its container is narrower than that width; without `collapseBelow` it never collapses. A container query cannot restyle its own container, so the sheet makes the component host `display: block; container-type: inline-size` and the queries restyle the `layout-host` inside it. The width compared is the host's content box, so the host's own padding is not counted. A nested layout host responds to its own component host's width.
+
+**Shrinking.** In a `row` with at least one growing item (`grow` 1 or more), the growing items take the squeeze when the row runs short of space and the other items keep their content width, so a label, a badge or an amount beside a growing text is never cut. A `row` with no growing item shrinks every item, as plain flex does.
+
+Limits: `grow` has rules for whole numbers 0 to 12 only; `adhoc` placement (`x`, `y`, `width`, `height`) uses typed `attr()`, so it needs a browser that supports it (Chromium 133 and later), and the `adhoc` container needs its own height because its children are absolutely positioned (give it a `height` in its parent's placement); empty tracks of a `region` layout still take the gap.
+
+## Convention scan
+
+`scanLibrary(fileMap)` turns a component library folder into a typed list of components by file convention alone. The
+file map is a record of relative path (forward slashes) to content; only the paths are read, so it needs no file system
+and no DOM.
+
+    <group>/<name>/<name>.<role>.<ext>
+
+| Role | File |
+| --- | --- |
+| view | `<name>.view.html` |
+| css | `<name>.view.css` |
+| controller | `<name>.controller.ts` |
+| state | `<name>.state.json` |
+| composed | `<name>.composed.json` |
+| locale | `<name>.locale.<code>.json` |
+
+- The folder name is the component name, camel-cased for state (`text-field` gives `textField`); the tag is `ui-` plus
+  the folder name. Folder names are lower-case kebab. Parent folders are grouping only and become `group`.
+- A folder is root (`view.html` and `state.json`), composed (`composed.json`) or shape (`state.json` and locale files
+  only), never a mix. A shape component is a mark a graphics renderer draws (a chart bar, a diagram node): it has no
+  tag, module or CSS, only a catalog entry with `tier: "shape"`. In a `ComponentLibrary` it is a `ShapeEntry` (`{ tier: 'shape', shape }`, no tag):
+  its nodes resolve over their shape's defaults and are validated, linked and localised as a root component's
+  (`entryShape(entry)` gives the shape of a root or shape entry), but `<sui-node>` never renders one, the dispatcher
+  (`componentTags`) hears no tag for it, and `mountApp` and `writeNode` refuse one outside a slot that names it with
+  `SUI-NODE-CHILD`.
+- Result: `{ components, errors }`. Each component is `{ name, tier, tag, group, files, locales }` (a shape component
+  has no `tag`), sorted by name. A
+  component with any problem is left out and its errors are reported; the others are still returned.
+- Errors: `SUI-BUILD-FILE` (a file outside a component folder), `SUI-BUILD-ROLE` (an unknown role or a file name
+  different from its folder), `SUI-BUILD-NAME` (a folder name that is not lower-case kebab), `SUI-BUILD-DUPLICATE` (two
+  components with the same name, including a root and a composed one; both files named), `SUI-BUILD-TIER` (root and
+  composed files in one folder), `SUI-BUILD-TIER-SHAPE` (a state file with a stylesheet or controller but no view) and
+  `SUI-BUILD-MISSING` (a root component without its view or state file).
+
+## Exposed paths of a composed component
+
+`exposes` in a `*.composed.json` (or in a document's `composed` entry) maps an override path to what it changes: `"footer.children.confirm.tone": "Confirm button tone"`. It is the interface the minion reads in `ui_component_get`.
+
+- `parseComposed(json, file)` returns the default tree without `exposes`, the `exposes` list and `SUI-BUILD-SHAPE` or `SUI-BUILD-EXPOSES` errors (an `exposes` that is not an object, a path with an empty segment, a description that is empty or not a string). `checkComposedExposes(parsed, library, file)` then reports each path that resolves nowhere, with the file. `buildLibrary` runs both and a component with an error gets no catalog entry or module.
+- A path resolves when every segment is a key of the resolved default tree (nested composed components are expanded), or when the last segment is a property, slot, `children` or `layout` the nested node's shape declares (`body.children` on a form that has no children yet), or `on` / `on.<event>` for an event the shape declares.
+- A document's `composed` entries are checked the same way by `validateDocument`: `SUI-DOC-EXPOSES` at `$.composed.<name>.exposes.<path>` (or `$.composed.<name>.exposes` when the value is not an object).
+- `checkExposes(exposes, tree, library, composed?)` and `exposedPathResolves(resolved, path, library)` are the shared checks.
+
+## Patterns
+
+A pattern is a ready tree for a screen, found by search and copied into an app. Its file is `<name>.pattern.json` under `patterns/<kind>/<name>/`, where the kind is `screen` (`PATTERN_KINDS`; an app is its screens, so there is nothing else to pattern). `src/core/convention/patterns.ts` reads, checks and applies one.
+
+- **Keys.** `summary` (one line, at most 120 characters), `purposes` (the `checkPurposes` rule of components), `tree` (a node), and optional `kind` (it must match the folder), `slots` and `params`. Paths in `slots` and `params` use the syntax of `exposes`, relative to the tree (`children.grid.pageSize`); there is no templating in the tree.
+- **Slots** map a name to `{ path, description }`: the node where the agent adds content after the pattern is applied.
+- **Params** map a name to `{ type, default?, required?, paths, description }`. `type` is one of `PATTERN_PARAM_TYPES` (`string`, `number`, `boolean`, `path`, a state path such as `$.data.products`); `paths` lists every tree path the value is written to. A param needs a `default` that fits its type, or `required: true`.
+- **`readPattern(json, file, kind)`** returns `{ pattern?, errors }`. Each problem is `SUI-PATTERN-SHAPE` with its path; an unknown key names the keys allowed there.
+- **`checkPattern(pattern, library, file)`** reports, as `SUI-PATTERN-SHAPE`: a component not in the library; a node of a root component that fails `validateNode` (the node error's code leads the reason; `$row` is legal inside a row template; a composed node is not opened); a child its slot's `childComponents` does not accept; a slot or param path that does not resolve (`exposedPathResolves`); a screen that holds an `app` node. `checkPatternPurposes(patterns)` reports a purpose two patterns share as `SUI-BUILD-PURPOSE-DUPLICATE`.
+- **`applyPattern(pattern, values?)`** returns `{ tree?, slots, errors }`: a copy of the tree with each value (or its default) written at each of its paths, and the slots as `{ name, path, description }`. An unknown param (the message lists the params), a missing required param or a value of the wrong type is `SUI-PATTERN-PARAM`, and no tree is returned. The pattern is not changed.
+
+## Resolving a node
+
+`resolveNode(node, library, composed?, { path? })` turns a node into one merged, fully resolved tree. It is pure and
+never throws; problems come back in `errors`.
+
+- A root component's node is merged over the shape's defaults. A composed component's node is merged over its default
+  tree; its values address nested nodes by path, such as `footer.children.confirm._title`.
+- Every nested node (`children` and node-typed slots) is resolved the same way, so a composed component can contain
+  another one.
+- Merging is deep and sparse. Arrays are replaced whole; `children`, slot maps and the entries of a keyed `map`
+  property (a table's `columns`) merge by key; `null` removes a default child, slot node or `map` entry
+  (`children.table.columns.actions: null`). Where the shape does not make the place a `map` property, `null` is a value
+  and stays one: a nullable property, `$.data`, or a `map` property set to `null` as a whole. A node that names a
+  different component replaces the node under it.
+- A composed file's `exposes` key is metadata and never reaches a resolved node. A node may still override a path that is not exposed; `exposes` is guidance, not a lock.
+- The document's `composed` entries win over the library; a name that is also a library name is `SUI-DOC-COMPOSED`
+  (`checkComposedNames`).
+- A composed component that contains itself through default trees is `SUI-NODE-CYCLE`, with the chain in the message;
+  an unknown component is `SUI-NODE-UNKNOWN`. Both carry the state path.
+- `instances` maps each state path where a composed component was expanded to the composed names, outermost first.
+
+```ts
+const { node, errors, instances } = resolveNode({ component: 'confirmDialog' }, library, document.composed);
+```
+
+## Links
+
+Code is in `src/core/links/`, exported from `@punyts/stateui-app/core`. A `<-key` property makes the node's `key` a
+store alias (`store.link`) of its target, so reads, writes and change events follow the data.
+
+- **`extractLinks(resolvedTree, { path? })`** returns `{ tree, links, linkedPaths, errors }`. `links` holds
+  `{ statePath, key, target }` for every `<-key` (in nodes and in nested objects such as map items; `on` entries are
+  skipped), `tree` is a copy without them. A target must start with `$.data` or `$row`, be the sync status (`$.runtime.sync`, `.mode`,
+  `.status` or `.waiting`), or be a node reference (`^name.path`, `.path`) to an exposed runtime property; `$.server` or a path below it is `SUI-LINK-SERVER`
+  (server-only), anything else is `SUI-LINK-TARGET`, an empty key is `SUI-NODE-NAME`. `linkedPaths` lists every linked property path (`statePath.key`); locale overlays and state snapshots exclude
+  them.
+- **Node references.** `^name.path` (nearest ancestor, the node itself included, named `name` or an instance of composed
+  component `name`) and `.path` (own subtree) may be a link target when the property they reach is `exposed` in that
+  node's shape: `"<-value": "^orders.current.customer"`. With `options.library` (and `instances`, the `resolveNode`
+  result) `extractLinks` resolves the reference to the runtime path, `^orders.current` giving
+  `$.runtime.nodes.app.…orders.current`. A node that does not exist, or whose shape has no such exposed property (not
+  exposed, or not there at all), is `SUI-LINK-MISSING` with the state path of the link. `..x`, absolute `$.app` targets
+  and any other form are `SUI-LINK-TARGET`. Without a library references are returned as written. Inside a row
+  template (a `row: true` slot or map-item field) relative references resolve against the node that owns the
+  template; `resolveRowLinks` takes `owner` (the owner's chain) for the same rule, and `library`.
+- **`applyLinks(store, links)`** calls `store.link(statePath.key, target)` and returns errors: `SUI-LINK-CYCLE` when the
+  target is the property, inside it, above it or loops through other links, `SUI-LINK-MISSING` otherwise, each with the
+  node path. It is idempotent per store (the same link twice does nothing; a new target re-points) and tries every link.
+  `disposeLinks(store, links)` unlinks what `applyLinks` created; listeners stay registered.
+- **`runtimePath(appPath)`** is the only place that builds a node's runtime path: `$.app.a.b` gives
+  `$.runtime.nodes.app.a.b`. `RUNTIME_PATHS` names `nodes`, `icons` and `empty`, which are separate keys.
+- **`resolveRowLinks(rowNode, rowPath, { path? })`** is `extractLinks` for one record-view slot: `$row.x` becomes
+  `<rowPath>.x` (for example `$.runtime.nodes.app.orders.slots.3.row.customer`) with `allowMissing: true`, so a missing
+  field reads as `undefined` and updates when it appears. Only `row` is re-pointed. `path` is the row node's state path
+  and defaults to the parent of `rowPath`.
+
+## `on` entries and targets
+
+A node's `on` maps an event its component declares to one command object or an ordered list of them.
+
+```json
+"on": { "press": [ { "command": "set", "target": "$.data.name", "value": "x" }, { "command": "close", "target": "$parent" } ] }
+```
+
+A command object is `{ command, target?, value? }`. `value` is the command's argument: what `set` writes, the key
+`select` takes, the payload `emit` sends. When `value` is absent, `emit` sends the event's payload.
+
+| Command | `target` | `value` |
+| --- | --- | --- |
+| `set` | a property to write (`$.data.name`, `.pressed`) | required |
+| `toggle` | a boolean property | none |
+| `emit` | the event name, such as `chat.send` (not resolved) | the payload |
+| `navigate` | a screen name, such as `product` (not resolved) | the params, where `$row` and `$row.path` values are read at any depth |
+| a component command | a node; absent means the node itself | the argument |
+
+Targets: `^name.path` (nearest node, starting with the node itself, whose key is `name` or that is an instance of
+composed component `name`, then the path below it), `.path` (own subtree), `$parent` (nearest ancestor whose component
+declares the command), `$row` / `$row.path` (the record a row template's slot shows) and `$.app…` (absolute; in a
+screen, `$.screens.{name}…` paths of that screen name nodes too, while in the app node's `on` they are plain state paths). Dot
+climbing (`..x`) is rejected.
+
+**`$row`.** Legal as a `target` and as a `value` (`"value": "$row.id"`) only inside a row template (the value of a
+`row: true` property or map-item field). It resolves through the slot's `row` alias, so `{ "command": "set", "target":
+"$.data.selected", "value": "$row.id" }` writes the id of the record the slot shows and `{ "command": "delete", "target":
+"$row" }` is a component command handled by the node that owns the template (the nearest node of its chain whose shape
+declares the command). Outside a row template `$row` is `SUI-ON-TARGET` (and `SUI-LINK-ROW` from `validateNode`). Other
+relative targets (`^name.path`, `.path`) inside a row template resolve against the owning node's `$.app` path, never
+against the slot's runtime path. `resolveTarget(target, chain, rootPath, rowPath?)` takes the row alias path (any marker
+when validating) and `findRowProvider` picks the owner for a command aimed at `$row`.
+
+`validateOn(resolveResult, library)` returns `SUI-ON-SHAPE` (an entry that is not a command object or a list of them),
+`SUI-ON-EVENT`, `SUI-ON-COMMAND`,  path or `{{ }}` value is not checked), `SUI-ON-LINKED` (a `set` or `toggle` on `change` or `input` whose target is also the target of one of the node's own `<-` links: the component wrote its value and the link saved it, so a toggle flips it back) and `SUI-ON-TARGET` errors with the state path. `parseTarget` and `resolveTarget` are
 exported so the runtime dispatcher uses the same rules.
 
 ## Document validation
