@@ -178,6 +178,33 @@ describe('startRuntime in Chromium', () => {
         expect(seen).toEqual(['e']);
     });
 
+    it('should answer an inspect with the node at a point and its ancestors, or with the nodes of some paths', async () => {
+        // Arrange
+        const document: AppDocument = {
+            app: { component: 'panel', children: { first: { component: 'label', text: 'one' }, second: { component: 'badge', text: 'two' } } } as AppDocument['app']
+        };
+        send(message('load', { document }));
+        await tick();
+        expect(ofType('error')).toEqual([]);
+        const badge = find(host, 'x-rt-badge') as Element;
+        const box = badge.getBoundingClientRect();
+
+        // Act
+        send(message('inspect', { id: 7, at: { x: box.x + 2, y: box.y + box.height / 2 } }));
+        send(message('inspect', { id: 8, paths: ['$.app', '$.app.children.first', '$.app.children.missing'] }));
+
+        // Assert
+        const [atPoint, ofPaths] = ofType('inspected') as unknown as { id: number; at?: string; nodes: { path: string; component: string; layout?: string; rect: { height: number }; children: { path: string }[] }[] }[];
+        expect(atPoint?.id).toBe(7);
+        expect(atPoint?.at).toBe('$.app.children.second');
+        expect(atPoint?.nodes.map((node) => node.path)).toEqual(['$.app.children.second', '$.app']);
+        expect(atPoint?.nodes[0]?.component).toBe('badge');
+        expect(atPoint?.nodes[1]?.children.map((child) => child.path)).toEqual(['$.app.children.first', '$.app.children.second']);
+        expect(ofPaths?.id).toBe(8);
+        expect(ofPaths?.nodes.map((node) => node.path).sort()).toEqual(['$.app', '$.app.children.first']);
+        expect(ofPaths?.nodes.find((node) => node.path === '$.app.children.first')?.rect.height).toBeGreaterThan(0);
+    });
+
     it('should put the state over the document and the icons into $.runtime.icons before rendering', async () => {
         // Arrange
         const document: AppDocument = { data: { name: 'Ada' }, app: panel({ hello: { component: 'label', '<-text': '$.data.name' } }) };

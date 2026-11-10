@@ -8,10 +8,10 @@ export type { AppEventName } from '../core/types.js';
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'inspect', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'key'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'key', 'inspected'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -169,6 +169,43 @@ export interface PongMessage extends Envelope<'pong'> {
     id: number;
 }
 
+/**
+ * Asks about the nodes on screen, for an editor over the frame: the node at a point of the frame (`at`, in CSS pixels
+ * of the frame's viewport) with its ancestors, or the nodes of the given absolute `paths`. Answered with `inspected`
+ */
+export interface InspectMessage extends Envelope<'inspect'> {
+    id: number;
+    at?: { x: number; y: number };
+    paths?: string[];
+}
+
+/** A box in CSS pixels of the frame's viewport */
+export interface InspectRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+/** One node on screen: its box, its component, the layout type it gives its children, and their boxes */
+export interface InspectedNode {
+    path: string;
+    component: string;
+    layout?: string;
+    rect: InspectRect;
+    children: { path: string; rect: InspectRect }[];
+}
+
+/**
+ * The answer to `inspect`, with its `id`: `at` is the path of the node at the point (absent when there is none), and
+ * `nodes` that node and its ancestors, innermost first, or the nodes of the paths asked for that are on screen
+ */
+export interface InspectedMessage extends Envelope<'inspected'> {
+    id: number;
+    at?: string;
+    nodes: InspectedNode[];
+}
+
 /** Raises an app event: `sync.rejected` with the rejected path and the reason as its payload */
 export interface EventMessage extends Envelope<'event'> {
     name: AppEventName;
@@ -275,6 +312,7 @@ export type InboundMessage =
     | ThemeMessage
     | EventMessage
     | PingMessage
+    | InspectMessage
     | FileProgressMessage
     | FileResultMessage
     | FileDataMessage
@@ -289,5 +327,6 @@ export type OutboundMessage =
     | FileCancelMessage
     | FileReadMessage
     | FileReleaseMessage
-    | KeyMessage;
+    | KeyMessage
+    | InspectedMessage;
 export type RuntimeMessage = InboundMessage | OutboundMessage;

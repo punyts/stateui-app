@@ -90,6 +90,12 @@ export const CHUNK_HASH_PATTERN = /^[0-9a-f]{16}$/;
 /** How long the `load3d` hook waits for the 3D chunk script to load, in milliseconds; then it rejects with `timeout` */
 export const CHUNK_LOAD_TIMEOUT_MS = 15_000;
 
+/** Most nodes an `inspected` answer lists (the node at a point and its ancestors, or the paths asked for), and most paths an `inspect` asks for */
+export const MAX_INSPECT_NODES = 50;
+
+/** Most children an `inspected` answer lists for one node */
+export const MAX_INSPECT_CHILDREN = 100;
+
 /** The byte limit of each message type */
 export const MESSAGE_BYTE_LIMITS = {
     load: MAX_LOAD_BYTES,
@@ -105,6 +111,8 @@ export const MESSAGE_BYTE_LIMITS = {
     ping: MAX_SMALL_BYTES,
     pong: MAX_SMALL_BYTES,
     key: MAX_SMALL_BYTES,
+    inspect: MAX_EVENT_BYTES,
+    inspected: MAX_EVENT_BYTES,
     file: MAX_FILE_JSON_BYTES,
     fileCancel: MAX_FILE_JSON_BYTES,
     fileProgress: MAX_FILE_JSON_BYTES,

@@ -20,6 +20,7 @@ import { applyOverlay } from '../dom/theme/index.js';
 import type { ThemeStore } from '../dom/theme/index.js';
 import { createFileReads } from './fileRead.js';
 import { createFileTransfers } from './fileTransfer.js';
+import { describeNode, nodesAt, nodesOf } from './inspect.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { createChunkLoader } from './load3d.js';
 import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
@@ -32,6 +33,7 @@ import type {
     FileResultMessage,
     IconsMap,
     InboundMessage,
+    InspectMessage,
     LoadMessage,
     LocaleMessage,
     OutboundMessage,
@@ -163,7 +165,7 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
  *   is refused: the host moves it with a `navigate` command) and of the sync status `$.runtime.sync`, as sync
  *   writes: they post no `change`. It merges its `icons` into `$.runtime.icons`.
  * - `event` raises an app event (`sync.rejected`): the root node's `on` entry for it runs with the payload.
- * - `ping` is answered with `pong`.
+ * - `ping` is answered with `pong`, and `inspect` with `inspected` (the nodes on screen, for an editor over the frame).
  * - `command` runs a component command with the runner the dispatcher uses for `on` (`target` is a `$.app` node path;
  *   the system commands `set`, `toggle` and `emit` are refused). `locale` applies a language overlay (`switchLocale`,
  *   from the document's `locales` and `options.componentOverlays`) and leaves `$.data` alone. `theme` applies the
@@ -510,6 +512,24 @@ export function startRuntime(
         if (errors.length > 0) postErrors(errors);
     }
 
+    /** Answers an editor over the frame: the node at a point and its ancestors, or the nodes of some paths */
+    function inspect(message: InspectMessage): void {
+        const store = mounted?.store;
+        const componentOf = (path: string): string | undefined => {
+            const name = store?.get(`${path}.component` as never) as unknown;
+            return typeof name === 'string' ? name : undefined;
+        };
+        const doc = win.document;
+        if (message.at !== undefined) {
+            const chain = nodesAt(doc, message.at.x, message.at.y);
+            const at = chain[0]?.getAttribute('state') ?? undefined;
+            post({ type: 'inspected', id: message.id, ...(at !== undefined && { at }), nodes: chain.map((element) => describeNode(element, componentOf)) });
+            return;
+        }
+        const found = nodesOf(doc, message.paths ?? []);
+        post({ type: 'inspected', id: message.id, nodes: [...found.values()].map((element) => describeNode(element, componentOf)) });
+    }
+
     function handle(message: InboundMessage): void {
         switch (message.type) {
             case 'load':
@@ -544,6 +564,9 @@ export function startRuntime(
                 return;
             case 'ping':
                 post({ type: 'pong', id: message.id });
+                return;
+            case 'inspect':
+                inspect(message);
                 return;
             default:
                 dropped.unhandled += 1;

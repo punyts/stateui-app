@@ -9,6 +9,8 @@ import {
     MAX_FILE_ID_LENGTH,
     MAX_FILE_NAME_LENGTH,
     MAX_FILE_TYPE_LENGTH,
+    MAX_INSPECT_CHILDREN,
+    MAX_INSPECT_NODES,
     MAX_NAME_LENGTH,
     MAX_NONCE_LENGTH,
     MAX_PATH_LENGTH,
@@ -178,6 +180,32 @@ function isFileData(m: Record<string, unknown>): boolean {
     return isFileResult(m);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isPoint(value: unknown): boolean {
+    return isRecord(value) && Object.keys(value).every((key) => key === 'x' || key === 'y') && isFiniteNumber(value['x']) && isFiniteNumber(value['y']);
+}
+
+function isRect(value: unknown): boolean {
+    return isRecord(value) && Object.keys(value).every((key) => ['x', 'y', 'width', 'height'].includes(key)) && ['x', 'y', 'width', 'height'].every((key) => isFiniteNumber(value[key]));
+}
+
+function isInspectedNode(value: unknown): boolean {
+    return (
+        isRecord(value) &&
+        Object.keys(value).every((key) => ['path', 'component', 'layout', 'rect', 'children'].includes(key)) &&
+        isText(value['path'], MAX_PATH_LENGTH) &&
+        isText(value['component'], MAX_NAME_LENGTH) &&
+        (value['layout'] === undefined || isText(value['layout'], MAX_NAME_LENGTH)) &&
+        isRect(value['rect']) &&
+        Array.isArray(value['children']) &&
+        value['children'].length <= MAX_INSPECT_CHILDREN &&
+        value['children'].every((child) => isRecord(child) && Object.keys(child).every((key) => key === 'path' || key === 'rect') && isText(child['path'], MAX_PATH_LENGTH) && isRect(child['rect']))
+    );
+}
+
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
@@ -214,6 +242,19 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     key: (m) => hasOnlyKeys(m, ['key']) && isKeyChord(m['key']),
+    inspect: (m) =>
+        hasOnlyKeys(m, ['id', 'at', 'paths']) &&
+        isInteger(m['id']) &&
+        (m['at'] !== undefined) !== (m['paths'] !== undefined) &&
+        (m['at'] === undefined || isPoint(m['at'])) &&
+        (m['paths'] === undefined || (Array.isArray(m['paths']) && m['paths'].length <= MAX_INSPECT_NODES && m['paths'].every((path) => isText(path, MAX_PATH_LENGTH)))),
+    inspected: (m) =>
+        hasOnlyKeys(m, ['id', 'at', 'nodes']) &&
+        isInteger(m['id']) &&
+        (m['at'] === undefined || isText(m['at'], MAX_PATH_LENGTH)) &&
+        Array.isArray(m['nodes']) &&
+        m['nodes'].length <= MAX_INSPECT_NODES &&
+        m['nodes'].every(isInspectedNode),
     file: (m) =>
         hasOnlyKeys(m, ['requestId', 'name', 'size', 'mediaType', 'data']) &&
         isPositiveInteger(m['requestId']) &&

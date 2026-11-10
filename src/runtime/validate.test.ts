@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
         );
     });
 
@@ -168,5 +168,20 @@ describe('runtime message validator', () => {
         }
         expect(validateMessage(base('key', { key: 'e' })).ok).toBe(false);
         expect(validateMessage(base('key', { key: 'mod+e', extra: 1 })).ok).toBe(false);
+    });
+
+    it('should take an inspect of a point or of paths, and an inspected answer with boxes', () => {
+        const rect = { x: 0, y: 0, width: 10, height: 20 };
+        expect(validateMessage(base('inspect', { id: 1, at: { x: 4, y: 5.5 } })).ok).toBe(true);
+        expect(validateMessage(base('inspect', { id: 2, paths: ['$.screens.home'] })).ok).toBe(true);
+        expect(validateMessage(base('inspect', { id: 3 })).ok).toBe(false);
+        expect(validateMessage(base('inspect', { id: 3, at: { x: 1, y: 1 }, paths: [] })).ok).toBe(false);
+        expect(validateMessage(base('inspect', { id: 3, at: { x: 'a', y: 1 } })).ok).toBe(false);
+        expect(validateMessage(base('inspect', { id: 3, paths: Array.from({ length: 51 }, () => '$.app') })).ok).toBe(false);
+        const node = { path: '$.app', component: 'panel', layout: 'column', rect, children: [{ path: '$.app.children.a', rect }] };
+        expect(validateMessage(base('inspected', { id: 1, at: '$.app', nodes: [node] })).ok).toBe(true);
+        expect(validateMessage(base('inspected', { id: 1, nodes: [] })).ok).toBe(true);
+        expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, rect: { x: 0 } }] })).ok).toBe(false);
+        expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, extra: true }] })).ok).toBe(false);
     });
 });
