@@ -32,7 +32,7 @@ export interface CommandContext {
     rootPath: string;
     library: ComponentLibrary;
     host: Element;
-    store: { get(path: string): unknown; set(path: string, value: never): boolean };
+    store: { get(path: string): unknown; set(path: string, value: never, options?: { always?: boolean }): boolean };
     payload: unknown;
     emit(name: string, payload: unknown): void;
     /** Moves `$.route` to a screen; returns why it cannot. Absent in an app without screens */
@@ -124,7 +124,8 @@ function writePath(command: OnCommand, context: CommandContext): string {
 
 function write(path: string, value: JsonValue, context: CommandContext): void {
     const copy = value !== null && typeof value === 'object' ? cloneJson(value) : value;
-    if (!context.store.set(path, copy as never)) throw new CommandFailure(`the store refused the write to ${path}`);
+    // A command is an action: a set of the value the path already holds still reaches state sync and the logic
+    if (!context.store.set(path, copy as never, { always: true })) throw new CommandFailure(`the store refused the write to ${path}`);
 }
 
 /**

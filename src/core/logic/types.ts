@@ -251,6 +251,12 @@ export interface LogicChange {
     value?: JsonValue;
     /** The value at the path before the change, for `$previous`; absent when there was none */
     previous?: JsonValue;
+    /**
+     * Written from outside the logic (a person's change, a tool's write): it fires the units whose trigger is its own
+     * path even when it set the value the path already held, as a press that sets `clicked` to true does every time.
+     * The logic's own writes are never explicit, so a unit that writes the value its trigger holds does not run again
+     */
+    explicit?: boolean;
 }
 
 /** A write of a transition; a delete when `value` is absent */

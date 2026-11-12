@@ -147,6 +147,8 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
         const old = plain(oldValue);
         const change: LogicChange = action === 'delete' || value === undefined ? { path } : { path, value: plain(value) as JsonValue };
         if (old !== undefined) change.previous = old;
+        // The app's own writes (a press, a field): the logic's carry an origin and never reach here
+        change.explicit = true;
         pending.push({ change, old });
         if (!scheduled) {
             scheduled = true;

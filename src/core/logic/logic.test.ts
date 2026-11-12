@@ -426,6 +426,35 @@ describe('createLogicEngine', () => {
         expect(memory.failures).toEqual([]);
     });
 
+    it('should fire a rule on every explicit set of its path, also of the value the path already holds', () => {
+        // Arrange: a press that sets clicked to true, twice
+        const logic: LogicDocument = { rules: { pressed: { when: { path: '$.data.clicked', is: true }, do: [{ command: 'increment', target: '$.data.presses' }] } } };
+        const memory = memoryHost({ ...BASE, data: { clicked: true, presses: 0 } });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        for (let press = 0; press < 2; press++) engine.changes([{ path: '$.data.clicked', value: true, previous: true, explicit: true }]);
+        engine.changes([{ path: '$.data.clicked', value: true, previous: true }]);
+
+        // Assert: the change that is not explicit (a write of the logic or a fan-out) is still unchanged
+        expect(memory.get('$.data.presses')).toBe(2);
+        expect(engine.trace().at(-1)?.events).toEqual([expect.objectContaining({ kind: 'rule', name: 'pressed', outcome: 'unchanged' })]);
+    });
+
+    it("should not run a rule again on the logic's own write of the value its trigger holds", () => {
+        // Arrange: a rule that writes back the value of the path it watches
+        const logic: LogicDocument = { rules: { echo: { when: { path: '$.data.clicked' }, do: [{ command: 'set', target: '$.data.clicked', value: true }, { command: 'increment', target: '$.data.runs' }] } } };
+        const memory = memoryHost({ ...BASE, data: { clicked: true, runs: 0 } });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        engine.changes([{ path: '$.data.clicked', value: true, previous: true, explicit: true }]);
+
+        // Assert
+        expect(memory.get('$.data.runs')).toBe(1);
+        expect(memory.failures).toEqual([]);
+    });
+
     it('should give the host guard\'s reason as the rejected result of save-data, and write nothing', () => {
         // Arrange
         const logic: LogicDocument = {

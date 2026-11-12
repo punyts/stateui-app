@@ -135,6 +135,11 @@ export interface LogicEngine {
     stop(): void;
 }
 
+/** A change from outside the logic at exactly this path: it fires even when it left the value as it was */
+function setExplicitly(change: LogicChange, path: string): boolean {
+    return change.explicit === true && change.path === path;
+}
+
 function deepEqual(a: JsonValue | undefined, b: JsonValue | undefined): boolean {
     return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
@@ -614,7 +619,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             for (const change of changes) {
                 for (const match of matchPattern(pattern, change.path, host.get(change.path))) {
                     const value = host.get(match.path);
-                    if (deepEqual(value, previousAt(match.path, change, value))) {
+                    if (!setExplicitly(change, match.path) && deepEqual(value, previousAt(match.path, change, value))) {
                         note({ kind: unit.kind, name: unit.name, outcome: 'unchanged', path: match.path });
                         continue;
                     }
@@ -747,7 +752,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 for (const match of matches) {
                     const trigger = host.get(match.path);
                     const previous = previousAt(match.path, change, trigger);
-                    if (deepEqual(trigger, previous)) {
+                    if (!setExplicitly(change, match.path) && deepEqual(trigger, previous)) {
                         missed('unchanged', match.path);
                         continue;
                     }
