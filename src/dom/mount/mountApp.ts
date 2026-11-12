@@ -17,7 +17,7 @@ import { PREFIXES } from '../../core/types.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
 import { refusedChildren, validateDocument } from '../../core/validate/index.js';
 import type { AppMode } from '../../core/validate/index.js';
-import { createDispatcher } from '../on/index.js';
+import { createDispatcher, usesRaisedHover } from '../on/index.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
 import { ensureAppRoot } from '../app/index.js';
@@ -57,6 +57,7 @@ function initialState(document: AppDocument, app: Node, mode: AppMode, screens: 
         data: cloneJson((document.data ?? {}) as JsonObject) as JsonObject,
         locale: typeof document.locale === 'string' ? document.locale : DEFAULT_LOCALE,
         app,
+        raised: {},
         runtime: {
             nodes: {},
             icons: {},
@@ -305,6 +306,7 @@ export function mountApp(
         rootPath: APP_PATH,
         roots: screenRoots,
         hooks,
+        recordHover: usesRaisedHover(document),
         ...(navigate === undefined ? {} : { navigate })
     });
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));

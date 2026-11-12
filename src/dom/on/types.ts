@@ -127,6 +127,11 @@ export interface DispatcherOptions {
     hooks?: DispatchHooks;
     /** Runs the `navigate` command: moves `$.route` to a screen, or returns why it cannot. Absent in an app without screens */
     navigate?(screen: string, params: JsonValue | undefined): string | undefined;
+    /**
+     * Writes `hover` events into state too (`$.raised.<node path>.hover`, throttled), which only a document that uses them
+     * needs (`usesRaisedHover`); false when absent. Every other event is always written (`raised.ts`)
+     */
+    recordHover?: boolean;
 }
 
 export interface Dispatcher {

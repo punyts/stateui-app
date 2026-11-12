@@ -9,6 +9,7 @@ import { runtimePath } from '../../core/links/index.js';
 import { RESERVED_KEYS } from '../../core/types.js';
 import type { JsonValue } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
+import { createRaisedRecorder } from './raised.js';
 import type { CommandContext } from './commands.js';
 import { FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT, LOAD_3D_EVENT } from './types.js';
 import type { Dispatcher, DispatcherOptions, FileReadRequest, FileReleaseRequest, FileTransferRequest, Load3dRequest } from './types.js';
@@ -96,6 +97,8 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     const instances = options.instances ?? {};
     const tags = componentTags(library);
     const names = eventNames(library);
+    // Every event is also written into its node's state (`raised.ts`), so logic that sees only state hears it
+    const recorder = createRaisedRecorder(store as never, { hover: options.recordHover === true });
 
     /** The root (`rootPath` or one of `roots`) that `path` is at or below */
     function rootOf(path: string): string | undefined {
@@ -239,11 +242,15 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         if (copy === null) return;
         if (copy === undefined) {
             const found = locate(target);
-            if (found) run(type, payload, found.chain, found);
+            if (!found) return;
+            recorder.record(type, payload, target);
+            run(type, payload, found.chain, found);
             return;
         }
         const found = locate(copy.template);
         if (!found) return;
+        // A copy is not a node: the repeat holds the event, whose payload names the copy's record (`key`)
+        recorder.record(type, payload, copy.repeat);
         const at = found.chain.findIndex((frame) => frame.path === copy.repeat);
         const owner = at < 0 ? (found.owner ?? found.chain) : found.chain.slice(0, at + 1);
         run(type, payload, found.chain, { owner, rowPath: copy.rowPath });
@@ -260,7 +267,9 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             return;
         }
         const found = locate(path);
-        if (found) run(event.type, payload, found.chain, found);
+        if (!found) return;
+        recorder.record(event.type, payload, path);
+        run(event.type, payload, found.chain, found);
     }
 
     /** Runs the `on` entry for `type` of the last node of `chain`, if it has one */
@@ -358,6 +367,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             if (chain) run(name, payload, chain);
         },
         dispose(): void {
+            recorder.dispose();
             for (const name of names) host.removeEventListener(name, handle, true);
             host.removeEventListener(FILE_TRANSFER_EVENT, transfer);
             host.removeEventListener(FILE_READ_EVENT, read);

@@ -69,7 +69,8 @@ const tags: Record<string, string> = { panel: 'x-on-panel', button: 'x-on-button
 
 function mountApp(app: unknown, data: unknown = {}): Fixture {
     setNodeResolver((name) => tags[name]);
-    const store = createStore<unknown>({ app, data });
+    // As mountApp builds it: the events have their own branch from the start
+    const store = createStore<unknown>({ app, data, raised: {} });
     const host = document.body.appendChild(document.createElement('div'));
     mount(host, store);
     const root = host.appendChild(document.createElement('sui-node'));
@@ -112,6 +113,25 @@ describe('on dispatch in Chromium', () => {
         errorSpy.mockRestore();
         for (const host of Array.from(document.body.children)) unmount(host);
         document.body.replaceChildren();
+    });
+
+    it('should write every event into $.raised by the node path, each time, and leave the node alone', () => {
+        // Arrange: a button with no on entry
+        const fixture = mountApp(panel({ save: { component: 'button' } }));
+        // The first press makes the missing parents in one write, so the branch is watched, not the leaf
+        const heard: string[] = [];
+        fixture.store.on('$.$all', (path, _value, _old, action) => {
+            if (typeof path === 'string' && path.startsWith('$.raised.') && !String(action).endsWith('-child')) heard.push(path);
+        });
+
+        // Act
+        raise(fixture.element('$.app.children.save'), 'press');
+        raise(fixture.element('$.app.children.save'), 'press');
+
+        // Assert
+        expect(fixture.store.get('$.raised')).toEqual({ app: { children: { save: { press: true } } } });
+        expect(heard).toEqual(['$.raised.app', '$.raised.app.children.save.press']);
+        expect(fixture.store.get('$.app.children.save')).toEqual({ component: 'button' });
     });
 
     it('should run set when press is raised and change the store', () => {

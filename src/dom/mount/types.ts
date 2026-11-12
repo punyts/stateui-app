@@ -21,6 +21,8 @@ export interface AppState {
     locale: string;
     /** The resolved `app` tree, without its `<-` links (they are store aliases) */
     app: Node;
+    /** The events the nodes raised, by node path (`$.raised.<node path>.<event>`, `dom/on/raised.ts`); empty at start */
+    raised: JsonObject;
     /** Each screen's resolved root by name, without its `<-` links; only for a document with screens */
     screens?: Record<string, Node>;
     /** The visible screen and its params; only for a document with screens. Protected: only `navigate` writes it */

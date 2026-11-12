@@ -27,8 +27,11 @@ export type DropReason = 'invalid' | 'unknown' | 'oversized';
 export type ValidationResult = { ok: true; message: RuntimeMessage } | { ok: false; reason: DropReason };
 
 const encoder = new TextEncoder();
-/** The synced branches, which changes and writes reach; `$.route` is protected, so a write to it is refused by the store */
-const SYNC_PATH = /^\$\.(data|app|screens|route|theme|locale)(\.[^.\s]+)*$/;
+/**
+ * The synced branches, which changes and writes reach; `$.route` is protected, so a write to it is refused by the
+ * store. `$.raised` holds the events the nodes raised (`dom/on/raised.ts`)
+ */
+const SYNC_PATH = /^\$\.(data|app|screens|route|theme|locale|raised)(\.[^.\s]+)*$/;
 /** The sync status the host writes */
 const STATUS_PATH = /^\$\.runtime\.sync(\.[^.\s]+)*$/;
 const MODES = ['standalone', 'persisted', 'full'];

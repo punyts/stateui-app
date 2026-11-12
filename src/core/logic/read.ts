@@ -9,7 +9,8 @@ import type { LogicCommand, LogicCompute, LogicDocument, LogicEffect, LogicFunct
 import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions, withCaptures } from './values.js';
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
-const LOGIC_ROOTS = ['app', 'data', 'server', 'screens', 'route'];
+// `raised`: the events the nodes raised (dom/on/raised.ts), which logic triggers on and reads
+const LOGIC_ROOTS = ['app', 'data', 'server', 'screens', 'route', 'raised'];
 
 const MACHINE_KEYS = ['state', 'initial', 'transitions'];
 const TRANSITION_KEYS = ['from', 'when', 'do', 'to'];

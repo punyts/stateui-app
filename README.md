@@ -616,10 +616,24 @@ embedded part) and is not checked.
 
 ## Dispatching `on` in the browser
 
-`createDispatcher({ host, store, library, instances?, rootPath?, roots?, hooks?, navigate? })` listens on `host` (the
+`createDispatcher({ host, store, library, instances?, rootPath?, roots?, hooks?, navigate?, recordHover? })` listens on `host` (the
 element the store is mounted on) and runs the `on` entry of the node that raised an event. It returns `{ dispose() }`.
 `roots` are more roots whose nodes raise events (`mountApp` passes each screen's `$.screens.{name}`); a node's chain and
 absolute targets start at the root that holds it, and app events still run on `rootPath`.
+
+**Events are state.** Logic on a server sees state, not events, so before it runs a node's `on` entry the
+dispatcher writes the event into state in a branch of its own: `$.raised.<node path without $.>.<event>`
+(`src/dom/on/raised.ts`), never into the node's state, so a component that watches its subtree (an accordion, a tree)
+is not disturbed. The app starts with an empty `$.raised`, and the runtime protocol syncs it like `$.data`. The value
+is the payload when the event carries data (a row's key; a drawing's `{ key, x, y }`, without its `shape` path), else
+`true`, and it is written with the store's `always`, so each occurrence is a change even when it repeats the last
+(a second press, the same row activated again). A rule or machine triggers on that path (`$.raised.screens.home.children.save.press`)
+and a link can read it. A shape inside a `drawRepeat` copy writes on the repeat, its payload naming the record. Not
+written: `change`, `input`, `valid`, `invalid` and `changed`, whose result the component already writes, and
+`query`, which comes as fast as typing. `hover` is written only with `recordHover`, which `mountApp` sets when the
+document names a `$.raised` path with a `hover` step (or a pattern step that matches it, `*` or `{name}`;
+`usesRaisedHover`), and at most once per `HOVER_THROTTLE_MS` (250 ms) per node, the last hover in a window landing
+when it ends. A node in the runtime branch (a record view's row) writes under `$.raised.runtime…`.
 
 **Events.** A root component raises an event on its own element, with `bubbles` and `composed` set; `detail` is the
 payload:

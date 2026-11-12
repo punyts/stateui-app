@@ -291,7 +291,7 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('change')).toHaveLength(0);
     });
 
-    it('should post one change for a user edit, with an id and no base', async () => {
+    it('should post the press, then the edit it makes, each with an id and no base', async () => {
         // Arrange
         const document: AppDocument = {
             data: { name: 'Ada' },
@@ -303,10 +303,12 @@ describe('startRuntime in Chromium', () => {
         find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
         await tick();
 
-        // Assert
+        // Assert: the event is state first ($.raised), then the command runs
         const changes = ofType('change');
-        expect(changes).toHaveLength(1);
-        expect(changes[0]?.['change']).toEqual({ id: expect.any(String), path: '$.data.name', op: 'set', value: 'Linus' });
+        expect(changes.map((change) => change['change'])).toEqual([
+            { id: expect.any(String), path: '$.raised.app', op: 'set', value: { children: { go: { press: true } } } },
+            { id: expect.any(String), path: '$.data.name', op: 'set', value: 'Linus' }
+        ]);
     });
 
     it('should post nothing for a host write', async () => {
