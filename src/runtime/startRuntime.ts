@@ -508,6 +508,11 @@ export function startRuntime(
             dropped.unhandled += 1;
             return;
         }
+        // `system` is no overlay: written as the active name, the mode (or motion) follows the device again
+        if (message.name === 'system' && (message.kind === 'mode' || message.kind === 'motion')) {
+            store.set(`$.theme.active.${message.kind}` as never, 'system' as never);
+            return;
+        }
         const errors = applyOverlay(store as unknown as ThemeStore, message.kind, message.name, themeOverlays);
         if (errors.length > 0) postErrors(errors);
     }
