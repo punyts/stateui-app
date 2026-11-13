@@ -211,7 +211,11 @@ export function generateLayoutSheet(type: LayoutType): string {
                 // `clip`: what reaches past the area (a window dragged low) is cut at its edge
                 block(container(type, 'clip'), ['overflow: clip']),
                 block(item(type), ['position: absolute']),
-                `@supports (left: attr(x type(<length-percentage>))) {\n${placed.join('\n')}\n}`
+                `@supports (left: attr(x type(<length-percentage>))) {\n${placed.join('\n')}\n}`,
+                // `center` holds a child in the middle of the area on an axis, whatever its size, over `x` and `y`
+                block(item(type, 'center="x"'), ['left: 50%', 'translate: -50% 0']),
+                block(item(type, 'center="y"'), ['top: 50%', 'translate: 0 -50%']),
+                block(item(type, 'center="both"'), ['left: 50%', 'top: 50%', 'translate: -50% -50%'])
             );
             break;
         }

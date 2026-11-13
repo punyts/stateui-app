@@ -223,6 +223,25 @@ describe('layout sheets in Chromium', () => {
             expect(first.position).toBe('absolute');
             expect([first.left, first.top, first.width, first.height]).toEqual(['10px', '20px', '50px', '30px']);
         });
+
+        it('should hold adhoc children to the right and bottom edges, and centre them on an axis', () => {
+            // Arrange and Act
+            const { boxes, layout } = start(
+                panel({ type: 'adhoc' }, four([{ right: '10px', bottom: '20px', width: '50px', height: '30px' }, { x: '5px', center: 'y', width: '40px', height: '40px' }, { center: 'both', width: '60px', height: '20px' }])),
+                600
+            );
+            layout().style.height = '400px';
+            const area = rect(layout());
+            const [corner, side, middle] = boxes().map((box) => rect(box));
+
+            // Assert
+            expect(area.right - (corner?.right ?? 0)).toBeCloseTo(10, 0);
+            expect(area.bottom - (corner?.bottom ?? 0)).toBeCloseTo(20, 0);
+            expect((side?.top ?? 0) + (side?.height ?? 0) / 2).toBeCloseTo(area.top + area.height / 2, 0);
+            expect((side?.left ?? 0) - area.left).toBeCloseTo(5, 0);
+            expect((middle?.left ?? 0) + (middle?.width ?? 0) / 2).toBeCloseTo(area.left + area.width / 2, 0);
+            expect((middle?.top ?? 0) + (middle?.height ?? 0) / 2).toBeCloseTo(area.top + area.height / 2, 0);
+        });
     });
 
     describe('state changes', () => {

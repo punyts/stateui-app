@@ -38,13 +38,16 @@ const MODES = ['standalone', 'persisted', 'full'];
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 const NAME = /^[A-Za-z][A-Za-z0-9_.:-]*$/;
 const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
-/** A key chord: at least one modifier, in the order mod, shift, alt, and a letter or a digit */
-export const KEY_CHORD = /^(mod\+)?(shift\+)?(alt\+)?[a-z0-9]$/;
+/**
+ * A key chord: modifiers in the order mod, shift, alt, then a letter, a digit, `-`, `=` or `escape`. A chord with no
+ * `mod` (a bare key such as `v`, or `shift+s`) goes to the host only while the person is not typing
+ */
+export const KEY_CHORD = /^(mod\+)?(shift\+)?(alt\+)?([a-z0-9=-]|escape)$/;
 /** The most key chords a `load` names */
 export const MAX_KEYS = 16;
 
 function isKeyChord(value: unknown): value is string {
-    return typeof value === 'string' && KEY_CHORD.test(value) && value.includes('+');
+    return typeof value === 'string' && KEY_CHORD.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

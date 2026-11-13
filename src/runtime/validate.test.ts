@@ -159,14 +159,14 @@ describe('runtime message validator', () => {
         expect(isIconsMap({ star: { outline: [], extra: [] } })).toBe(false);
     });
 
-    it('should take key chords with a modifier on load, and a key message that names one', () => {
+    it('should take key chords and bare keys on load, Escape among them, and a key message that names one', () => {
         const document = { app: { component: 'panel' } };
-        expect(validateMessage(base('load', { document, keys: ['mod+shift+e', 'alt+1', 'mod+k'] })).ok).toBe(true);
+        expect(validateMessage(base('load', { document, keys: ['mod+shift+e', 'alt+1', 'mod+k', 'v', 'escape', '-', '='] })).ok).toBe(true);
         expect(validateMessage(base('key', { key: 'mod+shift+e' })).ok).toBe(true);
-        for (const keys of [['e'], ['shift+mod+e'], ['mod+shift+E'], ['mod+enter'], ['mod+ctrl+e'], 'mod+e', Array.from({ length: 17 }, () => 'mod+e')]) {
+        expect(validateMessage(base('key', { key: 'e' })).ok).toBe(true);
+        for (const keys of [['shift+mod+e'], ['mod+shift+E'], ['mod+enter'], ['mod+ctrl+e'], ['Escape'], ['tab'], 'mod+e', Array.from({ length: 17 }, () => 'mod+e')]) {
             expect(validateMessage(base('load', { document, keys })).ok, JSON.stringify(keys)).toBe(false);
         }
-        expect(validateMessage(base('key', { key: 'e' })).ok).toBe(false);
         expect(validateMessage(base('key', { key: 'mod+e', extra: 1 })).ok).toBe(false);
     });
 

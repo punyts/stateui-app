@@ -654,11 +654,26 @@ export function startRuntime(
         postErrors([buildError('SUI-RUN-BINDING', { component: 'runtime', path: '$', statePath: '$' })]);
     }
 
-    /** A chord the host named goes to the host, and not to the app */
+    /** True while the person types: the focus is in a text field, a select or editable text, also inside a component */
+    function typing(event: KeyboardEvent): boolean {
+        const target = event.composedPath()[0];
+        if (!(target instanceof HTMLElement)) return false;
+        if (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
+        return target instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'range', 'reset', 'submit', 'color', 'file', 'image'].includes(target.type);
+    }
+
+    /**
+     * A chord the host named goes to the host, and not to the app. One without `mod` (a bare key, or Escape) goes only
+     * while the person is not typing, so the host can take single keys and a text field still gets its letters
+     */
     function onKey(event: KeyboardEvent): void {
-        if (hostKeys.size === 0 || event.key.length !== 1) return;
-        const chord = `${event.ctrlKey || event.metaKey ? 'mod+' : ''}${event.shiftKey ? 'shift+' : ''}${event.altKey ? 'alt+' : ''}${event.key.toLowerCase()}`;
+        if (hostKeys.size === 0) return;
+        const key = event.key === 'Escape' ? 'escape' : event.key.length === 1 ? event.key.toLowerCase() : '';
+        if (key === '') return;
+        const mod = event.ctrlKey || event.metaKey;
+        const chord = `${mod ? 'mod+' : ''}${event.shiftKey && key.length === 1 && /[a-z0-9]/.test(key) ? 'shift+' : ''}${event.altKey ? 'alt+' : ''}${key}`;
         if (!hostKeys.has(chord)) return;
+        if (!mod && typing(event)) return;
         event.preventDefault();
         event.stopPropagation();
         post({ type: 'key', key: chord });

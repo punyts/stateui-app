@@ -13,6 +13,9 @@ export const ALIGNS = ['start', 'center', 'end', 'stretch'] as const;
 /** The container widths a `collapseBelow` setting names */
 export const COLLAPSE_BELOW = ['sm', 'md', 'lg', 'xl'] as const;
 
+/** The axes an `adhoc` child can be centred on */
+export const CENTERS = ['x', 'y', 'both'] as const;
+
 /** The areas of a `region` layout */
 export const REGIONS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'center'] as const;
 
@@ -37,7 +40,10 @@ export const LAYOUTS: Readonly<Record<LayoutType, LayoutDefinition>> = {
         placement: { col: COUNT, row: COUNT, span: COUNT, rowSpan: COUNT, height: HEIGHT }
     },
     region: { settings: { gap: GAP, collapseBelow: COLLAPSE }, placement: { region: { type: 'enum', values: REGIONS } } },
-    adhoc: { settings: { clip: WRAP }, placement: { x: LENGTH, y: LENGTH, right: LENGTH, bottom: LENGTH, width: LENGTH, height: LENGTH, z: STACK } }
+    adhoc: {
+        settings: { clip: WRAP },
+        placement: { x: LENGTH, y: LENGTH, right: LENGTH, bottom: LENGTH, width: LENGTH, height: LENGTH, z: STACK, center: { type: 'enum', values: CENTERS } }
+    }
 };
 
 /** True when the name is one of the layout types */

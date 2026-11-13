@@ -178,6 +178,31 @@ describe('startRuntime in Chromium', () => {
         expect(seen).toEqual(['e']);
     });
 
+    it('should post a bare key and Escape the host named only while the person is not typing', () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ hello: { component: 'label', text: 'hi' } }) };
+        send(message('load', { document, keys: ['v', 'escape', 'mod+shift+e'] }));
+        const field = window.document.createElement('input');
+        host.append(field);
+        const press = (target: EventTarget, init: KeyboardEventInit): KeyboardEvent => {
+            const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, composed: true, ...init });
+            target.dispatchEvent(event);
+            return event;
+        };
+
+        // Act
+        const bare = press(host, { key: 'v' });
+        const escape = press(host, { key: 'Escape' });
+        const typed = press(field, { key: 'v' });
+        const chordWhileTyping = press(field, { key: 'E', ctrlKey: true, shiftKey: true });
+        field.remove();
+
+        // Assert
+        expect(ofType('key').map((posted) => posted['key'])).toEqual(['v', 'escape', 'mod+shift+e']);
+        expect(bare.defaultPrevented && escape.defaultPrevented && chordWhileTyping.defaultPrevented).toBe(true);
+        expect(typed.defaultPrevented).toBe(false);
+    });
+
     it('should answer an inspect with the node at a point and its ancestors, or with the nodes of some paths', async () => {
         // Arrange
         const document: AppDocument = {
