@@ -104,10 +104,11 @@ function gridPlacementRules(): string[] {
 /**
  * Below the `sm` breakpoint a row wraps, whether or not it names `wrap`: a phone has no room for a header of a
  * brand, links and a cart on one line, and an item that keeps its width (beside a growing one) would be cut at the
- * edge. An item is never wider than its row. A row that names `collapseBelow` stacks instead, and that rule wins
+ * edge, unless it says `wrap: false` (a chat bar keeps its box and its button side by side). An item is never wider
+ * than its row. A row that names `collapseBelow` stacks instead, and that rule wins
  */
 function rowNarrowRules(): string {
-    const rules = [block(container('row'), ['flex-wrap: wrap']), block(item('row'), ['max-inline-size: 100%'])];
+    const rules = [block(`${container('row')}:not([layout-wrap="false"])`, ['flex-wrap: wrap']), block(item('row'), ['max-inline-size: 100%'])];
     return `@container (width < ${BREAKPOINTS.sm}px) {\n${rules.map(indent).join('\n')}\n}`;
 }
 
@@ -131,12 +132,14 @@ function collapseRules(type: LayoutType): string[] {
 /**
  * The stylesheet every layout-capable component carries first: the component host and the `layout-host` are both
  * inline-size containers, so a layout host can query its component host and nested hosts can query theirs. The host
- * is a block-level box, because inline-size containment does not apply to an inline box
+ * is a block-level box, because inline-size containment does not apply to an inline box. A container's own width
+ * never comes from its content, so a component that must be as wide as its content (a panel floating on an `adhoc`
+ * area with no `width`) is given `--layout-contain: normal`: it and what it holds are then no containers
  */
 export function generateLayoutBase(): string {
     return [
-        block(':host', ['display: block', 'container-type: inline-size']),
-        block('[layout-host]', ['display: block', 'container-type: inline-size']),
+        block(':host', ['display: block', 'container-type: var(--layout-contain, inline-size)']),
+        block('[layout-host]', ['display: block', 'container-type: var(--layout-contain, inline-size)']),
         // A layout host whose node sets no layout stacks its children as a column with the default gap. :where keeps
         // the rule at the specificity of [layout-host], so a component's own rule (an empty body hidden) still wins
         block('[layout-host]:where(:not([layout]))', ['display: flex', 'flex-direction: column', `gap: ${DEFAULT_GAP}`])
@@ -151,12 +154,21 @@ export function generateLayoutSheet(type: LayoutType): string {
     const rules: string[] = [];
     switch (type) {
         case 'column':
-            rules.push(block(container(type), ['display: flex', 'flex-direction: column', `gap: ${DEFAULT_GAP}`]), ...alignRules(type), ...gapRules(type), ...growRules(type), ...heightRules(type));
+            rules.push(
+                block(container(type), ['display: flex', 'flex-direction: column', `gap: ${DEFAULT_GAP}`]),
+                ...alignRules(type),
+                ...gapRules(type),
+                ...growRules(type),
+                // A growing item may be shorter than its content, so in a column of fixed height it takes what is left
+                // and scrolls (a list, a tab's panel) instead of pushing past the column's end
+                block(`[layout=column] > sui-node > [grow]:not([grow="0"])`, ['min-height: 0']),
+                ...heightRules(type)
+            );
             break;
         case 'row':
             rules.push(
                 block(container(type), ['display: flex', 'flex-direction: row', `gap: ${DEFAULT_GAP}`]),
-                block(container(type, 'wrap'), ['flex-wrap: wrap']),
+                block(container(type, 'wrap', ''), ['flex-wrap: wrap']),
                 ...alignRules(type),
                 ...gapRules(type),
                 ...growRules(type),
@@ -199,18 +211,32 @@ export function generateLayoutSheet(type: LayoutType): string {
                 ['right', 'right'],
                 ['bottom', 'bottom'],
                 ['width', 'width'],
-                ['height', 'height']
+                ['height', 'height'],
+                ['max-height', 'max-height']
             ];
             const placed = fields.map(([attribute, property]) =>
                 indent(block(item(type, attribute), [`${property}: attr(${attribute} type(<length-percentage>))`]))
+            );
+            // And not past the area's far edge: what is left beside its offsets, or less when `maxWidth` (a panel that
+            // grows with its content up to a size, as a corner holding a long name does) asks for less
+            const room = 'calc(100% - attr(x type(<length-percentage>), 0px) - attr(right type(<length-percentage>), 0px))';
+            placed.push(
+                indent(block(item(type), [`max-width: ${room}`])),
+                indent(block(item(type, 'max-width'), [`max-width: min(attr(max-width type(<length-percentage>)), ${room})`])),
+                indent(block(item(type, 'center'), ['max-width: 100%'])),
+                indent(block(`${item(type, 'center')}[max-width]`, ['max-width: min(attr(max-width type(<length-percentage>)), 100%)']))
             );
             // `z` is the stacking order: a window a person brings to the front gets the highest
             placed.push(indent(block(item(type, 'z'), ['z-index: attr(z type(<integer>))'])));
             rules.push(
                 block(container(type), ['position: relative']),
                 // `clip`: what reaches past the area (a window dragged low) is cut at its edge
-                block(container(type, 'clip'), ['overflow: clip']),
-                block(item(type), ['position: absolute']),
+                block(container(type, 'clip', ''), ['overflow: clip']),
+                // A child is never wider than the area: in a small window a wide panel narrows (the height is left free,
+                // as an area often has none of its own)
+                block(item(type), ['position: absolute', 'box-sizing: border-box', 'max-width: 100%']),
+                // With no `width` a child is as wide as its content, which a container never is (see the base sheet)
+                block(`[layout=${type}] > sui-node > :not([width])`, ['--layout-contain: normal']),
                 `@supports (left: attr(x type(<length-percentage>))) {\n${placed.join('\n')}\n}`,
                 // `center` holds a child in the middle of the area on an axis, whatever its size, over `x` and `y`
                 block(item(type, 'center="x"'), ['left: 50%', 'translate: -50% 0']),

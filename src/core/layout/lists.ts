@@ -25,7 +25,8 @@ const WRAP: FieldSpec = { type: 'boolean' };
 const COUNT: FieldSpec = { type: 'integer', min: 1, max: 12 };
 const COLLAPSE: FieldSpec = { type: 'enum', values: COLLAPSE_BELOW };
 const GROW: FieldSpec = { type: 'number', min: 0, max: 12 };
-const LENGTH: FieldSpec = { type: 'dimension' };
+/** A length on an `adhoc` area: a dimension, or a math function of dimensions that may follow the viewport */
+const LENGTH: FieldSpec = { type: 'size' };
 /** The height of a child of a column, row or grid: what a record view or an `adhoc` area needs, since neither has one of its own */
 const HEIGHT: FieldSpec = { type: 'size' };
 /** The stacking order of an `adhoc` child: a higher `z` is drawn over a lower one */
@@ -42,7 +43,7 @@ export const LAYOUTS: Readonly<Record<LayoutType, LayoutDefinition>> = {
     region: { settings: { gap: GAP, collapseBelow: COLLAPSE }, placement: { region: { type: 'enum', values: REGIONS } } },
     adhoc: {
         settings: { clip: WRAP },
-        placement: { x: LENGTH, y: LENGTH, right: LENGTH, bottom: LENGTH, width: LENGTH, height: LENGTH, z: STACK, center: { type: 'enum', values: CENTERS } }
+        placement: { x: LENGTH, y: LENGTH, right: LENGTH, bottom: LENGTH, width: LENGTH, height: LENGTH, maxWidth: LENGTH, maxHeight: LENGTH, z: STACK, center: { type: 'enum', values: CENTERS } }
     }
 };
 

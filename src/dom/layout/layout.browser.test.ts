@@ -182,6 +182,16 @@ describe('layout sheets in Chromium', () => {
             expect(boxes()).toHaveLength(0);
             expect(b.top).toBeGreaterThanOrEqual(a.bottom);
         });
+
+        it('should keep a row that says wrap false on one line below the sm width', () => {
+            // Arrange and Act
+            start(panel({ type: 'row', wrap: false }, { a: { component: 'word', text: 'x'.repeat(40) }, b: { component: 'word', text: 'y'.repeat(40) } }), 300);
+            const [a, b] = findAll(host, 'x-lay-word').map(rect) as [DOMRect, DOMRect];
+
+            // Assert
+            expect(b.top).toBeCloseTo(a.top, 0);
+            expect(layoutHosts(host)[0]?.getAttribute('layout-wrap')).toBe('false');
+        });
     });
 
     describe('layout types', () => {
@@ -335,6 +345,69 @@ describe('layout sheets in Chromium', () => {
             expect((side?.left ?? 0) - area.left).toBeCloseTo(5, 0);
             expect((middle?.left ?? 0) + (middle?.width ?? 0) / 2).toBeCloseTo(area.left + area.width / 2, 0);
             expect((middle?.top ?? 0) + (middle?.height ?? 0) / 2).toBeCloseTo(area.top + area.height / 2, 0);
+        });
+    });
+
+    describe('adhoc widths', () => {
+        it('should keep a child within the area beside its offsets, and a centred one within the area', () => {
+            // Arrange and Act
+            const { boxes, layout } = start(
+                panel({ type: 'adhoc' }, { a: box({ x: '12px', y: '0', width: '900px' }), b: box({ right: '12px', y: '40px', width: '900px' }), c: box({ center: 'x', y: '80px', width: '900px' }) }),
+                400
+            );
+            const area = rect(layout());
+            const [left, right, middle] = boxes().map((element) => rect(element));
+
+            // Assert
+            expect(area.width).toBeLessThan(900);
+            expect(left?.left).toBeCloseTo(area.left + 12, 0);
+            expect(left?.right).toBeCloseTo(area.right, 0);
+            expect(right?.right).toBeCloseTo(area.right - 12, 0);
+            expect(right?.left).toBeCloseTo(area.left, 0);
+            expect(middle?.width).toBeCloseTo(area.width, 0);
+        });
+
+        it('should size a child without a width by its content, at an edge or centred', () => {
+            // Arrange and Act
+            const { boxes } = start(
+                panel({ type: 'adhoc' }, { a: box({ x: '12px', y: '12px' }), b: box({ right: '12px', y: '12px' }), c: box({ x: '12px', center: 'y' }), d: box({ right: '12px', bottom: 'clamp(12px, (1120px - 100vw) * 1000, 80px)' }) }),
+                400
+            );
+
+            // Assert
+            for (const element of boxes()) expect(rect(element).width).toBeGreaterThanOrEqual(40);
+        });
+
+        it('should size a panel without a width by what it holds, through a nested panel, as a floating corner is', () => {
+            // Arrange
+            const word = (text: string) => ({ component: 'word', text });
+            const corner = { component: 'panel', placement: { x: '12px', y: '12px' }, layout: { type: 'column' }, children: { bar: { component: 'panel', layout: { type: 'row', gap: 'none' }, children: { a: word('Desktop'), b: word('Open') } } } };
+            const fixed = { component: 'panel', placement: { x: '12px', y: '80px', width: '200px' }, layout: { type: 'row', collapseBelow: 'sm' }, children: { a: word('a'), b: word('b') } };
+
+            // Act
+            start(panel({ type: 'adhoc' }, { corner, fixed }), 600);
+            const [area, cornerHost, , fixedHost] = layoutHosts(host);
+
+            // Assert
+            expect(rect(cornerHost as Element).width).toBeGreaterThan(40);
+            expect(rect(cornerHost as Element).width).toBeLessThan(300);
+            expect(getComputedStyle(cornerHost as Element).containerType).toBe('normal');
+            expect(getComputedStyle(area as Element).containerType).toBe('inline-size');
+            expect(getComputedStyle(fixedHost as Element).containerType).toBe('inline-size');
+        });
+
+        it('should let a child grow with its content up to maxWidth', () => {
+            // Arrange and Act
+            const { boxes, layout } = start(
+                panel({ type: 'adhoc' }, { a: box({ x: '0', y: '0', width: '900px', maxWidth: '50%' }), b: box({ center: 'x', y: '40px', width: '900px', maxWidth: '120px' }) }),
+                400
+            );
+            const area = rect(layout());
+            const [half, small] = boxes().map((element) => rect(element));
+
+            // Assert
+            expect(half?.width).toBeCloseTo(area.width / 2, 0);
+            expect(small?.width).toBeCloseTo(120, 0);
         });
     });
 

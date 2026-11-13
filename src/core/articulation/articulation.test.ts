@@ -18,9 +18,9 @@ describe('closed lists', () => {
         expect(ARTICULATION_LISTS[name]).toEqual(values);
     });
 
-    it('lists the six shared names and adds hidden to the articulation names', () => {
+    it('lists the seven shared names and adds hidden to the articulation names', () => {
         // Assert
-        expect(SHARED_NAMES).toEqual(['tone', 'variant', 'size', 'density', 'elevation', 'textRole']);
+        expect(SHARED_NAMES).toEqual(['tone', 'variant', 'size', 'density', 'elevation', 'corners', 'textRole']);
         expect(ARTICULATION_NAMES).toEqual([...SHARED_NAMES, 'hidden']);
     });
 

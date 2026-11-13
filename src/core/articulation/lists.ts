@@ -5,6 +5,7 @@ export const ARTICULATION_LISTS = {
     size: ['sm', 'md', 'lg'],
     density: ['compact', 'comfortable', 'spacious'],
     elevation: ['flat', 'raised', 'overlay'],
+    corners: ['rounded', 'pill', 'square'],
     textRole: ['display', 'title', 'heading', 'body', 'label', 'caption', 'code']
 } as const;
 
@@ -23,7 +24,7 @@ export type ArticulationName = SharedName | typeof HIDDEN;
 /** Every articulation property name, `hidden` last */
 export const ARTICULATION_NAMES: readonly ArticulationName[] = [...SHARED_NAMES, HIDDEN];
 
-/** True when the name is one of the six shared properties that take a closed list */
+/** True when the name is one of the shared properties that take a closed list */
 export function isSharedName(name: string): name is SharedName {
     return Object.hasOwn(ARTICULATION_LISTS, name);
 }

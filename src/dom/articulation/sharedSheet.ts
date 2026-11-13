@@ -11,6 +11,9 @@ const SURFACE: Readonly<Record<(typeof ARTICULATION_LISTS.elevation)[number], st
     overlay: 'overlay'
 };
 
+/** How much a size scales a control's text: the text token is the medium size */
+const TEXT_SCALE: Readonly<Record<(typeof ARTICULATION_LISTS.size)[number], string>> = { sm: '0.875', md: '1', lg: '1.125' };
+
 const DENSITY_FACTOR_REFERENCE = '{density.factor}';
 
 /** The semantic tokens whose value uses the density factor, in tree order */
@@ -68,8 +71,9 @@ function rule(attribute: string, value: string, declarations: readonly [string, 
 /**
  * The shared articulation stylesheet, built from the closed lists. Each attribute `<sui-node>` reflects becomes
  * local custom properties on the host: `tone` gives `--tone`, `--tone-soft` and `--tone-on`; `size` gives
- * `--control-height` and `--icon-size`; `elevation` gives `--surface` and `--shadow`; `textRole` gives
- * `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `hidden` removes the host from layout.
+ * `--control-height`, `--icon-size` and `--size-text-scale` (by which a control scales its own text token); `elevation` gives `--surface` and `--shadow`; `textRole` gives
+ * `--text-family`, `--text-size`, `--text-weight` and `--text-leading`; `corners` `pill` or `square` gives `--corner-radius`,
+ * which a component's corners use before their own radius; `hidden` removes the host from layout.
  * `:focus-visible` is drawn from the focus tokens, and `forced-colors: active` maps the local colours to system colours.
  * `density` sets `--ui-density-factor` and re-declares the density-dependent `space` tokens on the host, so everything
  * below follows. `variant` has no rule here: a variant is painted by the component's own CSS. The build prepends this text to every root component's CSS, so the tone table lives only here
@@ -86,11 +90,9 @@ export function generateSharedSheet(leaves: readonly TokenLeaf[] = DEFAULT_LEAVE
         );
     }
     for (const size of ARTICULATION_LISTS.size) {
+        // A size scales a control's text too, from the control's own text token: small is 7/8 of it, large 9/8
         rules.push(
-            rule('size', size, [
-                ['--control-height', `--ui-size-control-${size}`],
-                ['--icon-size', `--ui-size-icon-${size}`]
-            ])
+            `:host([size=${size}]) {\n    --control-height: var(--ui-size-control-${size});\n    --icon-size: var(--ui-size-icon-${size});\n    --size-text-scale: ${TEXT_SCALE[size]};\n}`
         );
     }
     for (const elevation of ARTICULATION_LISTS.elevation) {
@@ -101,6 +103,9 @@ export function generateSharedSheet(leaves: readonly TokenLeaf[] = DEFAULT_LEAVE
             ])
         );
     }
+    // `rounded` keeps the component's own corners; `pill` and `square` override them through `--corner-radius`
+    rules.push(':host([corners=pill]) {\n    --corner-radius: var(--ui-radius-full);\n}');
+    rules.push(':host([corners=square]) {\n    --corner-radius: var(--ui-radius-none);\n}');
     for (const role of ARTICULATION_LISTS.textRole) {
         rules.push(
             rule(

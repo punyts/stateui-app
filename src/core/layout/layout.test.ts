@@ -56,7 +56,7 @@ describe('layout lists', () => {
         expect(names('row', 'placement')).toEqual(['grow', 'height']);
         expect(names('grid', 'placement')).toEqual(['col', 'row', 'span', 'rowSpan', 'height']);
         expect(names('region', 'placement')).toEqual(['region']);
-        expect(names('adhoc', 'placement')).toEqual(['x', 'y', 'right', 'bottom', 'width', 'height', 'z', 'center']);
+        expect(names('adhoc', 'placement')).toEqual(['x', 'y', 'right', 'bottom', 'width', 'height', 'maxWidth', 'maxHeight', 'z', 'center']);
     });
 
     it.each([
@@ -183,7 +183,7 @@ describe('placement validator', () => {
         [{ type: 'grid' }, { span: 2.5 }],
         [{ type: 'region' }, { region: 'middle' }],
         [{ type: 'column' }, { grow: 13 }],
-        [{ type: 'adhoc' }, { x: 'calc(1px + 2px)' }],
+        [{ type: 'adhoc' }, { x: '10vw' }],
         [{ type: 'adhoc' }, { width: '{scale.space.3}' }],
         [{ type: 'column' }, { height: '100vh' }],
         [{ type: 'grid' }, { height: 320 }]

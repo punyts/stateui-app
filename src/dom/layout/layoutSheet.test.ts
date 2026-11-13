@@ -20,8 +20,8 @@ describe('generateLayoutBase', () => {
         const base = generateLayoutBase();
 
         // Assert
-        expect(base).toContain(':host {\n    display: block;\n    container-type: inline-size;\n}');
-        expect(base).toContain('[layout-host] {\n    display: block;\n    container-type: inline-size;\n}');
+        expect(base).toContain(':host {\n    display: block;\n    container-type: var(--layout-contain, inline-size);\n}');
+        expect(base).toContain('[layout-host] {\n    display: block;\n    container-type: var(--layout-contain, inline-size);\n}');
     });
 
     it('should stack the children of a layout host without a layout as a column with the default gap, at low specificity', () => {
@@ -76,7 +76,7 @@ describe('generateLayoutSheet', () => {
 
         // Assert
         expect(sheet).toContain(
-            '@container (width < 480px) {\n    [layout-host][layout=row] {\n        flex-wrap: wrap;\n    }\n    [layout=row] > sui-node > * {\n        max-inline-size: 100%;\n    }\n}'
+            '@container (width < 480px) {\n    [layout-host][layout=row]:not([layout-wrap="false"]) {\n        flex-wrap: wrap;\n    }\n    [layout=row] > sui-node > * {\n        max-inline-size: 100%;\n    }\n}'
         );
         expect(sheet.indexOf('flex-wrap: wrap;\n    }\n    [layout=row]')).toBeLessThan(sheet.indexOf('[layout-collapse-below="sm"]'));
         expect(generateLayoutSheet('column')).not.toContain('max-inline-size');
@@ -157,11 +157,14 @@ describe('generateLayoutSheet', () => {
         const sheet = generateLayoutSheet('adhoc');
 
         // Assert
-        expect(sheet).toContain('[layout=adhoc] > sui-node > * {\n    position: absolute;\n}');
+        expect(sheet).toContain('[layout=adhoc] > sui-node > * {\n    position: absolute;\n    box-sizing: border-box;\n    max-width: 100%;\n}');
+        expect(sheet).toContain('max-width: calc(100% - attr(x type(<length-percentage>), 0px) - attr(right type(<length-percentage>), 0px));');
+        expect(sheet).toContain('[layout=adhoc] > sui-node > [max-width] {\n        max-width: min(attr(max-width type(<length-percentage>)), calc(100%');
+        expect(sheet).toContain('max-height: attr(max-height type(<length-percentage>));');
         expect(sheet).toContain('left: attr(x type(<length-percentage>));');
         expect(sheet).toContain('height: attr(height type(<length-percentage>));');
         expect(sheet).toContain('[layout=adhoc] > sui-node > [z] {\n        z-index: attr(z type(<integer>));\n    }');
-        expect(sheet).toContain('[layout-host][layout=adhoc][layout-clip] {\n    overflow: clip;\n}');
+        expect(sheet).toContain('[layout-host][layout=adhoc][layout-clip=""] {\n    overflow: clip;\n}');
     });
 
     it.each(['column', 'row', 'grid'] as const)('should size a child of a %s by its height attribute', (type) => {

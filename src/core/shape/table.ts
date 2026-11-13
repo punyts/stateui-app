@@ -393,7 +393,7 @@ function readNames(value: JsonValue, context: RuleContext, key: string): string[
 }
 
 /** The keys of one `shared` entry */
-const SHARED_ENTRY_KEYS: readonly KeyRule<{ default?: JsonValue }>[] = [
+const SHARED_ENTRY_KEYS: readonly KeyRule<SharedEntry>[] = [
     {
         name: 'default',
         type: 'any',
@@ -401,16 +401,35 @@ const SHARED_ENTRY_KEYS: readonly KeyRule<{ default?: JsonValue }>[] = [
         rule(value, entry) {
             entry.default = value;
         }
+    },
+    {
+        name: 'values',
+        type: 'array',
+        required: false,
+        rule(value, entry, context) {
+            const list = value as JsonValue[];
+            if (list.length === 0 || new Set(list).size !== list.length) {
+                context.errors.push(invalid(context, 'values'));
+                return;
+            }
+            entry.values = list;
+        }
     }
 ];
 
+/** One `shared` entry: its default, and the part of the closed list the component paints (all of it when absent) */
+interface SharedEntry {
+    default?: JsonValue;
+    values?: JsonValue[];
+}
+
 /** The property a shared entry expands to: a string with the closed list as its values, written as an attribute */
-function sharedProperty(name: SharedName, fallback: JsonValue | undefined): PropertyShape {
+function sharedProperty(name: SharedName, fallback: JsonValue | undefined, values: readonly string[] = closedList(name)): PropertyShape {
     return {
         type: 'string',
         required: false,
         ...(fallback === undefined ? {} : { default: fallback }),
-        values: closedList(name),
+        values: [...values],
         validators: {},
         runtime: false,
         reflect: true,
@@ -427,18 +446,25 @@ function readShared(value: { [key: string]: JsonValue }, shape: Shape, context: 
             context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: where }));
             continue;
         }
-        const entry: { default?: JsonValue } = {};
+        const entry: SharedEntry = {};
         const before = context.errors.length;
         applyKeys(SHARED_ENTRY_KEYS, asObject(input), entry, { ...context, where });
         if (context.errors.length > before) continue;
-        if (entry.default !== undefined && !closedList(name).includes(entry.default as string)) {
+        // `values` narrows the closed list to what the component paints, as a field has no `solid` variant
+        const list = closedList(name);
+        if (entry.values !== undefined && !entry.values.every((item) => list.includes(item as string))) {
+            context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `${where}.values` }));
+            continue;
+        }
+        const allowed = (entry.values as string[] | undefined) ?? list;
+        if (entry.default !== undefined && !allowed.includes(entry.default as string)) {
             context.errors.push(buildError('SUI-BUILD-DEFAULT', { file: context.file, name }));
             continue;
         }
         // An own property of the same name is reported by `finishShape` and keeps its place
         if (Object.hasOwn(shape.properties, name)) continue;
         shape.shared.push(name);
-        shape.properties[name] = sharedProperty(name, entry.default);
+        shape.properties[name] = sharedProperty(name, entry.default, allowed);
     }
 }
 

@@ -55,6 +55,25 @@ describe('generateSharedSheet', () => {
         }
     });
 
+    it('should scale the text of a control by its size: small 7/8, medium as the token, large 9/8', () => {
+        // Arrange and Act
+        const scale = (size: string) => sheet.slice(sheet.indexOf(`:host([size=${size}])`)).match(/--size-text-scale: ([\d.]+);/)?.[1];
+
+        // Assert
+        expect([scale('sm'), scale('md'), scale('lg')]).toEqual(['0.875', '1', '1.125']);
+    });
+
+    it('should give pill and square corners a radius the component uses before its own, and leave rounded to it', () => {
+        // Arrange and Act
+        const pill = sheet.slice(sheet.indexOf(':host([corners=pill])'));
+        const square = sheet.slice(sheet.indexOf(':host([corners=square])'));
+
+        // Assert
+        expect(pill).toMatch(/^:host\(\[corners=pill\]\) \{\n {4}--corner-radius: var\(--ui-radius-full\);/);
+        expect(square).toMatch(/^:host\(\[corners=square\]\) \{\n {4}--corner-radius: var\(--ui-radius-none\);/);
+        expect(sheet).not.toContain(':host([corners=rounded])');
+    });
+
     it('should remove a hidden host from layout, over a display rule of the component sheet', () => {
         // Assert
         expect(sheet).toContain(':host([hidden]) {\n    display: none !important;\n}');
