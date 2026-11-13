@@ -55,7 +55,7 @@ export function nodesOf(doc: Document, paths: readonly string[]): Map<string, El
     return found;
 }
 
-function rectOf(element: Element): InspectRect {
+export function rectOf(element: Element): InspectRect {
     const box = element.getBoundingClientRect();
     return { x: Math.round(box.x * 10) / 10, y: Math.round(box.y * 10) / 10, width: Math.round(box.width * 10) / 10, height: Math.round(box.height * 10) / 10 };
 }

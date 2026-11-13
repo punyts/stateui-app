@@ -205,6 +205,50 @@ describe('startRuntime in Chromium', () => {
         expect(ofPaths?.nodes.find((node) => node.path === '$.app.children.first')?.rect.height).toBeGreaterThan(0);
     });
 
+    it('should tell where watched nodes are, again when a write changes the layout, and stop when the watch is emptied', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { wide: false },
+            app: { component: 'panel', children: { first: { component: 'label', text: 'one' }, second: { component: 'badge', text: 'two', '<-hidden': '$.data.wide' } } } as AppDocument['app']
+        };
+        send(message('load', { document }));
+        await tick();
+        const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        // Act
+        send(message('watch', { paths: ['$.app.children.first', '$.app.children.second', '$.app.children.missing'] }));
+        await settle();
+        const first = ofType('watched').length;
+        send(message('write', { writes: [{ path: '$.data.wide', value: true }] }));
+        await settle();
+        const afterWrite = ofType('watched').length;
+        send(message('watch', { paths: [] }));
+        send(message('write', { writes: [{ path: '$.data.wide', value: false }] }));
+        await settle();
+
+        // Assert
+        const reports = ofType('watched') as unknown as { nodes: { path: string; rect: { width: number } }[] }[];
+        expect(first).toBe(1);
+        expect(reports[0]?.nodes.map((node) => node.path).sort()).toEqual(['$.app.children.first', '$.app.children.second']);
+        expect(afterWrite).toBe(2);
+        expect(reports[1]?.nodes.find((node) => node.path === '$.app.children.second')?.rect.width).toBe(0);
+        expect(ofType('watched').length).toBe(2);
+    });
+
+    it('should follow the system mode again on a theme message of system', async () => {
+        // Arrange
+        send(message('load', { document: { app: { component: 'panel' } } as AppDocument }));
+        await tick();
+        send(message('theme', { kind: 'mode', name: 'dark' }));
+
+        // Act
+        send(message('theme', { kind: 'mode', name: 'system' }));
+        await tick();
+
+        // Assert
+        expect(ofType('error')).toEqual([]);
+    });
+
     it('should put the state over the document and the icons into $.runtime.icons before rendering', async () => {
         // Arrange
         const document: AppDocument = { data: { name: 'Ada' }, app: panel({ hello: { component: 'label', '<-text': '$.data.name' } }) };

@@ -8,10 +8,10 @@ export type { AppEventName } from '../core/types.js';
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'inspect', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'key', 'inspected'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'key', 'inspected', 'watched'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -206,6 +206,20 @@ export interface InspectedMessage extends Envelope<'inspected'> {
     nodes: InspectedNode[];
 }
 
+/**
+ * Asks the frame to tell where some nodes are, now and whenever they move or change size (the window resizes, a
+ * write or a load changes the layout): `watched` comes with their boxes. A new `watch` replaces the paths watched;
+ * an empty list stops. An editor uses it to lay something of its own over a node of the frame
+ */
+export interface WatchMessage extends Envelope<'watch'> {
+    paths: string[];
+}
+
+/** Where the watched nodes are now, each with its box; a node not on screen is left out */
+export interface WatchedMessage extends Envelope<'watched'> {
+    nodes: { path: string; rect: InspectRect }[];
+}
+
 /** Raises an app event: `sync.rejected` with the rejected path and the reason as its payload */
 export interface EventMessage extends Envelope<'event'> {
     name: AppEventName;
@@ -313,6 +327,7 @@ export type InboundMessage =
     | EventMessage
     | PingMessage
     | InspectMessage
+    | WatchMessage
     | FileProgressMessage
     | FileResultMessage
     | FileDataMessage
@@ -328,5 +343,6 @@ export type OutboundMessage =
     | FileReadMessage
     | FileReleaseMessage
     | KeyMessage
-    | InspectedMessage;
+    | InspectedMessage
+    | WatchedMessage;
 export type RuntimeMessage = InboundMessage | OutboundMessage;

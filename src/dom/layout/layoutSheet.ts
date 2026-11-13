@@ -195,6 +195,9 @@ export function generateLayoutSheet(type: LayoutType): string {
             const fields: readonly [string, string][] = [
                 ['x', 'left'],
                 ['y', 'top'],
+                // `right` and `bottom` hold a child to the far edges, as a panel floating in a corner is
+                ['right', 'right'],
+                ['bottom', 'bottom'],
                 ['width', 'width'],
                 ['height', 'height']
             ];

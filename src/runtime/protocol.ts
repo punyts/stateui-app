@@ -45,6 +45,8 @@ export type {
     RuntimeMode,
     StateSnapshotData,
     ThemeMessage,
+    WatchedMessage,
+    WatchMessage,
     WriteMessage
 } from './messages.js';
 export { isWritablePath, KEY_CHORD, MAX_KEYS, validateMessage } from './validate.js';

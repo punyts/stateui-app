@@ -113,6 +113,8 @@ export const MESSAGE_BYTE_LIMITS = {
     key: MAX_SMALL_BYTES,
     inspect: MAX_EVENT_BYTES,
     inspected: MAX_EVENT_BYTES,
+    watch: MAX_EVENT_BYTES,
+    watched: MAX_EVENT_BYTES,
     file: MAX_FILE_JSON_BYTES,
     fileCancel: MAX_FILE_JSON_BYTES,
     fileProgress: MAX_FILE_JSON_BYTES,

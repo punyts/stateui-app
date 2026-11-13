@@ -251,6 +251,12 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['at'] !== undefined) !== (m['paths'] !== undefined) &&
         (m['at'] === undefined || isPoint(m['at'])) &&
         (m['paths'] === undefined || (Array.isArray(m['paths']) && m['paths'].length <= MAX_INSPECT_NODES && m['paths'].every((path) => isText(path, MAX_PATH_LENGTH)))),
+    watch: (m) => hasOnlyKeys(m, ['paths']) && Array.isArray(m['paths']) && m['paths'].length <= MAX_INSPECT_NODES && m['paths'].every((path) => isText(path, MAX_PATH_LENGTH)),
+    watched: (m) =>
+        hasOnlyKeys(m, ['nodes']) &&
+        Array.isArray(m['nodes']) &&
+        m['nodes'].length <= MAX_INSPECT_NODES &&
+        m['nodes'].every((node) => isRecord(node) && hasOnlyKeys(node, ['path', 'rect']) && isText(node['path'], MAX_PATH_LENGTH) && isRect(node['rect'])),
     inspected: (m) =>
         hasOnlyKeys(m, ['id', 'at', 'nodes']) &&
         isInteger(m['id']) &&

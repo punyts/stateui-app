@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
         );
     });
 
@@ -183,5 +183,16 @@ describe('runtime message validator', () => {
         expect(validateMessage(base('inspected', { id: 1, nodes: [] })).ok).toBe(true);
         expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, rect: { x: 0 } }] })).ok).toBe(false);
         expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, extra: true }] })).ok).toBe(false);
+    });
+
+    it('should take a watch of paths, and a watched answer with a box per node', () => {
+        const rect = { x: 0, y: 0, width: 10, height: 20 };
+        expect(validateMessage(base('watch', { paths: ['$.app'] })).ok).toBe(true);
+        expect(validateMessage(base('watch', { paths: [] })).ok).toBe(true);
+        expect(validateMessage(base('watch', {})).ok).toBe(false);
+        expect(validateMessage(base('watch', { paths: Array.from({ length: 51 }, () => '$.app') })).ok).toBe(false);
+        expect(validateMessage(base('watched', { nodes: [{ path: '$.app', rect }] })).ok).toBe(true);
+        expect(validateMessage(base('watched', { nodes: [{ path: '$.app', rect: { x: 0 } }] })).ok).toBe(false);
+        expect(validateMessage(base('watched', { nodes: [{ path: '$.app', rect, extra: 1 }] })).ok).toBe(false);
     });
 });

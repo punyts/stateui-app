@@ -37,7 +37,7 @@ export const LAYOUTS: Readonly<Record<LayoutType, LayoutDefinition>> = {
         placement: { col: COUNT, row: COUNT, span: COUNT, rowSpan: COUNT, height: HEIGHT }
     },
     region: { settings: { gap: GAP, collapseBelow: COLLAPSE }, placement: { region: { type: 'enum', values: REGIONS } } },
-    adhoc: { settings: { clip: WRAP }, placement: { x: LENGTH, y: LENGTH, width: LENGTH, height: LENGTH, z: STACK } }
+    adhoc: { settings: { clip: WRAP }, placement: { x: LENGTH, y: LENGTH, right: LENGTH, bottom: LENGTH, width: LENGTH, height: LENGTH, z: STACK } }
 };
 
 /** True when the name is one of the layout types */

@@ -20,7 +20,7 @@ import { applyOverlay } from '../dom/theme/index.js';
 import type { ThemeStore } from '../dom/theme/index.js';
 import { createFileReads } from './fileRead.js';
 import { createFileTransfers } from './fileTransfer.js';
-import { describeNode, nodesAt, nodesOf } from './inspect.js';
+import { describeNode, nodesAt, nodesOf, rectOf } from './inspect.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { createChunkLoader } from './load3d.js';
 import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
@@ -34,6 +34,7 @@ import type {
     IconsMap,
     InboundMessage,
     InspectMessage,
+    WatchMessage,
     LoadMessage,
     LocaleMessage,
     OutboundMessage,
@@ -535,13 +536,50 @@ export function startRuntime(
         post({ type: 'inspected', id: message.id, nodes: [...found.values()].map((element) => describeNode(element, componentOf)) });
     }
 
+    // The nodes an editor over the frame watches (`watch`): their boxes go out as `watched` when they change
+    let watched: string[] = [];
+    let lastWatched = '';
+    let watchFrame = 0;
+    const watchResize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => reportWatched()) : undefined;
+    function reportWatched(): void {
+        if (watched.length === 0 || watchFrame !== 0) return;
+        // A timer, not an animation frame: a frame the page has clipped away gets no animation frames, and it must still
+        // say where its nodes are for the page to show it again
+        watchFrame = Number(setTimeout(() => {
+            watchFrame = 0;
+            const found = nodesOf(win.document, watched);
+            watchResize?.disconnect();
+            if (watchResize) {
+                watchResize.observe(win.document.documentElement);
+                for (const element of found.values()) watchResize.observe(element);
+            }
+            const nodes = [...found.entries()].map(([path, element]) => ({ path, rect: rectOf(element) }));
+            const text = JSON.stringify(nodes);
+            if (text === lastWatched) return;
+            lastWatched = text;
+            post({ type: 'watched', nodes });
+        }, 16));
+    }
+    function watch(message: WatchMessage): void {
+        watched = message.paths.slice();
+        lastWatched = '';
+        if (watched.length === 0) {
+            watchResize?.disconnect();
+            return;
+        }
+        reportWatched();
+    }
+    win.addEventListener('resize', () => reportWatched());
+
     function handle(message: InboundMessage): void {
         switch (message.type) {
             case 'load':
                 load(message);
+                reportWatched();
                 return;
             case 'write':
                 writes(message);
+                reportWatched();
                 return;
             case 'command':
                 command(message);
@@ -572,6 +610,9 @@ export function startRuntime(
                 return;
             case 'inspect':
                 inspect(message);
+                return;
+            case 'watch':
+                watch(message);
                 return;
             default:
                 dropped.unhandled += 1;
