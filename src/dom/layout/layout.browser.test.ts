@@ -90,6 +90,100 @@ describe('layout sheets in Chromium', () => {
         document.body.replaceChildren();
     });
 
+    describe('settings', () => {
+        it('should align the items of a column by each align value', () => {
+            // Arrange and Act
+            const aligned = (['start', 'center', 'end', 'stretch'] as const).map((align) => {
+                const { layout } = start(panel({ type: 'column', align }, four()), 600);
+                const value = getComputedStyle(layout()).alignItems;
+                for (const mounted of apps.splice(0)) mounted.dispose();
+                host.replaceChildren();
+                return value;
+            });
+
+            // Assert
+            expect(aligned).toEqual(['flex-start', 'center', 'flex-end', 'stretch']);
+        });
+
+        it('should give no gap for none and a wider one for lg than for sm', () => {
+            // Arrange and Act
+            const gapOf = (gap: string): number => {
+                const { boxes } = start(panel({ type: 'column', gap }, four()), 600);
+                const [a, b] = boxes().map(rect) as [DOMRect, DOMRect];
+                const space = b.top - a.bottom;
+                for (const mounted of apps.splice(0)) mounted.dispose();
+                host.replaceChildren();
+                return space;
+            };
+            const none = gapOf('none');
+            const sm = gapOf('sm');
+            const lg = gapOf('lg');
+
+            // Assert
+            expect(none).toBeCloseTo(0, 0);
+            expect(lg).toBeGreaterThan(sm);
+        });
+
+        it('should stack a host with no layout as a column with the default gap', () => {
+            // Arrange and Act
+            const { boxes, layout } = start({ component: 'panel', children: four() } as AppDocument['app'], 600);
+            const [a, b] = boxes().map(rect) as [DOMRect, DOMRect];
+
+            // Assert
+            expect(getComputedStyle(layout()).flexDirection).toBe('column');
+            expect(b.top).toBeGreaterThan(a.bottom);
+        });
+
+        it('should share the space of a row between growing items by their grow', () => {
+            // Arrange and Act
+            const empty = (grow: number) => ({ component: 'word', text: '', placement: { grow } });
+            start(panel({ type: 'row', gap: 'none' }, { a: box({ grow: 0 }), b: empty(1), c: empty(2) }), 600);
+            const [one, two] = findAll(host, 'x-lay-word').map(rect) as [DOMRect, DOMRect];
+
+            // Assert: two items with no content share the space beside the box 1:2
+            expect(one.width).toBeGreaterThan(0);
+            expect(two.width).toBeCloseTo(one.width * 2, 0);
+        });
+
+        it('should let a grid child span rows', () => {
+            // Arrange and Act
+            const { boxes } = start(panel({ type: 'grid', cols: 2, rows: 2 }, four([{ col: 1, row: 1, rowSpan: 2 }, { col: 2, row: 1 }, { col: 2, row: 2 }])), 600);
+            const [tall, top, bottom] = boxes().map(rect) as [DOMRect, DOMRect, DOMRect];
+
+            // Assert
+            expect(getComputedStyle(boxes()[0] as Element).gridRowEnd).toBe('span 2');
+            expect(tall.top).toBeCloseTo(top.top, 0);
+            expect(bottom.top).toBeGreaterThan(top.top);
+        });
+
+        it('should place children in the edge areas of a region: n, e, s, w and sw', () => {
+            // Arrange and Act
+            const { boxes } = start(
+                panel({ type: 'region' }, { n: box({ region: 'n' }), e: box({ region: 'e' }), s: box({ region: 's' }), w: box({ region: 'w' }), sw: box({ region: 'sw' }), c: box({ region: 'center' }) }),
+                600
+            );
+            const [n, e, south, w, sw, center] = boxes().map(rect) as [DOMRect, DOMRect, DOMRect, DOMRect, DOMRect, DOMRect];
+
+            // Assert
+            expect(n.bottom).toBeLessThanOrEqual(center.top);
+            expect(south.top).toBeGreaterThanOrEqual(center.bottom);
+            expect(w.right).toBeLessThanOrEqual(center.left);
+            expect(e.left).toBeGreaterThanOrEqual(center.right);
+            expect(sw.left).toBeCloseTo(w.left, 0);
+            expect(sw.top).toBeCloseTo(south.top, 0);
+        });
+
+        it('should wrap a row below the sm width even without wrap', () => {
+            // Arrange and Act
+            const { boxes } = start(panel({ type: 'row' }, { a: { component: 'word', text: 'x'.repeat(40) }, b: { component: 'word', text: 'y'.repeat(40) } }), 300);
+            const [a, b] = findAll(host, 'x-lay-word').map(rect) as [DOMRect, DOMRect];
+
+            // Assert
+            expect(boxes()).toHaveLength(0);
+            expect(b.top).toBeGreaterThanOrEqual(a.bottom);
+        });
+    });
+
     describe('layout types', () => {
         it('should stack a column in key order with the gap token', () => {
             // Arrange and Act

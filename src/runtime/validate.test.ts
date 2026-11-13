@@ -183,6 +183,11 @@ describe('runtime message validator', () => {
         expect(validateMessage(base('inspected', { id: 1, nodes: [] })).ok).toBe(true);
         expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, rect: { x: 0 } }] })).ok).toBe(false);
         expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, extra: true }] })).ok).toBe(false);
+        const area = { rect, settings: { cols: '3', gap: 'md' }, flow: 'grid', gap: { row: 8, column: 8 }, columns: [10, 10, 10], rows: [20] };
+        expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, area }] })).ok).toBe(true);
+        expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, area: { ...area, flow: 'diagonal' } }] })).ok).toBe(false);
+        expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, area: { ...area, columns: ['10px'] } }] })).ok).toBe(false);
+        expect(validateMessage(base('inspected', { id: 1, nodes: [{ ...node, area: { ...area, gap: { row: 1 } } }] })).ok).toBe(false);
     });
 
     it('should take a watch of paths, and a watched answer with a box per node', () => {

@@ -187,12 +187,31 @@ export interface InspectRect {
     height: number;
 }
 
+/** How a node flows its children now: a row or grid collapsed below its breakpoint flows as a column */
+export type InspectFlow = 'row' | 'column' | 'grid' | 'free';
+
+/**
+ * The area a node lays its children out in, for an editor to show the layout itself: `rect` is the layout host's
+ * content box, `settings` the node's layout settings as written (`gap`, `cols`, `collapseBelow`...), `flow` how
+ * the children flow now, `gap` the space between them in pixels, and for a grid or region the sizes of its tracks
+ */
+export interface InspectedArea {
+    rect: InspectRect;
+    settings: Record<string, string>;
+    flow: InspectFlow;
+    gap: { row: number; column: number };
+    columns?: number[];
+    rows?: number[];
+}
+
 /** One node on screen: its box, its component, the layout type it gives its children, and their boxes */
 export interface InspectedNode {
     path: string;
     component: string;
     layout?: string;
     rect: InspectRect;
+    /** Present when the node lays out children (it has a layout host), whether or not it sets `layout` */
+    area?: InspectedArea;
     children: { path: string; rect: InspectRect }[];
 }
 

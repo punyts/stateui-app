@@ -198,10 +198,31 @@ function isRect(value: unknown): boolean {
     return isRecord(value) && Object.keys(value).every((key) => ['x', 'y', 'width', 'height'].includes(key)) && ['x', 'y', 'width', 'height'].every((key) => isFiniteNumber(value[key]));
 }
 
+function isTracks(value: unknown): boolean {
+    return value === undefined || (Array.isArray(value) && value.length <= MAX_INSPECT_CHILDREN && value.every(isFiniteNumber));
+}
+
+function isInspectedArea(value: unknown): boolean {
+    return (
+        isRecord(value) &&
+        Object.keys(value).every((key) => ['rect', 'settings', 'flow', 'gap', 'columns', 'rows'].includes(key)) &&
+        isRect(value['rect']) &&
+        isRecord(value['settings']) &&
+        Object.entries(value['settings']).every(([name, setting]) => isText(name, MAX_NAME_LENGTH) && isText(setting, MAX_NAME_LENGTH)) &&
+        ['row', 'column', 'grid', 'free'].includes(value['flow'] as string) &&
+        isRecord(value['gap']) &&
+        isFiniteNumber(value['gap']['row']) &&
+        isFiniteNumber(value['gap']['column']) &&
+        isTracks(value['columns']) &&
+        isTracks(value['rows'])
+    );
+}
+
 function isInspectedNode(value: unknown): boolean {
     return (
         isRecord(value) &&
-        Object.keys(value).every((key) => ['path', 'component', 'layout', 'rect', 'children'].includes(key)) &&
+        Object.keys(value).every((key) => ['path', 'component', 'layout', 'rect', 'area', 'children'].includes(key)) &&
+        (value['area'] === undefined || isInspectedArea(value['area'])) &&
         isText(value['path'], MAX_PATH_LENGTH) &&
         isText(value['component'], MAX_NAME_LENGTH) &&
         (value['layout'] === undefined || isText(value['layout'], MAX_NAME_LENGTH)) &&
