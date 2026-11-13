@@ -75,6 +75,7 @@ describe('error catalog', () => {
             'SUI-USES-NEEDS',
             'SUI-MODULE-PARAM',
             'SUI-DOC-SCREEN',
+            'SUI-DOC-ICON',
             'SUI-ROUTE-SCREEN',
             'SUI-SYNC-SHARED',
             'SUI-ROUTE-PARAMS',

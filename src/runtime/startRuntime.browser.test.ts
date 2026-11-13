@@ -6,6 +6,7 @@ import { parseShape } from '../core/shape/index.js';
 import type { Shape } from '../core/shape/index.js';
 import type { AppDocument } from '../core/types.js';
 import { MAX_ICON_PATH_LENGTH, PROTOCOL_VERSION } from './protocol.js';
+import { registerMountStep } from '../dom/mount/index.js';
 import { startRuntime } from './index.js';
 import type { RuntimeHandle } from './index.js';
 
@@ -652,6 +653,23 @@ describe('startRuntime in Chromium', () => {
             expect(JSON.stringify(ofType('error'))).toBe('[]');
             expect(textOf(host)).toContain('badge:picked');
         });
+    });
+
+    it("should keep the document's own icon over a host icon of the same name, on load and on a write", () => {
+        // Arrange
+        let store: { get(path: string): unknown } | undefined;
+        const unregister = registerMountStep('test-icons', { start: (context) => void (store = context.store as never) });
+        const own = { outline: ['M4 5h16v11H9l-5 4z'] };
+        const document: AppDocument = { app: panel({}), icons: { chat: own } };
+
+        // Act
+        send(message('load', { document, icons: { chat: { outline: ['M0 0h24'] }, star: { outline: ['M12 2l3 7h7z'] } } }));
+        send(message('write', { writes: [], icons: { chat: { outline: ['M1 1h2'] } } }));
+        unregister();
+
+        // Assert
+        expect(store?.get('$.runtime.icons.chat')).toEqual(own);
+        expect(store?.get('$.runtime.icons.star')).toEqual({ outline: ['M12 2l3 7h7z'] });
     });
 
     it('should accept the icons of a write', () => {

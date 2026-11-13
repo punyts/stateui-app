@@ -1,3 +1,4 @@
+import type { AppIcon } from './icons/appIcons.js';
 /** Any JSON value */
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -58,6 +59,8 @@ export interface AppDocument {
     locales?: Record<string, JsonObject>;
     /** Machines and rules (`logic/types.ts`); document only, never in a snapshot */
     logic?: JsonObject;
+    /** The app's own icons by name (`icons/appIcons.ts`); a name here wins over the icon set's */
+    icons?: Record<string, AppIcon>;
 }
 
 /** The top-level keys of a document */
@@ -75,7 +78,7 @@ export function isAppEvent(name: unknown): name is string {
     return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
 }
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic'] as const;
+export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {

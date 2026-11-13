@@ -165,7 +165,7 @@ function bindModules(blueprint: AppBlueprint, parts: PartSource, assembler: Asse
  * search keys; an owner component wins over a library component of the same name, as `composed` does. `app` is the
  * app node. A persona binding starts as the model's defaults over an empty map (`applyDefaults(model, {})`), so a model
  * without defaults gives `{}`. `logic` is the app's own units followed by each module of `uses.logic`, instantiated
- * with its params (`instantiateModule`, units named `{module}:{unit}`); a module whose needs are not bound under their
+ * with its params (`instantiateModule`, units named `{module}:{unit}`); `icons` is the app's own icons, when it has any; a module whose needs are not bound under their
  * names to data of their models (`SUI-USES-NEEDS`, `SUI-USES-MODEL`) or whose params do not fit (`SUI-MODULE-PARAM`)
  * adds no units, and its errors carry the module as `part`.
  *
@@ -221,6 +221,7 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     document.start = blueprint.start;
     if (Object.keys(assembler.composed).length > 0) document.composed = assembler.composed;
     if (Object.keys(logic).length > 0) document.logic = logic as unknown as JsonObject;
+    if (blueprint.icons !== undefined && Object.keys(blueprint.icons).length > 0) document.icons = cloneJson(blueprint.icons as unknown as JsonValue) as unknown as AppDocument['icons'];
     if (blueprint.locales !== undefined) document.locales = cloneJson(blueprint.locales as unknown as JsonValue) as AppDocument['locales'];
 
     return { document, errors: assembler.errors, uses: assembler.uses };

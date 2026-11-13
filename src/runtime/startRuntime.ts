@@ -3,6 +3,7 @@ import { SYNC_ORIGIN, captureChanges } from '@punyts/state-sync';
 import { LOGIC_ORIGIN } from '../core/logic/index.js';
 import type { Capture, Change } from '@punyts/state-sync';
 import { buildError } from '../core/errors/index.js';
+import { appIconNames } from '../core/icons/appIcons.js';
 import type { BuildError } from '../core/errors/index.js';
 import { entryShape } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
@@ -159,12 +160,13 @@ function passwordDataPaths(value: unknown, found: Set<string> = new Set()): Set<
  * else is dropped and counted (`stats()`).
  *
  * - `load` mounts the application with `mountApp` in the message's `mode` (a running one is disposed first), with its
- *   `instance` laid over the definition (`MountOptions.instance`), puts the state over it and writes the `icons` map to `$.runtime.icons` before the first render, then posts `ready`. A
+ *   `instance` laid over the definition (`MountOptions.instance`), puts the state over it and writes the `icons` map to `$.runtime.icons` before the first render (the document's own `icons` are there
+ *   already and win over a host icon of the same name), then posts `ready`. A
  *   document that does not mount posts `error` with the errors and no `ready`.
  * - `write` sets or removes paths of the synced branches (`$.data`, `$.app`, `$.screens`, `$.theme`, `$.locale`; a
  *   whole node below `$.app` or `$.screens.{name}` is mounted as a load would; `$.route` is protected, so a write of it
  *   is refused: the host moves it with a `navigate` command) and of the sync status `$.runtime.sync`, as sync
- *   writes: they post no `change`. It merges its `icons` into `$.runtime.icons`.
+ *   writes: they post no `change`. It merges its `icons` into `$.runtime.icons`, but for the document's own.
  * - `event` raises an app event (`sync.rejected`): the root node's `on` entry for it runs with the payload.
  * - `ping` is answered with `pong`, and `inspect` with `inspected` (the nodes on screen, for an editor over the frame).
  * - `command` runs a component command with the runner the dispatcher uses for `on` (`target` is a `$.app` node path;
@@ -214,6 +216,8 @@ export function startRuntime(
     let disposed = false;
     /** The key chords the host handles itself (`LoadMessage.keys`) */
     let hostKeys: ReadonlySet<string> = new Set();
+    /** The names of the loaded document's own icons, which an icons map from the host never replaces */
+    let documentIcons: ReadonlySet<string> = new Set();
 
     function post(message: { type: OutboundMessage['type'] } & Record<string, unknown>, transfer?: Transferable[]): boolean {
         const full = { v: PROTOCOL_VERSION, nonce, ...message };
@@ -375,13 +379,15 @@ export function startRuntime(
         mounted = undefined;
     }
 
+    /** Writes the host's icons to `$.runtime.icons`, all but those the document carries of its own, which win */
     function writeIcons(store: NonNullable<MountedApp['store']>, icons: IconsMap): void {
-        for (const [name, icon] of Object.entries(icons)) store.set(`${ICONS_PATH}.${name}`, icon as never);
+        for (const [name, icon] of Object.entries(icons)) if (!documentIcons.has(name)) store.set(`${ICONS_PATH}.${name}`, icon as never);
     }
 
     function load(message: LoadMessage): void {
         teardown();
         hostKeys = new Set(message.keys ?? []);
+        documentIcons = appIconNames(message.document.icons);
         passwordData = passwordDataPaths(message.document);
         themeOverlays = buildOverlayCatalog(message.document.themes).overlays;
         const unregister = registerMountStep(STEP_NAME, {

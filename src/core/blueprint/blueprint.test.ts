@@ -210,3 +210,28 @@ describe('PART_KINDS', () => {
         expect(PART_KINDS).toEqual(['apps', 'themes', 'logic', 'models', 'data', 'components', 'patterns']);
     });
 });
+
+describe('readBlueprint icons', () => {
+    it("should read the app's own icons", () => {
+        // Arrange
+        const json = storeWith('icons', { chat: { outline: ['M4 5h16v11H9l-5 4z'] } });
+
+        // Act
+        const result = readBlueprint(json);
+
+        // Assert
+        expect(result.errors).toEqual([]);
+        expect(result.blueprint?.icons).toEqual({ chat: { outline: ['M4 5h16v11H9l-5 4z'] } });
+    });
+
+    it('should refuse an icon path that is not path data as SUI-BLUEPRINT-SHAPE at its path', () => {
+        // Arrange
+        const json = storeWith('icons', { chat: { outline: ['<path d="M0 0"/>'] } });
+
+        // Act
+        const errors = errorsOf(json);
+
+        // Assert
+        expect(errors).toEqual(['SUI-BLUEPRINT-SHAPE $.icons.chat.outline.0']);
+    });
+});

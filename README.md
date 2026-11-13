@@ -526,7 +526,8 @@ exported so the runtime dispatcher uses the same rules.
 `validateDocument(document, catalog, options?)` runs every structural check without a DOM and returns
 `{ valid, errors }`. `catalog` is a `ComponentLibrary` or the content of `catalog.json` (`libraryFromCatalog` converts
 it). `valid` ignores warnings. The function never throws; every error carries a state path (`$` when it concerns the
-whole document). `options.isIconName` checks icon names against the server's `icons.json`. `options.mode` (`standalone`,
+whole document). `options.isIconName` checks icon names against the server's `icons.json`; a name the document's own
+`icons` defines is accepted before it is asked (see App icons). `options.mode` (`standalone`,
 `persisted` or `full`) says how the app keeps its state: in `standalone` and `persisted` mode there is no app server, so
 every string of the document that names `$.server` or a path below it (an `on` target, a command value) is
 `SUI-DOC-SERVER`; `full` or no mode allows it.
@@ -795,11 +796,28 @@ server's `logicFunctions`) for the rest. A cell sets a value in state; listeners
   result (the app server checks shared dataset records against their model this way). Timers live in memory: they are armed
   again when the engine starts and `engine.stop()` cancels them.
 
+## App icons
+An app may carry icons of its own, for glyphs the icon set does not have: `icons` on the blueprint and on the
+assembled document, a map of name to `{ outline: [paths], filled?: [paths] }` (`AppIcon`). A path is the `d` of an SVG
+path in a 24×24 view box, or `{ d, fill?: true, stroke?: false, opacity? }` for a part the icon fills, draws without a
+stroke or fades; the icon component strokes an outline with the `icon.stroke` token, as it does the set's.
+
+- **Checked as content.** `appIconProblems(value, path)` (`src/core/icons/appIcons.ts`) lists what is wrong: at most
+  `MAX_APP_ICONS` (64) icons named in lower-case words joined by hyphens, 1 to `MAX_APP_ICON_PATHS` (16) paths a
+  variant, and each path SVG path data that parses (the `pathData` validator: at most `MAX_PATH_DATA_LENGTH`
+  characters), so no markup, `url(` or other attribute can ride in one. The blueprint reader reports a problem as
+  `SUI-BLUEPRINT-SHAPE`, the document check as `SUI-DOC-ICON`, each at its path.
+- **The app's first.** A name of the app's own icons is an icon name before the icon set is asked (`validateDocument`
+  wraps `isIconName`), and the runtime draws it in place of a set icon of the same name: `mountApp` starts
+  `$.runtime.icons` with the document's icons, and the runtime never writes a host icon over one of them. A name that is
+  neither is `SUI-STATE-INVALID`, whose message says so.
+- **Assembled as is.** `assembleApp` copies the blueprint's `icons` into the document; an app without any has no key.
+
 ## App blueprints and owner parts
 The owner tree (`knowledge-base/design/stateui-owner-tree-and-tools.md` in AI Minion) splits an app into a blueprint and
 the owner's parts. `src/core/blueprint/` holds their types and the blueprint reader; `src/core/assemble/` assembles and validates an app.
 
-- **Types.** `AppBlueprint` (`title`, `uses`, `start`, `app`, `screens`, `logic`, `locales`), `ThemePart`
+- **Types.** `AppBlueprint` (`title`, `uses`, `start`, `app`, `screens`, `logic`, `locales`, `icons`), `ThemePart`
   (base `tokens`, `overlays` by name with a `kind` of `OVERLAY_KINDS`), `LogicModule` (`needs`, `params` and the logic
   units), `ModelPart` (`fields`), `DatasetPart` (`model?`, `records`), `ComposedPart` (a tree, `exposes` and the search
   keys) and `PatternPart` (read and checked under Patterns). `PART_KINDS` lists the owner roots and `PartRef` names a part by kind and name;
@@ -923,7 +941,7 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
    - `theme` is `{ tokens, active }`: the document's `theme.tokens` over the default tree (every token, so a write patches one custom property) and `active` as `{ mode: "light", brand: "default", motion: "full" }` unless the document gives other names. See Token emission below.
    - `data` is a copy of the document's `data`; the document itself is never changed.
    - `locale` is the document's, `"en"` by default.
-   - `runtime` is never read from the document: `nodes` (`{}`), `icons` (`{}`, written by the host's `load` message) and
+   - `runtime` is never read from the document, except `icons`: `nodes` (`{}`), `icons` (the document's own `icons`, `{}` without any; the host's `load` message adds the icon set's, but never over a name the document defines) and
      `empty` (`{}`, the shared empty record). `$.runtime.empty` is protected, so nothing can write into it.
    - `screens` holds each screen's resolved root by name, without its `<-` links.
    - `route` starts as `initialRoute(document)` and is protected: only `navigate` (an `on` entry, the logic,

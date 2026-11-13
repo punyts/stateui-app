@@ -172,6 +172,8 @@ function checkValue(property: PropertyShape, value: JsonValue, name: string, pat
     const takenByOtherType = types.some((type) => type !== 'icon' && type !== 'map' && fitsType(type, value));
     if (types.includes('icon') && !takenByOtherType && fitsAnyType(property, value) && !isIconName(value)) {
         report(walk, 'SUI-STATE-INVALID', name, path);
+        const error = walk.errors[walk.errors.length - 1] as BuildError;
+        error.message += `: "${value}" is neither one of the app's own icons nor an icon of the set`;
     }
 }
 

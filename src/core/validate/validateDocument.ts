@@ -1,5 +1,6 @@
 import { buildError, isValid } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
+import { appIconNames } from '../icons/appIcons.js';
 import { checkLimits } from '../limits.js';
 import { checkExposes, EXPOSES_KEY } from '../convention/index.js';
 import { resolveNode } from '../resolve/index.js';
@@ -115,6 +116,17 @@ function runChecks(
 }
 
 /**
+ * The options with the app's own icon names accepted before the caller's `isIconName`: a name the document's `icons`
+ * defines is an icon whether or not the icon set has it. Without an `isIconName` no icon name is checked
+ */
+function withAppIcons(document: Record<string, JsonValue>, options: ValidateDocumentOptions): ValidateDocumentOptions {
+    const own = appIconNames(document['icons']);
+    const isIconName = options.isIconName;
+    if (own.size === 0 || isIconName === undefined) return options;
+    return { ...options, isIconName: (name) => own.has(name) || isIconName(name) };
+}
+
+/**
  * Runs every structural check on a document without a DOM and returns all errors in one pass, each with a state
  * path. `catalog` is the component library (`ComponentLibrary`) or the content of `catalog.json`.
  *
@@ -142,7 +154,7 @@ export function validateDocument(
                     : runChecks(
                           document as Record<string, JsonValue>,
                           isCatalog(catalog) ? libraryFromCatalog(catalog) : catalog,
-                          options
+                          withAppIcons(document as Record<string, JsonValue>, options)
                       );
         }
     } catch {

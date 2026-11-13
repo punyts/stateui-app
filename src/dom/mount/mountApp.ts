@@ -60,7 +60,8 @@ function initialState(document: AppDocument, app: Node, mode: AppMode, screens: 
         raised: {},
         runtime: {
             nodes: {},
-            icons: {},
+            // The document's own icons; the runtime adds the icon set's that the host sends
+            icons: cloneJson((document.icons ?? {}) as unknown as JsonObject) as JsonObject,
             empty: {},
             sync: { mode, status: mode === 'standalone' ? 'standalone' : 'connecting', waiting: 0 }
         }

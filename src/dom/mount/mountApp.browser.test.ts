@@ -165,6 +165,18 @@ describe('mountApp in Chromium', () => {
         expect(store?.get('$.runtime.empty')).toEqual({});
     });
 
+    it("should start $.runtime.icons with the document's own icons", () => {
+        // Arrange
+        const host = freshHost();
+        const icons = { chat: { outline: ['M4 5h16v11H9l-5 4z'] } };
+
+        // Act
+        const app = start(host, { app: panel({}), icons });
+
+        // Assert
+        expect(app.store?.get('$.runtime.icons')).toEqual(icons);
+    });
+
     it('should take the locale from the document and never the runtime branch', () => {
         // Arrange
         const host = freshHost();

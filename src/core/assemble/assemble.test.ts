@@ -385,3 +385,27 @@ describe('nearestNames', () => {
         expect(nearestNames('bag', ['shopping-bag'])).toEqual(['shopping-bag']);
     });
 });
+
+describe('assembleApp icons', () => {
+    it("should carry the app's own icons into the document as a copy", () => {
+        // Arrange
+        const icons = { chat: { outline: ['M4 5h16v11H9l-5 4z'] } };
+        const blueprint: AppBlueprint = { ...copy(STORE_APP), icons };
+
+        // Act
+        const { document, errors } = assembleApp(blueprint, STORE_PARTS);
+
+        // Assert
+        expect(errors).toEqual([]);
+        expect(document.icons).toEqual(icons);
+        expect(document.icons).not.toBe(icons);
+    });
+
+    it('should leave icons out of the document of an app without any', () => {
+        // Act
+        const { document } = assembleApp(STORE_APP, STORE_PARTS);
+
+        // Assert
+        expect(Object.hasOwn(document, 'icons')).toBe(false);
+    });
+});

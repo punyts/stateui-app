@@ -2,11 +2,12 @@ import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
+import { appIconProblems } from '../icons/appIcons.js';
 import { declarationProblems, isKeyName } from './declaration.js';
 import { isPartName } from './names.js';
 import type { AppBlueprint } from './types.js';
 
-const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locales'];
+const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locales', 'icons'];
 const USES_KEYS = ['themes', 'data', 'logic'];
 const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
@@ -64,6 +65,7 @@ class Reader {
         else if (screens !== undefined && !Object.hasOwn(screens, start)) this.shape('$.start', `"${start}" names no screen`);
         if (json['logic'] !== undefined) this.logic(json['logic'], '$.logic');
         if (json['locales'] !== undefined) this.locales(json['locales'], '$.locales');
+        if (json['icons'] !== undefined) for (const problem of appIconProblems(json['icons'], '$.icons')) this.shape(problem.path, problem.reason);
     }
 
     uses(value: JsonValue, path: string): void {
@@ -169,7 +171,8 @@ class Reader {
 }
 
 /**
- * Reads an app blueprint: its keys, the shape of `uses`, the app and screen nodes, typed screen params and `start`.
+ * Reads an app blueprint: its keys, the shape of `uses`, the app and screen nodes, typed screen params, `start` and
+ * the app's own `icons` (`appIconProblems`).
  * The contents of `logic`, the parts `uses` names and the app node are checked when the app is assembled
  */
 export function readBlueprint(json: JsonValue): ReadBlueprintResult {

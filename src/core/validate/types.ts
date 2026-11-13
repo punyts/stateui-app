@@ -24,7 +24,7 @@ export interface CatalogSource {
 export interface ValidateDocumentOptions {
     /**
      * True when the name is in the icon list (the server reads the list from `icons.json`). Without it any name of
-     * lower-case letters, digits and `-` is accepted
+     * lower-case letters, digits and `-` is accepted. A name the document's own `icons` defines is accepted first
      */
     isIconName?(name: string): boolean;
     /**

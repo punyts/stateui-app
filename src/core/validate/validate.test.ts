@@ -981,3 +981,53 @@ describe('validateDocument: number field min and step', () => {
         expect(paths).toEqual(['$.app.children.amount', '$.composed.money']);
     });
 });
+
+describe('validateDocument app icons', () => {
+    const icons = { chat: { outline: ['M4 5h16v11H9l-5 4z'] } };
+
+    it("should accept a name of the app's own icons before asking isIconName", () => {
+        // Arrange
+        const document = doc({ component: 'icon', name: 'chat' }, { icons });
+
+        // Act
+        const result = validateDocument(document, LIBRARY, { isIconName: (name) => name === 'circle' });
+
+        // Assert
+        expect(result.errors).toEqual([]);
+    });
+
+    it('should still report a name that is neither an app icon nor in the icon set', () => {
+        // Arrange
+        const document = doc({ component: 'icon', name: 'missing' }, { icons });
+
+        // Act
+        const result = validateDocument(document, LIBRARY, { isIconName: (name) => name === 'circle' });
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.app.name']]);
+    });
+
+    it('should report an app icon that holds more than path data as SUI-DOC-ICON at its path', () => {
+        // Arrange
+        const document = doc({ component: 'panel' }, { icons: { chat: { outline: ['url(#x)'] } } });
+
+        // Act
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        // Assert
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-DOC-ICON', '$.icons.chat.outline.0']]);
+    });
+});
+
+describe('validateDocument unknown icon message', () => {
+    it('should say an unknown icon name is in neither the app icons nor the icon set', () => {
+        // Arrange
+        const document = doc({ component: 'icon', name: 'missing' });
+
+        // Act
+        const [error] = validateDocument(document, LIBRARY, { isIconName: () => false }).errors;
+
+        // Assert
+        expect(error?.message).toContain('"missing" is neither one of the app\'s own icons nor an icon of the set');
+    });
+});

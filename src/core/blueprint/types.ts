@@ -1,4 +1,5 @@
 import type { ExposedPath } from '../convention/composed.js';
+import type { AppIcon } from '../icons/appIcons.js';
 import type { LogicDocument } from '../logic/types.js';
 import type { ComponentCategory } from '../shape/categories.js';
 import type { ValidatorOptions } from '../shape/types.js';
@@ -83,6 +84,8 @@ export interface AppBlueprint {
     logic?: LogicDocument;
     /** Locale name to messages */
     locales?: Record<string, JsonObject>;
+    /** The app's own icons by name, each outline path data in a 24×24 view box; a name here wins over the icon set's */
+    icons?: Record<string, AppIcon>;
 }
 
 /** One named overlay of a theme part */
