@@ -75,6 +75,17 @@ describe('readModel', () => {
         ]);
     });
 
+    it('should let a string field be embedded, and no other field or value', () => {
+        // Arrange
+        const json = { fields: { notes: { type: 'string', embed: true }, plain: { type: 'string', embed: false }, price: { type: 'number', embed: true }, tag: { type: 'string', embed: 'yes' } } } as unknown as JsonValue;
+
+        // Act
+        const messages = readModel(json).errors.map((error) => error.message);
+
+        // Assert
+        expect(messages).toEqual(['Model at $.fields.price.embed is not valid: only a string field can be embedded', 'Model at $.fields.tag.embed is not valid: must be true or false']);
+    });
+
     it('should refuse a model that is not an object or has no fields', () => {
         // Act
         const messages = [readModel([]), readModel({}), readModel({ fields: [] })].map((result) => result.errors.map((error) => error.message));

@@ -38,7 +38,7 @@ export function readModel(json: JsonValue): ReadModelResult {
     for (const [name, declaration] of Object.entries(fields)) {
         const at = `$.fields.${name}`;
         if (!isKeyName(name)) errors.push(shapeError(at, `field name "${name}" must be a key name`));
-        for (const problem of declarationProblems(declaration, at)) errors.push(shapeError(problem.path, problem.reason));
+        for (const problem of declarationProblems(declaration, at, { field: true })) errors.push(shapeError(problem.path, problem.reason));
     }
     if (errors.length > 0) return { errors };
     return { model: json as unknown as ModelPart, errors: [] };

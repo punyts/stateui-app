@@ -49,17 +49,23 @@ function validatorProblems(validators: JsonValue, type: FieldType | undefined, p
 /**
  * The problems of one typed declaration (`{ type, default?, required?, validators? }`), as a model field, a module param
  * and a screen param are declared: an unknown key or type, a `required` that is not a boolean, an unknown or malformed
- * validator, one that does not apply to the type, and a default that does not fit the type or its own validators
+ * validator, one that does not apply to the type, and a default that does not fit the type or its own validators.
+ * With `field`, a model field may also say `embed: true` (a string field only): a server with embeddings makes its
+ * records searchable by meaning, and other servers ignore it
  */
-export function declarationProblems(value: JsonValue, path: string): DeclarationProblem[] {
+export function declarationProblems(value: JsonValue, path: string, options: { readonly field?: boolean } = {}): DeclarationProblem[] {
     if (!isObject(value)) return [{ path, reason: 'must be a typed declaration { "type", "default"?, "required"?, "validators"? }' }];
     const problems: DeclarationProblem[] = [];
     for (const key of Object.keys(value)) {
-        if (!DECLARATION_KEYS.includes(key)) problems.push({ path: `${path}.${key}`, reason: `unknown key "${key}"` });
+        if (!DECLARATION_KEYS.includes(key) && !(key === 'embed' && options.field === true)) problems.push({ path: `${path}.${key}`, reason: `unknown key "${key}"` });
     }
     const type = isFieldType(value['type']) ? value['type'] : undefined;
     if (type === undefined) problems.push({ path: `${path}.type`, reason: `type must be one of ${FIELD_TYPES.join(', ')}` });
     if (value['required'] !== undefined && typeof value['required'] !== 'boolean') problems.push({ path: `${path}.required`, reason: 'must be true or false' });
+    if (value['embed'] !== undefined && options.field === true) {
+        if (typeof value['embed'] !== 'boolean') problems.push({ path: `${path}.embed`, reason: 'must be true or false' });
+        else if (value['embed'] && type !== undefined && type !== 'string') problems.push({ path: `${path}.embed`, reason: 'only a string field can be embedded' });
+    }
     const validators = value['validators'];
     const before = problems.length;
     if (validators !== undefined) problems.push(...validatorProblems(validators, type, `${path}.validators`));

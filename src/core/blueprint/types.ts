@@ -30,6 +30,11 @@ export interface FieldDeclaration {
     required?: boolean;
     /** The library's closed validator set */
     validators?: ValidatorOptions;
+    /**
+     * A model's string field only: a server with embeddings makes the field of each record searchable by meaning, which
+     * the `similar` server call answers; other servers ignore it
+     */
+    embed?: boolean;
 }
 
 export type ParamDeclaration = FieldDeclaration;
