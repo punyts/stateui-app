@@ -63,6 +63,8 @@ export interface AppDocument {
     icons?: Record<string, AppIcon>;
     /** State paths whose changes reach everyone using the app but are never stored (a pointer, presence); `*` matches one segment */
     ephemeral?: string[];
+    /** Alias to another app's state path it mirrors at `$.external.{alias}` (`uses.external`), read only */
+    external?: Record<string, { app: string; path: string }>;
 }
 
 /** The top-level keys of a document */
@@ -80,7 +82,7 @@ export function isAppEvent(name: unknown): name is string {
     return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
 }
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons', 'ephemeral'] as const;
+export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons', 'ephemeral', 'external'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {

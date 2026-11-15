@@ -9,7 +9,10 @@ import { isPartName } from './names.js';
 import type { AppBlueprint } from './types.js';
 
 const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locales', 'icons', 'ephemeral'];
-const USES_KEYS = ['themes', 'data', 'logic'];
+const USES_KEYS = ['themes', 'data', 'logic', 'external'];
+
+/** The state roots another app's path may be read under */
+const EXTERNAL_PATH = /^\$\.(data|screens|app|route)(\.[^.\s]+)*$/;
 const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
 const LOGIC_KEYS = ['machines', 'rules', 'tables', 'computes', 'effects'];
@@ -76,6 +79,19 @@ class Reader {
         if (value['themes'] !== undefined) this.themes(value['themes'], `${path}.themes`);
         if (value['data'] !== undefined) this.data(value['data'], `${path}.data`);
         if (value['logic'] !== undefined) this.moduleUses(value['logic'], `${path}.logic`);
+        if (value['external'] !== undefined) this.external(value['external'], `${path}.external`);
+    }
+
+    /** Each alias: a key name, to `{ app, path }`, the app an id and the path a state path under one of its roots */
+    external(value: JsonValue, path: string): void {
+        if (!this.object(value, path, 'uses.external')) return;
+        for (const [alias, use] of Object.entries(value)) {
+            const at = `${path}.${alias}`;
+            if (!isKeyName(alias)) this.shape(at, `alias "${alias}" must be a key name`);
+            if (!this.object(use, at, 'an external path') || !this.knownKeys(use, ['app', 'path'], at)) continue;
+            if (typeof use['app'] !== 'string' || !/^[0-9a-fA-F-]{36}$/.test(use['app'])) this.shape(`${at}.app`, 'must be the id of an app');
+            if (typeof use['path'] !== 'string' || !EXTERNAL_PATH.test(use['path'])) this.shape(`${at}.path`, 'must be a state path under $.data, $.screens, $.app or $.route');
+        }
     }
 
     themes(value: JsonValue, path: string): void {

@@ -1708,6 +1708,13 @@ describe('createLogicEngine: await durable', () => {
         expect(failing.get('$.app.form.error')).toBe('the database is gone');
     });
 
+    it('should let logic read $.external and refuse a write there', () => {
+        const read = (logic: JsonObject) => readLogic(logic as JsonValue).errors.map((error) => error.message);
+
+        expect(read({ rules: { r: { when: { path: '$.external.notes.{id}.title' }, do: [{ command: 'set', target: '$.app.x', value: '$trigger' }] } } })).toEqual([]);
+        expect(read({ rules: { r: { when: { path: '$.app.y' }, do: [{ command: 'set', target: '$.external.notes.n1', value: 1 }] } } }).join()).toContain('$.external is read only');
+    });
+
     it('should refuse await on a command that has no result to wait for, and any value but durable', () => {
         const read = (command: JsonObject) => readLogic({ rules: { r: { when: { path: '$.data.x' }, do: [command] } } } as JsonValue).errors.map((error) => error.message);
 

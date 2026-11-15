@@ -65,6 +65,17 @@ export interface BlueprintUses {
     data?: Record<string, DataBinding>;
     /** Module name to its param values */
     logic?: Record<string, ModuleUse>;
+    /** Alias (`$.external.{alias}`) to a path of another app's state that this app's logic reads, read only */
+    external?: Record<string, ExternalUse>;
+}
+
+/**
+ * A path of another app's state an app reads: the person's own state of that app (`app` is its id), from `path`
+ * down. It shows at `$.external.{alias}`, read only and never stored, and the app's logic runs on its changes
+ */
+export interface ExternalUse {
+    app: string;
+    path: string;
 }
 
 /** One screen: a root node the app node lays out (its `placement` places it in the app's `layout`) */

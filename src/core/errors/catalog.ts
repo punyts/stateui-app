@@ -213,7 +213,7 @@ export const ERROR_CATALOG = {
     'SUI-APP-ROOT': { template: 'The app node at {path} is not valid: {reason}' },
     'SUI-LOGIC-COMMAND': { template: 'Unknown logic command "{command}" at {path}' },
     'SUI-LOGIC-PATH': {
-        template: 'Path {target} at {path} must be under $.app, $.data, $.server, $.screens, $.route or $.raised, use only the captures of its trigger, or be a node reference that resolves to one node'
+        template: 'Path {target} at {path} must be under $.app, $.data, $.server, $.screens, $.route, $.raised or $.external, use only the captures of its trigger, or be a node reference that resolves to one node'
     },
     'SUI-LOGIC-STATE': { template: 'State "{name}" at {path} is not a state of machine "{other}"' },
     'SUI-LOGIC-EXPRESSION': { template: 'Expression at {path} does not compile: {name}' },

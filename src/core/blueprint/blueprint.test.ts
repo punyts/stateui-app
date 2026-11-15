@@ -211,6 +211,22 @@ describe('PART_KINDS', () => {
     });
 });
 
+describe('readBlueprint external', () => {
+    const APP = '0f8fad5b-d9cb-469f-a165-70867728950e';
+
+    it('should read paths of other apps by alias', () => {
+        expect(readBlueprint(storeWith('uses.external', { notes: { app: APP, path: '$.data.notes' } })).errors).toEqual([]);
+    });
+
+    it('should report an alias that is not a key name, an app that is not an id and a path outside the roots', () => {
+        expect(errorsOf(storeWith('uses.external', { 'my-notes': { app: APP, path: '$.data.notes' }, other: { app: 'notes', path: '$.server.key' } }))).toEqual([
+            'SUI-BLUEPRINT-SHAPE $.uses.external.my-notes',
+            'SUI-BLUEPRINT-SHAPE $.uses.external.other.app',
+            'SUI-BLUEPRINT-SHAPE $.uses.external.other.path'
+        ]);
+    });
+});
+
 describe('readBlueprint icons', () => {
     it("should read the app's own icons", () => {
         // Arrange

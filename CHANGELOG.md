@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Reading another app.** `uses.external` names, by alias, another app (its id) and a state path there; the assembled document carries it as `external`. Logic may read `$.external` and run on its changes, and a write there is refused as read only. Tests: `blueprint.test.ts`, `logic.test.ts`.
 - **A save waits until it is durable.** A `save-data` or `delete-data` with `as` gives its accepted result once the host says its write is durable (`LogicHost.durable`), by default; `await: 'applied'` gives it at once, and a host without `durable` gives it at once. A failure of durability gives a rejection with its reason. `readLogic` allows `await` only on those two commands, with `as`.
 - **Ephemeral paths.** An app and its document take `ephemeral`: state paths (`*` for one segment) whose changes are shared but never stored. `SUI-DOC-EPHEMERAL` reports one that is not a path under `$.app`, `$.screens`, `$.data` or `$.raised`, or a repeat. Tests: `logic.test.ts`, `validate.test.ts`.
 - **A model's string field can say `embed: true`.** `FieldDeclaration` takes `embed`, which `readModel` accepts on a string field only (`only a string field can be embedded`) and as true or false; screen and module params still refuse it. A server with embeddings makes that field of each record searchable by meaning; other servers ignore it. Test: `model.test.ts`.

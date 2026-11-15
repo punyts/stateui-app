@@ -10,7 +10,10 @@ import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions, withCa
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
 // `raised`: the events the nodes raised (dom/on/raised.ts), which logic triggers on and reads
-const LOGIC_ROOTS = ['app', 'data', 'server', 'screens', 'route', 'raised'];
+const LOGIC_ROOTS = ['app', 'data', 'server', 'screens', 'route', 'raised', 'external'];
+
+/** What an app reads of other apps (`uses.external`): logic reads it and runs on it, but never writes it */
+const READ_ONLY_ROOT = '$.external';
 
 const MACHINE_KEYS = ['state', 'initial', 'transitions'];
 const TRANSITION_KEYS = ['from', 'when', 'do', 'to'];
@@ -254,6 +257,7 @@ class Reader {
                 this.shape(`${path}.${key}`, `"${key}" must be a path`);
             } else if (!((command === 'notify' || command === 'emit' || command === 'call' || command === 'navigate') && key === 'target')) {
                 this.statePath(text, `${path}.${key}`, captures);
+                if (key !== 'from' && (text === READ_ONLY_ROOT || text.startsWith(`${READ_ONLY_ROOT}.`))) this.shape(`${path}.${key}`, `${READ_ONLY_ROOT} is read only: it shows what the app reads of other apps`);
             }
         }
         for (const key of ['as', 'reason', 'key', 'filter'] as const) {
