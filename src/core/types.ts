@@ -61,6 +61,8 @@ export interface AppDocument {
     logic?: JsonObject;
     /** The app's own icons by name (`icons/appIcons.ts`); a name here wins over the icon set's */
     icons?: Record<string, AppIcon>;
+    /** State paths whose changes reach everyone using the app but are never stored (a pointer, presence); `*` matches one segment */
+    ephemeral?: string[];
 }
 
 /** The top-level keys of a document */
@@ -78,7 +80,7 @@ export function isAppEvent(name: unknown): name is string {
     return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
 }
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons'] as const;
+export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons', 'ephemeral'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {

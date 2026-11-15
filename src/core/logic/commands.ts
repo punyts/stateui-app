@@ -23,6 +23,8 @@ export interface CommandContext {
     after: (() => void)[];
     /** Server procedures to call after the transition commits, each answered as the named result `as` */
     calls: { name: string; payload: JsonValue; as: string }[];
+    /** Accepted results of `await: 'durable'` commands, given once the transition's writes are durable */
+    durable: { name: string; result: LogicResult }[];
 }
 
 function required(command: LogicCommand, key: 'target' | 'from' | 'into'): string {
@@ -80,7 +82,7 @@ function resetWrites(at: string, current: JsonValue | undefined, initial: JsonVa
 
 function outcome(context: CommandContext, command: LogicCommand, result: LogicResult): void {
     if (command.as !== undefined) {
-        context.results.push({ name: command.as, result });
+        (command.await !== 'applied' && result.status === 'accepted' ? context.durable : context.results).push({ name: command.as, result });
         return;
     }
     if (result.status === 'rejected') throw new LogicError(result.reason ?? `"${command.command}" was rejected`);

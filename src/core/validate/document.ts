@@ -4,6 +4,7 @@ import { isNodeValue, isObject } from '../resolve/merge.js';
 import { isPartName } from '../blueprint/names.js';
 import { FIELD_TYPES } from '../blueprint/types.js';
 import { appIconProblems } from '../icons/appIcons.js';
+import { ephemeralProblems } from '../ephemeral/ephemeral.js';
 import { DOCUMENT_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 
@@ -63,6 +64,12 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     }
 
     errors.push(...checkScreens(document));
+
+    if (Object.hasOwn(document, 'ephemeral')) {
+        for (const problem of ephemeralProblems(document['ephemeral'] as JsonValue, '$.ephemeral')) {
+            errors.push(buildError('SUI-DOC-EPHEMERAL', { path: problem.path, reason: problem.reason, statePath: problem.path }));
+        }
+    }
 
     if (Object.hasOwn(document, 'icons')) {
         for (const problem of appIconProblems(document['icons'], '$.icons')) {

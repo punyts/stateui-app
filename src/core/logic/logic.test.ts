@@ -1633,6 +1633,90 @@ describe('createLogicEngine: timers', () => {
     });
 });
 
+describe('createLogicEngine: await durable', () => {
+    const SAVE: LogicDocument = Object.freeze({
+        machines: {
+            save: {
+                state: '$.app.form.phase',
+                initial: 'editing',
+                transitions: [
+                    { from: 'editing', when: { path: '$.app.form.submit' }, do: [{ command: 'save-data', into: '$.data.contacts', value: { name: 'Ada' }, as: 'saved', await: 'durable' }], to: 'saving' },
+                    { from: 'saving', when: { result: 'saved', is: 'accepted' }, to: 'saved' },
+                    { from: 'saving', when: { result: 'saved', is: 'rejected' }, do: [{ command: 'set', target: '$.app.form.error', value: '$result.reason' }], to: 'editing' }
+                ]
+            }
+        }
+    }) as LogicDocument;
+
+    it('should give a save its result only once the host says its write is durable', async () => {
+        // Arrange
+        let durable!: () => void;
+        const memory = memoryHost({ app: { form: {} }, data: { contacts: {} } }, { durable: () => new Promise<void>((resolve) => (durable = resolve)) });
+        const engine = createLogicEngine(SAVE, memory.host);
+        engine.start();
+
+        // Act
+        userChange(memory, engine, '$.app.form.submit', true);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const before = { phase: memory.get('$.app.form.phase'), record: memory.get('$.data.contacts') };
+        durable();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Assert
+        expect(before).toEqual({ phase: 'saving', record: { c1: { name: 'Ada' } } });
+        expect(memory.get('$.app.form.phase')).toBe('saved');
+    });
+
+    it('should wait for durability by default, and not with await applied', async () => {
+        // Arrange
+        const doc = (extra: JsonObject): LogicDocument => ({ machines: { save: { ...(SAVE.machines as JsonObject)['save'] as JsonObject, transitions: [{ from: 'editing', when: { path: '$.app.form.submit' }, do: [{ command: 'save-data', into: '$.data.contacts', value: { name: 'Ada' }, as: 'saved', ...extra }], to: 'saving' }, { from: 'saving', when: { result: 'saved', is: 'accepted' }, to: 'saved' }] } } }) as unknown as LogicDocument;
+        const never = (): Promise<void> => new Promise<void>(() => undefined);
+        const byDefault = memoryHost({ app: { form: {} }, data: { contacts: {} } }, { durable: never });
+        const applied = memoryHost({ app: { form: {} }, data: { contacts: {} } }, { durable: never });
+        const first = createLogicEngine(doc({}), byDefault.host);
+        const second = createLogicEngine(doc({ await: 'applied' }), applied.host);
+        first.start();
+        second.start();
+
+        // Act
+        userChange(byDefault, first, '$.app.form.submit', true);
+        userChange(applied, second, '$.app.form.submit', true);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Assert
+        expect(byDefault.get('$.app.form.phase')).toBe('saving');
+        expect(applied.get('$.app.form.phase')).toBe('saved');
+    });
+
+    it('should give the result at once on a host that keeps nothing durable, and a rejection when durability fails', async () => {
+        // Arrange
+        const plain = memoryHost({ app: { form: {} }, data: { contacts: {} } });
+        const failing = memoryHost({ app: { form: {} }, data: { contacts: {} } }, { durable: () => Promise.reject(new Error('the database is gone')) });
+        const first = createLogicEngine(SAVE, plain.host);
+        const second = createLogicEngine(SAVE, failing.host);
+        first.start();
+        second.start();
+
+        // Act
+        userChange(plain, first, '$.app.form.submit', true);
+        userChange(failing, second, '$.app.form.submit', true);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Assert
+        expect(plain.get('$.app.form.phase')).toBe('saved');
+        expect(failing.get('$.app.form.phase')).toBe('editing');
+        expect(failing.get('$.app.form.error')).toBe('the database is gone');
+    });
+
+    it('should refuse await on a command that has no result to wait for, and any value but durable', () => {
+        const read = (command: JsonObject) => readLogic({ rules: { r: { when: { path: '$.data.x' }, do: [command] } } } as JsonValue).errors.map((error) => error.message);
+
+        expect(read({ command: 'set', target: '$.data.y', value: 1, await: 'durable' }).join()).toContain('"await" is for save-data and delete-data');
+        expect(read({ command: 'save-data', into: '$.data.contacts', value: {}, as: 'r', await: 'soon' }).join()).toContain('"await" must be "durable" or "applied"');
+        expect(read({ command: 'save-data', into: '$.data.contacts', value: {}, await: 'durable' }).join()).toContain('"await" needs "as"');
+    });
+});
+
 describe('createLogicEngine: call', () => {
     const LOOKUP: LogicDocument = Object.freeze({
         machines: {

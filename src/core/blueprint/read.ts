@@ -3,11 +3,12 @@ import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
 import { appIconProblems } from '../icons/appIcons.js';
+import { ephemeralProblems } from '../ephemeral/ephemeral.js';
 import { declarationProblems, isKeyName } from './declaration.js';
 import { isPartName } from './names.js';
 import type { AppBlueprint } from './types.js';
 
-const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locales', 'icons'];
+const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locales', 'icons', 'ephemeral'];
 const USES_KEYS = ['themes', 'data', 'logic'];
 const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
@@ -66,6 +67,7 @@ class Reader {
         if (json['logic'] !== undefined) this.logic(json['logic'], '$.logic');
         if (json['locales'] !== undefined) this.locales(json['locales'], '$.locales');
         if (json['icons'] !== undefined) for (const problem of appIconProblems(json['icons'], '$.icons')) this.shape(problem.path, problem.reason);
+        if (json['ephemeral'] !== undefined) for (const problem of ephemeralProblems(json['ephemeral'], '$.ephemeral')) this.shape(problem.path, problem.reason);
     }
 
     uses(value: JsonValue, path: string): void {

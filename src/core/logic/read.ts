@@ -239,6 +239,11 @@ class Reader {
         if (command === 'reject' && !guard) this.shape(path, '"reject" must be the only command of a rule');
         if (command === 'call' && !machine) this.shape(path, '"call" runs only in a machine, which waits for its result');
         if (command === 'call' && !Object.hasOwn(value, 'as')) this.shape(path, '"call" needs "as"');
+        if (Object.hasOwn(value, 'await')) {
+            if (value['await'] !== 'durable' && value['await'] !== 'applied') this.shape(`${path}.await`, '"await" must be "durable" or "applied"');
+            else if (command !== 'save-data' && command !== 'delete-data') this.shape(`${path}.await`, '"await" is for save-data and delete-data, whose result waits until the write is durable');
+            else if (!Object.hasOwn(value, 'as')) this.shape(`${path}.await`, '"await" needs "as": the result that waits');
+        }
         for (const key of REQUIRED[command]) {
             if (!Object.hasOwn(value, key)) this.shape(path, `"${command}" needs "${key}"`);
         }

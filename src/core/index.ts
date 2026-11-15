@@ -1,6 +1,8 @@
 export { VERSION } from './version.js';
 export { ERROR_CATALOG, ERROR_PREFIXES, TEMPLATE_PLACEHOLDERS, buildError, isValid } from './errors/index.js';
 export type { BuildError, CatalogEntry, ErrorCode, ErrorDetails, Severity, TemplatePlaceholder } from './errors/index.js';
+export { ephemeralProblems, MAX_EPHEMERAL_PATHS } from './ephemeral/ephemeral.js';
+export type { EphemeralProblem } from './ephemeral/ephemeral.js';
 export { MAX_APP_ICONS, MAX_APP_ICON_NAME_LENGTH, MAX_APP_ICON_PATHS, appIconNames, appIconProblems } from './icons/appIcons.js';
 export type { AppIcon, AppIconPath, AppIconProblem } from './icons/appIcons.js';
 export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';

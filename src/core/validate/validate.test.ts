@@ -1007,6 +1007,14 @@ describe('validateDocument app icons', () => {
         expect(result.errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.app.name']]);
     });
 
+    it('should take a list of ephemeral state paths, and report one that is not a path as SUI-DOC-EPHEMERAL', () => {
+        const errorsOf = (ephemeral: unknown) => validateDocument({ app: { component: 'page' }, ephemeral } as unknown as JsonObject, LIBRARY).errors.filter((error) => error.code === 'SUI-DOC-EPHEMERAL');
+
+        expect(errorsOf(['$.app.cursor', '$.data.presence.*'])).toEqual([]);
+        expect(errorsOf(['$.server.key', 'cursor', '$.app.cursor', '$.app.cursor']).map((error) => error.statePath)).toEqual(['$.ephemeral.0', '$.ephemeral.1', '$.ephemeral.3']);
+        expect(errorsOf('$.app.cursor').map((error) => error.statePath)).toEqual(['$.ephemeral']);
+    });
+
     it('should report an app icon that holds more than path data as SUI-DOC-ICON at its path', () => {
         // Arrange
         const document = doc({ component: 'panel' }, { icons: { chat: { outline: ['url(#x)'] } } });

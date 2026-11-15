@@ -221,6 +221,7 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     document.start = blueprint.start;
     if (Object.keys(assembler.composed).length > 0) document.composed = assembler.composed;
     if (Object.keys(logic).length > 0) document.logic = logic as unknown as JsonObject;
+    if (blueprint.ephemeral !== undefined && blueprint.ephemeral.length > 0) document.ephemeral = [...blueprint.ephemeral];
     if (blueprint.icons !== undefined && Object.keys(blueprint.icons).length > 0) document.icons = cloneJson(blueprint.icons as unknown as JsonValue) as unknown as AppDocument['icons'];
     if (blueprint.locales !== undefined) document.locales = cloneJson(blueprint.locales as unknown as JsonValue) as AppDocument['locales'];
 

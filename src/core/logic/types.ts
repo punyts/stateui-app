@@ -49,7 +49,8 @@ export const LOGIC_COMMAND_KEYS = [
     'sort',
     'filter',
     'window',
-    'reason'
+    'reason',
+    'await'
 ] as const;
 
 /** What starts a transition: a change at a path, or a named result of an earlier command (of the same machine, or of a rule) */
@@ -82,6 +83,12 @@ export interface LogicCommand {
     filter?: string;
     window?: JsonValue;
     reason?: string;
+    /**
+     * When a `save-data` or `delete-data` with `as` gives its accepted result. `durable`, the default: once its write is
+     * durable, on a host that says so (in the database, on a server), so a form shows Saved only when it is; at once on
+     * a host that keeps nothing. `applied`: at once, as soon as the write is in the state. A rejection comes at once
+     */
+    await?: 'durable' | 'applied';
 }
 
 export interface LogicTransition {
@@ -302,6 +309,11 @@ export interface LogicResult {
  * paths (`$.data.contacts`); node references are resolved by `resolve`
  */
 export interface LogicHost {
+    /**
+     * Resolves once every write committed so far is durable; a command with `await: 'durable'` gives its result then.
+     * Without it, such a result comes at once
+     */
+    durable?(): Promise<void>;
     /** The value at a path; the engine never changes what it returns */
     get(path: string): JsonValue | undefined;
     /** Applies the writes of one transition, all or none; throws when they cannot be applied */

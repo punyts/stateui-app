@@ -846,7 +846,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             ...(hit.result === undefined ? {} : { result: hit.result }),
             functions
         };
-        const context: CommandContext = { copy, scope, host, guard, results: [], after: [], calls: [] };
+        const context: CommandContext = { copy, scope, host, guard, results: [], after: [], calls: [], durable: [] };
         const from = fromOf(hit.state);
         for (const [index, command] of (hit.transition.do ?? []).entries()) {
             try {
@@ -879,6 +879,10 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         });
         for (const notice of context.after) notice();
         for (const { name, result } of context.results) results.push({ unit, name, result });
+        for (const { name, result } of context.durable) {
+            if (host.durable === undefined) results.push({ unit, name, result });
+            else host.durable().then(() => later(unit, name, result), (error: unknown) => later(unit, name, { ...result, status: 'rejected', reason: error instanceof Error ? error.message : String(error) }));
+        }
         if (unit.machine) for (const call of context.calls) ask(unit, call.name, call.payload, call.as);
         return copy.writes.map((write, index) => (before[index] === undefined ? write : { ...write, previous: before[index] }));
     };
@@ -1016,6 +1020,14 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             chain(fire(unit, hit, results), new Set([unit.id]), results);
             drain(results);
         });
+        arm();
+        settle();
+    };
+
+    /** Gives a result that waited for durability to the units that wait for it, as a chain of its own */
+    const later = (unit: Unit, name: string, result: LogicResult): void => {
+        if (stopped) return;
+        traced('answer', [`durable → ${name}`], () => drain([{ unit, name, result }]));
         arm();
         settle();
     };

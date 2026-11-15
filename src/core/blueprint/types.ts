@@ -91,6 +91,8 @@ export interface AppBlueprint {
     locales?: Record<string, JsonObject>;
     /** The app's own icons by name, each outline path data in a 24×24 view box; a name here wins over the icon set's */
     icons?: Record<string, AppIcon>;
+    /** State paths whose changes reach everyone using the app but are never stored (a pointer, presence); `*` matches one segment */
+    ephemeral?: string[];
 }
 
 /** One named overlay of a theme part */
