@@ -1,9 +1,13 @@
-import type { Store } from '@punyts/state';
+import type { Store, WriteOptions } from '@punyts/state';
 import type { NodeOptions } from '@punyts/stateui';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentToken } from '../../core/theme/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
-import type { AppDocument, JsonObject, Node } from '../../core/types.js';
+import type { RouteState } from '../../core/route/index.js';
+import type { AppInstance } from '../../core/snapshot/index.js';
+import type { LogicFunctions } from '../../core/logic/index.js';
+import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
+import type { AppMode } from '../../core/validate/index.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
 
@@ -17,6 +21,12 @@ export interface AppState {
     locale: string;
     /** The resolved `app` tree, without its `<-` links (they are store aliases) */
     app: Node;
+    /** The events the nodes raised, by node path (`$.raised.<node path>.<event>`, `dom/on/raised.ts`); empty at start */
+    raised: JsonObject;
+    /** Each screen's resolved root by name, without its `<-` links; only for a document with screens */
+    screens?: Record<string, Node>;
+    /** The visible screen and its params; only for a document with screens. Protected: only `navigate` writes it */
+    route?: RouteState;
     /** Never from the document: controller state and shared values */
     runtime: {
         /** The runtime branch of each node (`runtimePath`) */
@@ -25,6 +35,8 @@ export interface AppState {
         icons: JsonObject;
         /** The shared empty record that record views and `current` point at; protected, so nothing writes into it */
         empty: JsonObject;
+        /** The sync status the host writes: the mode, `standalone`, `connecting`, `online` or `offline`, and the changes waiting */
+        sync: { mode: AppMode; status: string; waiting: number };
     };
 }
 
@@ -42,6 +54,10 @@ export interface MountContext {
     /** The options given to `<sui-node>`; `prepare` may add `theme` and extend `reflect` */
     options: NodeOptions;
     hooks: DispatchHooks & SystemHooks;
+    /** The options `mountApp` was called with */
+    mountOptions: MountOptions;
+    /** The instance's active overlay names that the app still has; the theme step lays them over the document's */
+    instanceActive: Readonly<Record<string, string>>;
 }
 
 /** What a step sees in `start`: the store is there, links are applied, nothing has rendered yet */
@@ -59,16 +75,56 @@ export interface MountStep {
     start?(context: StartedContext): (() => void) | void;
 }
 
+/** How `mountApp` mounts an app */
+export interface MountOptions {
+    /** How the app keeps its state; `standalone` when absent */
+    mode?: AppMode;
+    /**
+     * Whether an app with screens keeps `$.route` in the URL fragment of its window (`#/product?id=p42`): read on start,
+     * pushed on navigation, followed on the back button and a hash change. True when absent; a host that embeds the app
+     * in a page whose URL it must not touch (a preview) passes false
+     */
+    route?: boolean;
+    /**
+     * A persona's instance, laid over the definition's values before the store exists (`layInstance`): the
+     * articulation of the app node and the screens, the persona's data, the route and the active overlay names. A screen
+     * or an overlay name the app no longer has falls back with a `SUI-INSTANCE-STALE` warning in `errors`. The
+     * document is never written
+     */
+    instance?: AppInstance;
+    /** The compute and expression functions the browser logic runs by name (`computes` units, expression calls); without them a compute unit fails when it runs */
+    logicFunctions?: LogicFunctions;
+}
+
 /** What `mountApp` returns */
 export interface MountedApp {
     /** The store mounted on the host; undefined when `errors` holds an error and nothing was rendered */
     store: Store<AppState> | undefined;
     /** The content of the application as mounted, as an overlay of every unlinked `_` property; undefined with `store` */
     baseOverlay: JsonObject | undefined;
+    /**
+     * The content of each screen as mounted, by screen name, relative to `$.screens.{name}`: the base-language entries
+     * of `switchLocale`'s `screens`. Undefined without screens or without `store`
+     */
+    screenBaseOverlays: Record<string, JsonObject> | undefined;
     /** The language of `baseOverlay`: the document's `locale`, `"en"` when it gives none; undefined with `store` */
     baseLocale: string | undefined;
     /** Validation warnings, or the errors that stopped the run; empty for a clean document */
     errors: BuildError[];
+    /** Runs the root node's `on` entry for an app event with the payload; nothing when the app did not mount */
+    raise(name: AppEventName, payload?: unknown): void;
+    /** The screen that shows (`$.route.screen` once mounted); undefined for an app without screens */
+    visibleScreen(): string | undefined;
+    /** Runs `navigate`: moves `$.route` to `screen` with `params`. Returns why it cannot, undefined when it moved */
+    navigate(screen: string, params?: JsonValue): string | undefined;
+    /**
+     * Mounts a node written after start at `path` (below `$.app` or a screen's `$.screens.{name}`), as a load would: component defaults and composed
+     * components resolved, its `<-` links applied (node references resolve against the whole app) and the links of the
+     * node it replaces removed. A plain store write of a node does none of this. Returns the errors; empty when it mounted
+     */
+    writeNode(path: string, node: Node, options?: WriteOptions): BuildError[];
+    /** Removes the node at `path` with its links. False when nothing was removed */
+    removeNode(path: string, options?: WriteOptions): boolean;
     /** Unmounts, unlinks and removes listeners. Safe to call more than once */
     dispose(): void;
 }

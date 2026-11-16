@@ -1,6 +1,10 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isNodeValue, isObject } from '../resolve/merge.js';
+import { isPartName } from '../blueprint/names.js';
+import { FIELD_TYPES } from '../blueprint/types.js';
+import { appIconProblems } from '../icons/appIcons.js';
+import { ephemeralProblems } from '../ephemeral/ephemeral.js';
 import { DOCUMENT_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 
@@ -12,6 +16,15 @@ const MAX_INDEX = 4294967294;
 
 function isIntegerKey(key: string): boolean {
     return INTEGER_KEY.test(key) && Number(key) <= MAX_INDEX;
+}
+
+/** The properties a record view reads by position when its node has a `total` (what the logic `query` command writes) */
+const POSITIONED_KEYS: readonly string[] = ['records', 'items'];
+
+/** True when the object is a node of a paged record view: a non-negative integer `total` says its records are read by position */
+function isPaged(value: Record<string, JsonValue>): boolean {
+    const total = value['total'];
+    return typeof total === 'number' && Number.isInteger(total) && total >= 0;
 }
 
 function wrongType(key: string, statePath: string): BuildError {
@@ -35,9 +48,11 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     const typed: [string, (value: JsonValue) => boolean][] = [
         ['theme', isObject],
         ['themes', (value) => isMapOf(value, isObject)],
+        ['appThemes', (value) => isMapOf(value, (entry) => isObject(entry) && isObject(entry['tokens'] ?? {}) && isObject(entry['overlays'] ?? {}))],
         ['locale', (value) => typeof value === 'string'],
         ['data', isObject],
-        ['locales', (value) => isMapOf(value, isObject)]
+        ['locales', (value) => isMapOf(value, isObject)],
+        ['logic', isObject]
     ];
     for (const [key, fits] of typed) {
         if (Object.hasOwn(document, key) && !fits(document[key] as JsonValue)) errors.push(wrongType(key, `$.${key}`));
@@ -46,6 +61,20 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     if (!isNodeValue(document['app'])) {
         const path = '$.app';
         errors.push(buildError('SUI-NODE-MISSING', { path, statePath: path }));
+    }
+
+    errors.push(...checkScreens(document));
+
+    if (Object.hasOwn(document, 'ephemeral')) {
+        for (const problem of ephemeralProblems(document['ephemeral'] as JsonValue, '$.ephemeral')) {
+            errors.push(buildError('SUI-DOC-EPHEMERAL', { path: problem.path, reason: problem.reason, statePath: problem.path }));
+        }
+    }
+
+    if (Object.hasOwn(document, 'icons')) {
+        for (const problem of appIconProblems(document['icons'], '$.icons')) {
+            errors.push(buildError('SUI-DOC-ICON', { path: problem.path, reason: problem.reason, statePath: problem.path }));
+        }
     }
 
     const composed = document['composed'];
@@ -61,6 +90,76 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     return errors;
 }
 
+const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
+const DECLARATION_KEYS = ['type', 'default', 'required', 'validators'];
+
+function screenError(path: string, reason: string): BuildError {
+    return buildError('SUI-DOC-SCREEN', { path, reason, statePath: path });
+}
+
+/** Why a screen's params are not typed declarations, or undefined */
+function paramsProblem(params: JsonValue): string | undefined {
+    if (!isObject(params)) return '"params" must be an object of typed declarations';
+    for (const [name, declaration] of Object.entries(params)) {
+        if (!isObject(declaration)) return `param "${name}" must be a typed declaration`;
+        const unknown = Object.keys(declaration).find((key) => !DECLARATION_KEYS.includes(key));
+        if (unknown !== undefined) return `param "${name}" has the unknown key "${unknown}"`;
+        if (!(FIELD_TYPES as readonly JsonValue[]).includes(declaration['type'] ?? null)) return `param "${name}" needs a type: ${FIELD_TYPES.join(', ')}`;
+    }
+    return undefined;
+}
+
+/**
+ * The `screens` and `start` keys: `screens` maps part names to `{ title?, params?, root, locales? }` with a node as `root`, and
+ * `start` names one of them; one without the other is an error. Each problem is `SUI-DOC-SCREEN` at the screen's path
+ */
+function checkScreens(document: Record<string, JsonValue>): BuildError[] {
+    const errors: BuildError[] = [];
+    const hasScreens = Object.hasOwn(document, 'screens');
+    const screens = document['screens'];
+    if (hasScreens && !isObject(screens)) errors.push(wrongType('screens', '$.screens'));
+    if (isObject(screens)) {
+        if (Object.keys(screens).length === 0) errors.push(screenError('$.screens', 'an app with screens needs at least one'));
+        for (const [name, screen] of Object.entries(screens)) {
+            const path = `$.screens.${name}`;
+            if (!isPartName(name)) errors.push(screenError(path, `"${name}" is not a screen name (lower-case letters, digits and -)`));
+            if (!isObject(screen)) {
+                errors.push(screenError(path, 'a screen is { title?, params?, root, locales? }'));
+                continue;
+            }
+            const unknown = Object.keys(screen).filter((key) => !SCREEN_KEYS.includes(key));
+            for (const key of unknown) errors.push(screenError(path, `unknown key "${key}"`));
+            if (screen['title'] !== undefined && typeof screen['title'] !== 'string') errors.push(screenError(path, '"title" must be text'));
+            if (!isNodeValue(screen['root'])) errors.push(screenError(path, 'a screen needs a "root" node'));
+            const problem = screen['params'] === undefined ? undefined : paramsProblem(screen['params']);
+            if (problem !== undefined) errors.push(screenError(path, problem));
+            const locales = screen['locales'];
+            if (locales !== undefined && (!isObject(locales) || Object.values(locales).some((overlay) => !isObject(overlay)))) {
+                errors.push(screenError(path, '"locales" must map language codes to overlays'));
+            }
+        }
+    }
+
+    const start = document['start'];
+    if (Object.hasOwn(document, 'start')) {
+        if (typeof start !== 'string') errors.push(wrongType('start', '$.start'));
+        else if (!hasScreens) errors.push(screenError('$.start', '"start" needs "screens"'));
+        else if (isObject(screens) && !Object.hasOwn(screens, start)) errors.push(screenError('$.start', `"${start}" names no screen`));
+    } else if (hasScreens) {
+        errors.push(screenError('$.start', 'an app with screens needs "start"'));
+    }
+    return errors;
+}
+
+/** The screen root nodes of a document, by screen name, with the state path of each root */
+export function screenRoots(document: Record<string, JsonValue>): { name: string; path: string; root: JsonValue }[] {
+    const screens = document['screens'];
+    if (!isObject(screens)) return [];
+    return Object.entries(screens)
+        .filter(([, screen]) => isObject(screen) && isNodeValue(screen['root']))
+        .map(([name, screen]) => ({ name, path: `$.screens.${name}`, root: (screen as Record<string, JsonValue>)['root'] as JsonValue }));
+}
+
 interface Frame {
     value: JsonValue;
     path: string;
@@ -71,7 +170,10 @@ interface Frame {
 
 /**
  * Finds integer-like keys in every ordered map of the nodes (`children`, `options`, `columns`, `items`, `steps`,
- * `messages`) and in every object under `data`. The same list as E6.2. Iterative, so a deep value cannot overflow
+ * `messages`) and in every object under `data`. The same list as E6.2. Iterative, so a deep value cannot overflow.
+ *
+ * The `records` or `items` of a node that also has an integer `total` are exempt: a paged record view reads them by
+ * position, so the key is the position and the order of the keys carries nothing (the `query` command writes them so)
  */
 export function checkOrderedKeys(document: Record<string, JsonValue>): BuildError[] {
     const errors: BuildError[] = [];
@@ -81,6 +183,7 @@ export function checkOrderedKeys(document: Record<string, JsonValue>): BuildErro
     };
 
     push(document['app'], '$.app', false);
+    for (const screen of screenRoots(document)) push(screen.root, screen.path, false);
     if (isObject(document['composed'])) {
         for (const [name, tree] of Object.entries(document['composed'])) push(tree, `$.composed.${name}`, false);
     }
@@ -98,7 +201,8 @@ export function checkOrderedKeys(document: Record<string, JsonValue>): BuildErro
                 if ((frame.ordered || frame.underData) && isIntegerKey(key)) {
                     errors.push(buildError('SUI-DOC-ORDER', { key, path, statePath: path }));
                 }
-                stack.push({ value: item, path, ordered: ORDERED_KEYS.includes(key), underData: frame.underData });
+                const positioned = POSITIONED_KEYS.includes(key) && !frame.underData && isPaged(frame.value);
+                stack.push({ value: item, path, ordered: ORDERED_KEYS.includes(key) && !positioned, underData: frame.underData });
             }
         }
     }
@@ -120,4 +224,31 @@ export function dataPathExists(data: JsonValue | undefined, target: string): boo
         if (current === undefined) return false;
     }
     return true;
+}
+
+/** A value naming `$.server` or a path below it: a link or `on` target, a path in a command value */
+const SERVER_PATH = /^\$\.server(\.|$)/;
+
+/**
+ * Every string of the document that names `$.server` or a path below it, and every logic `call` command, as
+ * `SUI-DOC-SERVER`. Only an app server (Full mode) has a `$.server` branch and answers calls, so a Standalone or
+ * Persisted app may use neither
+ */
+export function checkServerUse(document: Record<string, JsonValue>, mode: string): BuildError[] {
+    const errors: BuildError[] = [];
+    const stack: { value: JsonValue; path: string }[] = Object.entries(document).map(([key, value]) => ({ value, path: `$.${key}` }));
+    while (stack.length > 0) {
+        const { value, path } = stack.pop() as { value: JsonValue; path: string };
+        if (typeof value === 'string') {
+            if (SERVER_PATH.test(value)) errors.push(buildError('SUI-DOC-SERVER', { target: value, name: mode, path, statePath: path }));
+        } else if (Array.isArray(value)) {
+            value.forEach((item, index) => stack.push({ value: item, path: `${path}.${index}` }));
+        } else if (isObject(value)) {
+            if (path.startsWith('$.logic.') && value['command'] === 'call') {
+                errors.push(buildError('SUI-DOC-SERVER', { target: '"call"', name: mode, path, statePath: path }));
+            }
+            for (const [key, item] of Object.entries(value)) stack.push({ value: item, path: `${path}.${key}` });
+        }
+    }
+    return errors.sort((a, b) => (a.statePath as string).localeCompare(b.statePath as string));
 }

@@ -1,10 +1,10 @@
 import type { BuildError } from '../errors/index.js';
-import { resolveNode } from '../resolve/index.js';
+import { entryShape, resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
 import { fitsProperty, nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
-import { RESERVED_KEYS } from '../types.js';
+import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
 import type { DocumentValidationContext } from '../validate/types.js';
 import { layoutError } from './errors.js';
@@ -18,7 +18,7 @@ const EXPOSES = 'exposes';
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 /** The node a child sits under: its layout and its component's declared placement shape decide what the child may place */
@@ -28,10 +28,10 @@ interface Parent {
     shape: Shape | undefined;
 }
 
-type Check = (node: Node, path: string, shape: Shape | undefined, parent: Parent | undefined) => void;
+export type Check = (node: Node, path: string, shape: Shape | undefined, parent: Parent | undefined) => void;
 
 /** Walks one resolved tree and calls `check` for every node with its parent */
-function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Check): void {
+function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Check, rootParent?: Parent): void {
     const visit = (node: Node, path: string, parent: Parent | undefined): void => {
         const shape = shapeOf(library, node.component);
         check(node, path, shape, parent);
@@ -39,12 +39,18 @@ function walk(root: Node, rootPath: string, library: ComponentLibrary, check: Ch
             visit(child.node as Node, child.path, { node, path, shape });
         }
     };
-    visit(root, rootPath, undefined);
+    visit(root, rootPath, rootParent);
 }
 
-/** The trees to check: the resolved `app` tree and every composed tree on its own */
-function forEachTree(context: DocumentValidationContext, check: Check): void {
-    walk(context.tree.node, APP_PATH, context.library, check);
+/**
+ * The trees to check: the resolved `app` tree, every screen with the app node as the parent of its root (the app's
+ * layout places the screens) and every composed tree on its own
+ */
+export function forEachTree(context: DocumentValidationContext, check: Check): void {
+    const app = context.tree.node;
+    walk(app, APP_PATH, context.library, check);
+    const screenParent: Parent = { node: app, path: APP_PATH, shape: shapeOf(context.library, app.component) };
+    for (const [name, tree] of Object.entries(context.screens ?? {})) walk(tree.node, `$.screens.${name}`, context.library, check, screenParent);
     const composed = context.document.composed;
     if (composed === undefined || !isObject(composed as JsonValue)) return;
     for (const [name, tree] of Object.entries(composed)) {
@@ -62,6 +68,12 @@ function layoutTypeOf(node: JsonObject): LayoutType | undefined {
     const layout = node[RESERVED_KEYS.layout];
     if (layout === undefined || !isObject(layout)) return undefined;
     return isLayoutType(layout.type) ? layout.type : undefined;
+}
+
+/** The settings a layout type takes, for the message of an unknown one: an agent that guessed can pick the right key */
+function allowedSettings(type: LayoutType): string {
+    const names = Object.keys(LAYOUTS[type].settings).map((name) => `"${name}"`);
+    return names.length === 0 ? `the ${type} layout takes only "type"` : `the ${type} layout takes "type", ${names.join(', ')}`;
 }
 
 function checkLayout(node: Node, path: string, shape: Shape | undefined, errors: BuildError[]): void {
@@ -86,14 +98,17 @@ function checkLayout(node: Node, path: string, shape: Shape | undefined, errors:
         const settingPath = `${at}.${name}`;
         const spec = Object.hasOwn(settings, name) ? settings[name] : undefined;
         if (spec === undefined) {
-            errors.push(layoutError('SUI-LAYOUT-SETTING', { name, path: settingPath, statePath: settingPath }));
+            errors.push(layoutError('SUI-LAYOUT-SETTING', { name, path: settingPath, statePath: settingPath, reason: allowedSettings(layout.type) }));
         } else if (!fitsField(spec, value)) {
             errors.push(layoutError('SUI-LAYOUT-VALUE', { name, path: settingPath, statePath: settingPath }));
         }
     }
 }
 
-/** Checks each placement field against the parent's declared placement shape, or else the placement of its layout type */
+/**
+ * Checks each placement field against the parent's declared placement shape, or else the placement of its layout type.
+ * A placement links as a whole (`<-placement`); a link to one field (`<-x`) is an unknown field
+ */
 function checkFields(placement: JsonObject, at: string, parent: Parent, type: LayoutType | undefined, errors: BuildError[]): void {
     const declared = parent.shape?.placement;
     for (const [name, value] of Object.entries(placement)) {
@@ -114,7 +129,9 @@ function checkFields(placement: JsonObject, at: string, parent: Parent, type: La
 
 function checkPlacement(node: Node, path: string, parent: Parent | undefined, errors: BuildError[]): void {
     const at = `${path}.${RESERVED_KEYS.placement}`;
-    const present = Object.hasOwn(node, RESERVED_KEYS.placement);
+    // A linked placement (`<-placement`) takes its fields from the store: only where it sits is checked
+    const linked = Object.hasOwn(node, `${PREFIXES.link}${RESERVED_KEYS.placement}`);
+    const present = Object.hasOwn(node, RESERVED_KEYS.placement) && !linked;
     const declared = parent?.shape?.placement;
     const value = node[RESERVED_KEYS.placement] as JsonValue | undefined;
 
@@ -125,6 +142,7 @@ function checkPlacement(node: Node, path: string, parent: Parent | undefined, er
     const placement = (present ? value : {}) as JsonObject;
 
     if (parent !== undefined && declared !== undefined) {
+        if (linked) return;
         checkFields(placement, at, parent, undefined, errors);
         for (const [name, property] of Object.entries(declared)) {
             if (property.required && !Object.hasOwn(placement, name)) {
@@ -133,7 +151,7 @@ function checkPlacement(node: Node, path: string, parent: Parent | undefined, er
         }
         return;
     }
-    if (!present) return;
+    if (!present && !linked) return;
 
     if (parent === undefined) {
         // A composed component's own root carries a default placement for where it is used; only the app root has none
@@ -148,7 +166,7 @@ function checkPlacement(node: Node, path: string, parent: Parent | undefined, er
     }
     // An invalid parent layout is reported by the layout validator; the child is not checked against it
     const type = layoutTypeOf(parent.node);
-    if (type !== undefined) checkFields(placement, at, parent, type, errors);
+    if (type !== undefined && !linked) checkFields(placement, at, parent, type, errors);
 }
 
 /**

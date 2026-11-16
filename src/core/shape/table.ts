@@ -11,6 +11,17 @@ import { MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.
 import type { PropertyShape, PropertyType, Shape } from './types.js';
 import type { ComponentToken } from '../theme/types.js';
 import { VALIDATORS, isValidatorName } from './validators.js';
+import { COMPONENT_CATEGORIES, MAX_PURPOSE_LENGTH, checkPurposes, isComponentCategory } from './categories.js';
+
+/** `SUI-BUILD-CATEGORY` for a file: a missing category, or one not in the list */
+export function categoryError(file: string): BuildError {
+    return buildError('SUI-BUILD-CATEGORY', { file, name: COMPONENT_CATEGORIES.join(', ') });
+}
+
+/** `SUI-BUILD-PURPOSES` for a file, with what is wrong */
+export function purposesError(file: string, reason: string): BuildError {
+    return buildError('SUI-BUILD-PURPOSES', { file, name: reason, limit: MAX_PURPOSE_LENGTH });
+}
 
 /** What the parser hands every rule: the file being read, the error list and where in the file the rule runs */
 export interface RuleContext {
@@ -382,7 +393,7 @@ function readNames(value: JsonValue, context: RuleContext, key: string): string[
 }
 
 /** The keys of one `shared` entry */
-const SHARED_ENTRY_KEYS: readonly KeyRule<{ default?: JsonValue }>[] = [
+const SHARED_ENTRY_KEYS: readonly KeyRule<SharedEntry>[] = [
     {
         name: 'default',
         type: 'any',
@@ -390,16 +401,35 @@ const SHARED_ENTRY_KEYS: readonly KeyRule<{ default?: JsonValue }>[] = [
         rule(value, entry) {
             entry.default = value;
         }
+    },
+    {
+        name: 'values',
+        type: 'array',
+        required: false,
+        rule(value, entry, context) {
+            const list = value as JsonValue[];
+            if (list.length === 0 || new Set(list).size !== list.length) {
+                context.errors.push(invalid(context, 'values'));
+                return;
+            }
+            entry.values = list;
+        }
     }
 ];
 
+/** One `shared` entry: its default, and the part of the closed list the component paints (all of it when absent) */
+interface SharedEntry {
+    default?: JsonValue;
+    values?: JsonValue[];
+}
+
 /** The property a shared entry expands to: a string with the closed list as its values, written as an attribute */
-function sharedProperty(name: SharedName, fallback: JsonValue | undefined): PropertyShape {
+function sharedProperty(name: SharedName, fallback: JsonValue | undefined, values: readonly string[] = closedList(name)): PropertyShape {
     return {
         type: 'string',
         required: false,
         ...(fallback === undefined ? {} : { default: fallback }),
-        values: closedList(name),
+        values: [...values],
         validators: {},
         runtime: false,
         reflect: true,
@@ -416,18 +446,25 @@ function readShared(value: { [key: string]: JsonValue }, shape: Shape, context: 
             context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: where }));
             continue;
         }
-        const entry: { default?: JsonValue } = {};
+        const entry: SharedEntry = {};
         const before = context.errors.length;
         applyKeys(SHARED_ENTRY_KEYS, asObject(input), entry, { ...context, where });
         if (context.errors.length > before) continue;
-        if (entry.default !== undefined && !closedList(name).includes(entry.default as string)) {
+        // `values` narrows the closed list to what the component paints, as a field has no `solid` variant
+        const list = closedList(name);
+        if (entry.values !== undefined && !entry.values.every((item) => list.includes(item as string))) {
+            context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `${where}.values` }));
+            continue;
+        }
+        const allowed = (entry.values as string[] | undefined) ?? list;
+        if (entry.default !== undefined && !allowed.includes(entry.default as string)) {
             context.errors.push(buildError('SUI-BUILD-DEFAULT', { file: context.file, name }));
             continue;
         }
         // An own property of the same name is reported by `finishShape` and keeps its place
         if (Object.hasOwn(shape.properties, name)) continue;
         shape.shared.push(name);
-        shape.properties[name] = sharedProperty(name, entry.default);
+        shape.properties[name] = sharedProperty(name, entry.default, allowed);
     }
 }
 
@@ -623,6 +660,32 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
         required: false,
         rule(value, shape) {
             shape.tokenGroup = value as string;
+        }
+    },
+    {
+        // Optional here: `BuildOptions.requireSearchKeys` makes a missing one an error
+        name: 'category',
+        type: 'any',
+        required: false,
+        rule(value, shape, context) {
+            if (!isComponentCategory(value)) {
+                context.errors.push(categoryError(context.file));
+                return;
+            }
+            shape.category = value;
+        }
+    },
+    {
+        name: 'purposes',
+        type: 'any',
+        required: false,
+        rule(value, shape, context) {
+            const reason = checkPurposes(value);
+            if (reason !== undefined) {
+                context.errors.push(purposesError(context.file, reason));
+                return;
+            }
+            shape.purposes = [...(value as string[])];
         }
     }
 ];

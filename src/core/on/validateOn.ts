@@ -1,10 +1,11 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { isObject } from '../resolve/merge.js';
+import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary, ResolveResult } from '../resolve/index.js';
 import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
-import { RESERVED_KEYS } from '../types.js';
+import { PREFIXES, RESERVED_KEYS, isAppEvent } from '../types.js';
 import type { JsonValue } from '../types.js';
 import { parseTarget, readCommand, readEntry } from './parse.js';
 import { findProvider, findRowProvider, resolveTarget } from './resolveTarget.js';
@@ -15,6 +16,8 @@ const ROOT_PATH = '$.app';
 export interface ValidateOnOptions {
     /** The state path of the node being validated; `$.app` when absent */
     path?: string;
+    /** The resolved app node: a screen's commands aiming at `$.app…` (such as its toasts) are checked against it */
+    app?: ResolvedTree;
 }
 
 /** The part of a `ResolveResult` the validator needs */
@@ -23,13 +26,26 @@ export type ResolvedTree = Pick<ResolveResult, 'node' | 'instances'>;
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 /** The chain of the node holding an `on` entry and, inside a row template, the index of the owning frame */
 interface Scope {
     chain: readonly Frame[];
     owner: number | undefined;
+}
+
+/**
+ * The events a component raises after it wrote its own value (a checkbox's `checked`, a field's `value`): a link on
+ * that value has already saved the change when the `on` entry runs
+ */
+const VALUE_EVENTS: readonly string[] = ['change', 'input'];
+
+/** The node's own links, `<-key` to its target, for the targets written as text */
+function ownLinks(node: TreeNode): [key: string, target: string][] {
+    return Object.entries(node).flatMap(([key, value]): [string, string][] =>
+        key.startsWith(PREFIXES.link) && typeof value === 'string' ? [[key, value]] : []
+    );
 }
 
 /** What stands for the slot's `row` alias while validating: the alias only exists at run time */
@@ -47,7 +63,8 @@ class OnValidator {
     constructor(
         private readonly library: ComponentLibrary,
         private readonly instances: Readonly<Record<string, string[]>>,
-        private readonly rootPath: string
+        private readonly rootPath: string,
+        private readonly app?: ResolvedTree
     ) {}
 
     /** `owner` is the index in the chain of the node that owns the row template this node is inside, if any */
@@ -88,7 +105,8 @@ class OnValidator {
         const shape = shapeOf(this.library, self.node.component);
         for (const [event, entry] of Object.entries(on)) {
             const eventPath = `${onPath}.${event}`;
-            if (shape && !shape.events.includes(event)) {
+            const appEvent = self.path === '$.app' && isAppEvent(event);
+            if (shape && !appEvent && !shape.events.includes(event)) {
                 this.errors.push(
                     buildError('SUI-ON-EVENT', { component: self.node.component, path: self.path, event, statePath: eventPath })
                 );
@@ -119,13 +137,14 @@ class OnValidator {
     }
 
     private checkCommand(command: OnCommand, event: string, scope: Scope, statePath: string): void {
-        const { chain } = scope;
-        if (command.command === 'emit') {
+        if (command.from !== undefined) this.checkFrom(command.from, event, scope, statePath);
+        if (command.command === 'emit' || command.command === 'navigate') {
             if (command.target === undefined) this.malformed(statePath);
             return;
         }
         if (command.command === 'set' || command.command === 'toggle') {
             this.checkWrite(command, event, scope, statePath);
+            this.checkLinked(command, event, scope, statePath);
             return;
         }
         this.checkComponentCommand(command, event, scope, statePath);
@@ -134,7 +153,7 @@ class OnValidator {
     /** `set` and `toggle` write to a property: they need a target that names one, and `set` needs a value */
     private checkWrite(command: OnCommand, event: string, scope: Scope, statePath: string): void {
         const { chain } = scope;
-        if (command.command === 'set' && !('value' in command)) this.malformed(statePath);
+        if (command.command === 'set' && !('value' in command) && command.from === undefined) this.malformed(statePath);
         if (command.target === undefined) {
             this.malformed(statePath);
             return;
@@ -147,6 +166,39 @@ class OnValidator {
                 located.kind === 'outside' ||
                 (located.kind === 'property' && this.declares(located.node.component, located.property)));
         if (!ok) this.badTarget(command.target, event, chain, statePath);
+    }
+
+    /**
+     * A `set` or `toggle` on a value event that writes the target of one of the node's own links: the component wrote
+     * its value and the link saved it, so a toggle flips it back and a set overwrites the person's choice
+     * (`"<-checked": "$row.done"` with `toggle $row.done` on `change` never changes the record)
+     */
+    private checkLinked(command: OnCommand, event: string, scope: Scope, statePath: string): void {
+        if (!VALUE_EVENTS.includes(event) || command.target === undefined) return;
+        const self = scope.chain[scope.chain.length - 1] as Frame;
+        const linked = ownLinks(self.node).find(([, target]) => target === command.target);
+        if (linked === undefined) return;
+        this.errors.push(
+            buildError('SUI-ON-LINKED', {
+                command: command.command,
+                event,
+                path: self.path,
+                target: command.target,
+                key: linked[0],
+                statePath
+            })
+        );
+    }
+
+    /** `from` reads a value: a property a component declares, a path outside `$.app` or `$row.path`, never a node */
+    private checkFrom(from: string, event: string, scope: Scope, statePath: string): void {
+        const located = this.locate(from, scope);
+        const ok =
+            located !== undefined &&
+            (located.kind === 'state' ||
+                located.kind === 'outside' ||
+                (located.kind === 'property' && this.declares(located.node.component, located.property)));
+        if (!ok) this.badTarget(from, event, scope.chain, statePath);
     }
 
     private checkComponentCommand(command: OnCommand, event: string, scope: Scope, statePath: string): void {
@@ -165,7 +217,7 @@ class OnValidator {
         }
 
         const self = chain[chain.length - 1] as Frame;
-        const located: Located | undefined =
+        let located: Located | undefined =
             command.target === undefined
                 ? { kind: 'node', path: self.path, node: self.node }
                 : this.locate(command.target, scope);
@@ -173,7 +225,15 @@ class OnValidator {
             this.badTarget(command.target ?? '', event, chain, statePath);
             return;
         }
-        if (located.kind === 'outside') return;
+        if (located.kind === 'outside') {
+            if (!this.reachesApp(located.path)) return;
+            const inApp = this.locateInApp(located.path);
+            if (inApp?.kind !== 'node') {
+                this.badTarget(command.target ?? '', event, chain, statePath);
+                return;
+            }
+            located = inApp;
+        }
 
         const commands = this.commandsOf(located.node.component);
         if (commands && !commands.includes(name)) {
@@ -209,6 +269,19 @@ class OnValidator {
             : undefined;
     }
 
+    /** Whether a path outside the validated tree names the app node or below it, and the app node is known */
+    private reachesApp(path: string): boolean {
+        return this.app !== undefined && (path === ROOT_PATH || path.startsWith(`${ROOT_PATH}.`));
+    }
+
+    /** A `$.app…` path resolved against the app node */
+    private locateInApp(path: string): Located | undefined {
+        const parsed = parseTarget(path);
+        if (!parsed || this.app === undefined) return undefined;
+        const frame: Frame = { path: ROOT_PATH, key: 'app', node: this.app.node as TreeNode, instances: [] };
+        return resolveTarget(parsed, [frame], ROOT_PATH);
+    }
+
     private commandsOf(component: string): readonly string[] | undefined {
         return shapeOf(this.library, component)?.commands;
     }
@@ -224,14 +297,19 @@ class OnValidator {
  * Checks every `on` entry in a resolved tree and returns the errors, in tree order:
  * - a malformed `on` (reported as `SUI-DOC-SHAPE` with the state path until the catalog has a `SUI-ON` code for it):
  *   not a map of event to entry, an entry that is not one command object or a non-empty list of them, a command
- *   object with other keys, an `emit` without a target (its event name), a `set` without a value, or a `set` or
+ *   object with other keys or with both `value` and `from`, an `emit` without a target (its event name), a `set`
+ *   without a value or `from`, or a `set` or
  *   `toggle` without a target
- * - `SUI-ON-EVENT`: the node's component does not declare the event
+ * - `SUI-ON-EVENT`: the node's component does not declare the event; the root node (`$.app`) may also use the app
+ *   events (`APP_EVENTS`: `sync.rejected`, `logic.failed`, and `notify.<name>`) the host raises
  * - `SUI-ON-COMMAND`: the target's component does not declare the command
+ * - `SUI-ON-LINKED`: a `set` or `toggle` on `change` or `input` writes the target of one of the node's own `<-` links,
+ *   which already saved the value the component wrote, so the two writes undo each other
  * - `SUI-ON-VALUE`: a literal `value` of a command the target's shape lists in `commandValues` is not a key of that map
  * - `SUI-ON-TARGET`: the target text is not a valid form (including dot climbing), the ancestor or a step does not
  *   exist, no ancestor provides the command for `$parent`, a component command targets a property or a path outside
- *   `$.app`, or `set` and `toggle` do not target a property the component declares
+ *   `$.app`, `set` and `toggle` do not target a property the component declares, or `from` names no such property,
+ *   path or `$row.path`
  *
  * Target rules: a component command without a target acts on the node itself; `set` and `toggle` target a property
  * (`$.data.name`, `.value`, `^form.children.name.value`); `emit` uses `target` as the event name and is not resolved.
@@ -240,7 +318,7 @@ class OnValidator {
  */
 export function validateOn(tree: ResolvedTree, library: ComponentLibrary, options: ValidateOnOptions = {}): BuildError[] {
     const rootPath = options.path ?? ROOT_PATH;
-    const validator = new OnValidator(library, tree.instances, rootPath);
+    const validator = new OnValidator(library, tree.instances, rootPath, options.app);
     validator.visit(tree.node, rootPath, []);
     return validator.errors;
 }

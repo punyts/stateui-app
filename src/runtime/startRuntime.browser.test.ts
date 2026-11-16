@@ -6,6 +6,7 @@ import { parseShape } from '../core/shape/index.js';
 import type { Shape } from '../core/shape/index.js';
 import type { AppDocument } from '../core/types.js';
 import { MAX_ICON_PATH_LENGTH, PROTOCOL_VERSION } from './protocol.js';
+import { registerMountStep } from '../dom/mount/index.js';
 import { startRuntime } from './index.js';
 import type { RuntimeHandle } from './index.js';
 
@@ -24,11 +25,18 @@ const library: ComponentLibrary = {
     input: {
         tier: 'root',
         tag: 'x-rt-input',
-        shape: shapeOf({ value: { type: 'string', default: '' }, inputType: { type: 'string', default: 'text' } })
+        shape: shapeOf({ value: { type: 'string', default: '' }, inputType: { type: 'string', default: 'text' } }, ['press'])
     },
     heading: { tier: 'root', tag: 'x-rt-heading', shape: shapeOf({ _text: { type: 'string', kind: 'content', default: 'Heading' } }) },
     modal: { tier: 'root', tag: 'x-rt-modal', shape: shapeOf({ title: { type: 'string', default: '' } }, [], ['open', 'toast']) },
-    button: { tier: 'root', tag: 'x-rt-button', shape: shapeOf({ enabled: { type: 'boolean', default: true } }, ['press']) }
+    button: { tier: 'root', tag: 'x-rt-button', shape: shapeOf({ enabled: { type: 'boolean', default: true } }, ['press']) },
+    counter: {
+        tier: 'root',
+        tag: 'x-rt-counter',
+        shape: shapeOf({ count: { type: 'number', default: 0, runtime: true }, label: { type: 'string', default: '' }, note: { type: 'string' } })
+    },
+    app: { tier: 'root', tag: 'x-rt-app', shape: shapeOf({}) },
+    picker: { tier: 'root', tag: 'x-rt-picker', shape: shapeOf({ current: { type: 'string', runtime: true, exposed: true, default: '' } }) }
 };
 
 defineComponent({
@@ -41,6 +49,32 @@ defineComponent({ tag: 'x-rt-input', template: '<i>input</i>' });
 defineComponent({ tag: 'x-rt-heading', template: '<h1>{{ $._text }}</h1>' });
 defineComponent({ tag: 'x-rt-modal', template: '<dialog>modal</dialog>' });
 defineComponent({ tag: 'x-rt-button', template: '<b>button</b>' });
+/** The test stand-in for the app component: the screens go in its layout host */
+defineComponent({ tag: 'x-rt-app', template: '<section layout-host=""></section>' });
+/** Computes its runtime property `count` on every mount, as a record view counts its records */
+defineComponent({
+    tag: 'x-rt-counter',
+    template: '<p>count:{{ $.count }} note:{{ $.note }}</p>',
+    controller: ({ store, basePath }) => {
+        store.set(`${basePath}.count`, 3);
+        return {};
+    }
+});
+
+/** Writes its exposed property `current` in its runtime branch when it starts, as a list exposes its selection */
+defineComponent({
+    tag: 'x-rt-picker',
+    template: '<p>picker</p>',
+    controller: ({ store, basePath }) => {
+        const segments = `$.runtime.nodes.${basePath.slice(2)}`.split('.');
+        for (let length = 3; length <= segments.length; length += 1) {
+            const prefix = segments.slice(0, length).join('.');
+            if (store.get(prefix) === undefined) store.set(prefix, {});
+        }
+        store.set(`${segments.join('.')}.current`, 'picked');
+        return {};
+    }
+});
 
 function textOf(root: ParentNode): string {
     let text = '';
@@ -119,18 +153,365 @@ describe('startRuntime in Chromium', () => {
         expect(postMessage.mock.calls[0]?.[1]).toBe('*');
     });
 
-    it('should put the state snapshot over the document and the icons into $.runtime.icons before rendering', () => {
+    it('should post a key chord the host named instead of letting the app see it, and let other keys through', () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ hello: { component: 'label', text: 'hi' } }) };
+        send(message('load', { document, keys: ['mod+shift+e'] }));
+        const seen: string[] = [];
+        const listen = (event: KeyboardEvent): void => void seen.push(event.key);
+        host.addEventListener('keydown', listen);
+        const press = (init: KeyboardEventInit): KeyboardEvent => {
+            const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+            host.dispatchEvent(event);
+            return event;
+        };
+
+        // Act
+        const chord = press({ key: 'E', ctrlKey: true, shiftKey: true });
+        const mac = press({ key: 'E', metaKey: true, shiftKey: true });
+        const other = press({ key: 'e', ctrlKey: true });
+        host.removeEventListener('keydown', listen);
+
+        // Assert
+        expect(ofType('key').map((posted) => posted['key'])).toEqual(['mod+shift+e', 'mod+shift+e']);
+        expect(chord.defaultPrevented && mac.defaultPrevented).toBe(true);
+        expect(other.defaultPrevented).toBe(false);
+        expect(seen).toEqual(['e']);
+    });
+
+    it('should post a bare key and Escape the host named only while the person is not typing', () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ hello: { component: 'label', text: 'hi' } }) };
+        send(message('load', { document, keys: ['v', 'escape', 'mod+shift+e'] }));
+        const field = window.document.createElement('input');
+        host.append(field);
+        const press = (target: EventTarget, init: KeyboardEventInit): KeyboardEvent => {
+            const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, composed: true, ...init });
+            target.dispatchEvent(event);
+            return event;
+        };
+
+        // Act
+        const bare = press(host, { key: 'v' });
+        const escape = press(host, { key: 'Escape' });
+        const typed = press(field, { key: 'v' });
+        const chordWhileTyping = press(field, { key: 'E', ctrlKey: true, shiftKey: true });
+        field.remove();
+
+        // Assert
+        expect(ofType('key').map((posted) => posted['key'])).toEqual(['v', 'escape', 'mod+shift+e']);
+        expect(bare.defaultPrevented && escape.defaultPrevented && chordWhileTyping.defaultPrevented).toBe(true);
+        expect(typed.defaultPrevented).toBe(false);
+    });
+
+    it('should answer an inspect with the node at a point and its ancestors, or with the nodes of some paths', async () => {
+        // Arrange
+        const document: AppDocument = {
+            app: { component: 'panel', children: { first: { component: 'label', text: 'one' }, second: { component: 'badge', text: 'two' } } } as AppDocument['app']
+        };
+        send(message('load', { document }));
+        await tick();
+        expect(ofType('error')).toEqual([]);
+        const badge = find(host, 'x-rt-badge') as Element;
+        const box = badge.getBoundingClientRect();
+
+        // Act
+        send(message('inspect', { id: 7, at: { x: box.x + 2, y: box.y + box.height / 2 } }));
+        send(message('inspect', { id: 8, paths: ['$.app', '$.app.children.first', '$.app.children.missing'] }));
+
+        // Assert
+        const [atPoint, ofPaths] = ofType('inspected') as unknown as { id: number; at?: string; nodes: { path: string; component: string; layout?: string; rect: { height: number }; children: { path: string }[] }[] }[];
+        expect(atPoint?.id).toBe(7);
+        expect(atPoint?.at).toBe('$.app.children.second');
+        expect(atPoint?.nodes.map((node) => node.path)).toEqual(['$.app.children.second', '$.app']);
+        expect(atPoint?.nodes[0]?.component).toBe('badge');
+        expect(atPoint?.nodes[1]?.children.map((child) => child.path)).toEqual(['$.app.children.first', '$.app.children.second']);
+        expect(ofPaths?.id).toBe(8);
+        expect(ofPaths?.nodes.map((node) => node.path).sort()).toEqual(['$.app', '$.app.children.first']);
+        expect(ofPaths?.nodes.find((node) => node.path === '$.app.children.first')?.rect.height).toBeGreaterThan(0);
+    });
+
+    it('should tell where watched nodes are, again when a write changes the layout, and stop when the watch is emptied', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { wide: false },
+            app: { component: 'panel', children: { first: { component: 'label', text: 'one' }, second: { component: 'badge', text: 'two', '<-hidden': '$.data.wide' } } } as AppDocument['app']
+        };
+        send(message('load', { document }));
+        await tick();
+        const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        // Act
+        send(message('watch', { paths: ['$.app.children.first', '$.app.children.second', '$.app.children.missing'] }));
+        await settle();
+        const first = ofType('watched').length;
+        send(message('write', { writes: [{ path: '$.data.wide', value: true }] }));
+        await settle();
+        const afterWrite = ofType('watched').length;
+        send(message('watch', { paths: [] }));
+        send(message('write', { writes: [{ path: '$.data.wide', value: false }] }));
+        await settle();
+
+        // Assert
+        const reports = ofType('watched') as unknown as { nodes: { path: string; rect: { width: number } }[] }[];
+        expect(first).toBe(1);
+        expect(reports[0]?.nodes.map((node) => node.path).sort()).toEqual(['$.app.children.first', '$.app.children.second']);
+        expect(afterWrite).toBe(2);
+        expect(reports[1]?.nodes.find((node) => node.path === '$.app.children.second')?.rect.width).toBe(0);
+        expect(ofType('watched').length).toBe(2);
+    });
+
+    it('should follow the system mode again on a theme message of system', async () => {
+        // Arrange
+        send(message('load', { document: { app: { component: 'panel' } } as AppDocument }));
+        await tick();
+        send(message('theme', { kind: 'mode', name: 'dark' }));
+
+        // Act
+        send(message('theme', { kind: 'mode', name: 'system' }));
+        await tick();
+
+        // Assert
+        expect(ofType('error')).toEqual([]);
+    });
+
+    it('should put the state over the document and the icons into $.runtime.icons before rendering', async () => {
         // Arrange
         const document: AppDocument = { data: { name: 'Ada' }, app: panel({ hello: { component: 'label', '<-text': '$.data.name' } }) };
         const icons = { star: { outline: ['M12 2l3 7h7z'] } };
 
         // Act
         send(message('load', { document, state: { data: { name: 'Grace' }, app: {} }, icons }));
-        send(message('write', { writes: [{ path: '$.data.name', value: 'Hopper' }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('label:Grace');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should lay the instance over the definition on load: a screen, the data and the route', async () => {
+        // Arrange
+        const document = {
+            data: { name: 'Ada' },
+            app: { component: 'app' },
+            screens: {
+                home: { root: panel({ title: { component: 'badge', text: 'home' } }) },
+                about: { root: panel({ title: { component: 'badge', text: 'about' }, hello: { component: 'label', '<-text': '$.data.name' } }) }
+            },
+            start: 'home'
+        } as unknown as AppDocument;
+        const instance = { app: {}, screens: { about: { children: { title: { text: 'about us' } } } }, route: { screen: 'about' }, data: { name: 'Grace' } };
+
+        // Act
+        send(message('load', { document, instance }));
+        await tick();
+
+        // Assert
+        const text = textOf(host);
+        expect(ofType('ready')).toHaveLength(1);
+        expect(text).toContain('label:Grace');
+        expect(text).toContain('badge:about us');
+        expect(text).not.toContain('badge:home');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should take a host write below a screen as a sync write and refuse one of the protected route', async () => {
+        // Arrange
+        const document = {
+            app: { component: 'app' },
+            screens: { home: { root: panel({ title: { component: 'badge', text: 'home' } }) }, about: { root: panel({}) } },
+            start: 'home'
+        } as unknown as AppDocument;
+        send(message('load', { document }));
+        await tick();
+
+        // Act
+        send(message('write', { writes: [{ path: '$.screens.home.children.title.text', value: 'welcome' }, { path: '$.route', value: { screen: 'about' } }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('badge:welcome');
+        expect(ofType('change')).toHaveLength(0);
+        const errors = ofType('error').flatMap((posted) => posted['errors'] as { code: string; statePath?: string }[]);
+        expect(errors).toEqual([expect.objectContaining({ code: 'SUI-RUN-WRITE', statePath: '$.route' })]);
+    });
+
+    it('should replace the document data with the state data, so a shorter list and a removed key stay gone', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { rows: ['a', 'b', 'c', 'd'], map: { k1: 'one', k2: 'two' }, name: 'Ada' },
+            app: panel({
+                hello: { component: 'label', '<-text': '$.data.name' },
+                second: { component: 'badge', '<-text': '$.data.rows.1' },
+                third: { component: 'badge', '<-text': '$.data.rows.2' },
+                gone: { component: 'badge', '<-text': '$.data.map.k2' }
+            })
+        };
+
+        // Act
+        send(message('load', { document, state: { data: { rows: ['x', 'y'], map: { k1: 'uno' }, name: 'Grace' }, app: {} } }));
+        await tick();
+
+        // Assert
+        const text = textOf(host);
+        expect(text).toContain('label:Grace');
+        expect(text).toContain('badge:y');
+        expect(text).not.toContain('badge:c');
+        expect(text).not.toContain('badge:two');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should post the press, then the edit it makes, each with an id and no base', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { name: 'Ada' },
+            app: panel({ go: { component: 'button', on: { press: { command: 'set', target: '$.data.name', value: 'Linus' } } } })
+        };
+        send(message('load', { document }));
+
+        // Act
+        find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+        await tick();
+
+        // Assert: the event is state first ($.raised), then the command runs
+        const changes = ofType('change');
+        expect(changes.map((change) => change['change'])).toEqual([
+            { id: expect.any(String), path: '$.raised.app', op: 'set', value: { children: { go: { press: true } } } },
+            { id: expect.any(String), path: '$.data.name', op: 'set', value: 'Linus' }
+        ]);
+    });
+
+    it('should post nothing for a host write', async () => {
+        // Arrange
+        const document: AppDocument = {
+            data: { name: 'Ada' },
+            app: panel({ hello: { component: 'label', '<-text': '$.data.name' }, other: { component: 'label', text: 'a' } })
+        };
+        send(message('load', { document }));
+
+        // Act
+        send(message('write', { writes: [{ path: '$.data.name', value: 'Hopper' }, { path: '$.app.children.other.text', value: 'x' }] }));
+        await tick();
 
         // Assert
         expect(textOf(host)).toContain('label:Hopper');
-        expect(ofType('snapshot')[0]).toMatchObject({ data: { name: 'Hopper' } });
+        expect(textOf(host)).toContain('label:x');
+        expect(ofType('change')).toHaveLength(0);
+    });
+
+    it('should neither post nor restore a runtime property of a node', async () => {
+        // Arrange
+        const document: AppDocument = { data: {}, app: panel({ rows: { component: 'counter' } }) };
+        const stale = { data: {}, app: { children: { rows: { count: 0, label: 'kept' } } } };
+
+        // Act
+        send(message('load', { document, state: stale }));
+        await tick();
+        send(message('write', { writes: [{ path: '$.app.children.rows.count', value: 0 }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('count:3');
+        expect(ofType('change').map((posted) => (posted['change'] as { path: string }).path)).not.toContain('$.app.children.rows.count');
+        expect(ofType('error')).toHaveLength(0);
+    });
+
+    it('should neither post nor restore a runtime property of a node on a screen', async () => {
+        // Arrange
+        const document = {
+            data: {},
+            app: { component: 'app' },
+            screens: { home: { root: panel({ rows: { component: 'counter' } }) } },
+            start: 'home'
+        } as unknown as AppDocument;
+
+        // Act
+        send(message('load', { document }));
+        await tick();
+        send(message('write', { writes: [{ path: '$.screens.home.children.rows.count', value: 0 }] }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('count:3');
+        expect(ofType('change').map((posted) => (posted['change'] as { path: string }).path)).not.toContain('$.screens.home.children.rows.count');
+        expect(ofType('error')).toHaveLength(0);
+    });
+
+    it('should put a snapshot property the document does not set on its node, and skip a node that is gone', async () => {
+        // Arrange
+        const document: AppDocument = { data: {}, app: panel({ rows: { component: 'counter' } }) };
+        const snapshot = { data: {}, app: { children: { rows: { note: 'filled', other: 'x' }, gone: { label: 'old' } } } };
+
+        // Act
+        send(message('load', { document, state: snapshot }));
+        await tick();
+
+        // Assert
+        expect(textOf(host)).toContain('note:filled');
+        expect(textOf(host)).not.toContain('old');
+        expect(ofType('error')).toHaveLength(0);
+    });
+
+    it('should show a sync status write in a linked node', async () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ status: { component: 'label', '<-text': '$.runtime.sync.status' } }) };
+        send(message('load', { document, mode: 'full' }));
+        const initial = textOf(host);
+
+        // Act
+        send(message('write', { writes: [{ path: '$.runtime.sync', value: { mode: 'full', status: 'offline', waiting: 3 } }] }));
+        await tick();
+
+        // Assert
+        expect(initial).toContain('label:connecting');
+        expect(textOf(host)).toContain('label:offline');
+        expect(ofType('change')).toHaveLength(0);
+        expect(handle.stats().dropped.invalid).toBe(0);
+    });
+
+    it('should start a Standalone app with the standalone status and refuse $.server in it', () => {
+        // Arrange
+        const status: AppDocument = { app: panel({ status: { component: 'label', '<-text': '$.runtime.sync.status' } }) };
+        const secret: AppDocument = {
+            app: panel({ go: { component: 'button', on: { press: { command: 'set', target: '$.server.token', value: 'x' } } } })
+        };
+
+        // Act
+        send(message('load', { document: status }));
+        const text = textOf(host);
+        send(message('load', { document: secret, mode: 'persisted' }));
+
+        // Assert
+        expect(text).toContain('label:standalone');
+        const errors = ofType('error').flatMap((entry) => entry['errors'] as { code: string }[]);
+        expect(errors.map((error) => error.code)).toContain('SUI-DOC-SERVER');
+        expect(ofType('ready')).toHaveLength(1);
+    });
+
+    it('should run the root on entry for sync.rejected with the payload', () => {
+        // Arrange
+        const document: AppDocument = {
+            app: { ...panel({}), on: { 'sync.rejected': { command: 'emit', target: 'rejected' } } } as AppDocument['app']
+        };
+        send(message('load', { document, mode: 'full' }));
+
+        // Act
+        send(message('event', { name: 'sync.rejected', payload: { path: '$.data.stock', reason: 'sold out' } }));
+
+        // Assert
+        expect(ofType('error')).toHaveLength(0);
+        expect(ofType('emit')).toEqual([
+            { v: PROTOCOL_VERSION, nonce: NONCE, type: 'emit', name: 'rejected', payload: { path: '$.data.stock', reason: 'sold out' } }
+        ]);
+    });
+
+    it('should drop an event that is not an app event, and count one while nothing is mounted', () => {
+        // Act
+        send(message('event', { name: 'sync.rejected' }));
+        send(message('event', { name: 'press' }));
+
+        // Assert
+        expect(handle.stats().dropped).toMatchObject({ unhandled: 1, invalid: 1 });
     });
 
     it('should change the DOM on a path write without a reload', () => {
@@ -146,7 +527,6 @@ describe('startRuntime in Chromium', () => {
         expect(textOf(host)).toContain('label:Grace');
         expect(find(host, 'x-rt-label')).toBe(label);
         expect(ofType('ready')).toHaveLength(1);
-        expect(ofType('snapshot')).toHaveLength(1);
     });
 
     it('should replace only the node whose component changed', () => {
@@ -168,7 +548,131 @@ describe('startRuntime in Chromium', () => {
         expect(find(host, 'x-rt-label')).toBe(before);
     });
 
-    it('should accept the icons of a write and post a snapshot', () => {
+    it('should remount a node whose component changes to one with children', async () => {
+        // Arrange
+        const document: AppDocument = {
+            app: panel({ kpis: panel({ cash: { component: 'label', text: 'cash' }, other: { component: 'label', text: 'o' } }) })
+        };
+        send(message('load', { document }));
+        const writes = [{ path: '$.app.children.kpis.children.cash', value: panel({ inner: { component: 'badge', text: 'deep' } }) }];
+
+        // Act
+        send(message('write', { writes }));
+        await tick();
+
+        // Assert
+        expect(ofType('error')).toEqual([]);
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(textOf(host)).toContain('badge:deep');
+        expect(textOf(host)).not.toContain('label:cash');
+        expect(textOf(host)).toContain('label:o');
+    });
+
+    describe('a node written after load', () => {
+        const DOCUMENT: AppDocument = Object.freeze({
+            data: Object.freeze({ total: 'ten', other: 'eleven' }),
+            app: Object.freeze(
+                panel({
+                    source: Object.freeze({ component: 'picker' }),
+                    stat: Object.freeze({ component: 'label', '<-text': '$.data.total' })
+                })
+            )
+        }) as AppDocument;
+
+        const load = async (): Promise<void> => {
+            send(message('load', { document: JSON.parse(JSON.stringify(DOCUMENT)) }));
+            await tick();
+        };
+        const write = async (writes: unknown[]): Promise<void> => {
+            send(message('write', { writes }));
+            await tick();
+        };
+
+        it('should apply the links of a node swapped for another component', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.stat', value: { component: 'badge', '<-text': '$.data.other' } }]);
+
+            // Assert
+            expect(JSON.stringify(ofType('error'))).toBe('[]');
+            expect(textOf(host)).toContain('badge:eleven');
+            expect(textOf(host)).not.toContain('label:ten');
+        });
+
+        it('should apply the links and defaults of a new node', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.added', value: { component: 'badge', '<-text': '$.data.total' } }, { path: '$.app.children.titled', value: { component: 'heading' } }]);
+
+            // Assert
+            expect(ofType('error')).toEqual([]);
+            expect(textOf(host)).toContain('badge:ten');
+            expect(textOf(host)).toContain('Heading');
+        });
+
+        it('should drop the links of the node it replaces', async () => {
+            // Arrange
+            await load();
+            await write([{ path: '$.app.children.stat', value: { component: 'label', text: 'plain' } }]);
+
+            // Act
+            await write([{ path: '$.data.total', value: 'changed' }]);
+
+            // Assert
+            expect(ofType('error')).toEqual([]);
+            expect(textOf(host)).toContain('label:plain');
+            expect(textOf(host)).not.toContain('changed');
+        });
+
+        it('should drop the links of a removed node', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.stat', remove: true }]);
+            await write([{ path: '$.data.total', value: 'changed' }]);
+
+            // Assert
+            expect(ofType('error')).toEqual([]);
+            expect(textOf(host)).not.toContain('ten');
+            expect(textOf(host)).not.toContain('changed');
+        });
+
+        it('should resolve a node reference to a node outside the written node', async () => {
+            // Arrange
+            await load();
+
+            // Act
+            await write([{ path: '$.app.children.stat', value: { component: 'badge', '<-text': '^source.current' } }]);
+
+            // Assert
+            expect(JSON.stringify(ofType('error'))).toBe('[]');
+            expect(textOf(host)).toContain('badge:picked');
+        });
+    });
+
+    it("should keep the document's own icon over a host icon of the same name, on load and on a write", () => {
+        // Arrange
+        let store: { get(path: string): unknown } | undefined;
+        const unregister = registerMountStep('test-icons', { start: (context) => void (store = context.store as never) });
+        const own = { outline: ['M4 5h16v11H9l-5 4z'] };
+        const document: AppDocument = { app: panel({}), icons: { chat: own } };
+
+        // Act
+        send(message('load', { document, icons: { chat: { outline: ['M0 0h24'] }, star: { outline: ['M12 2l3 7h7z'] } } }));
+        send(message('write', { writes: [], icons: { chat: { outline: ['M1 1h2'] } } }));
+        unregister();
+
+        // Assert
+        expect(store?.get('$.runtime.icons.chat')).toEqual(own);
+        expect(store?.get('$.runtime.icons.star')).toEqual({ outline: ['M12 2l3 7h7z'] });
+    });
+
+    it('should accept the icons of a write', () => {
         // Arrange
         send(message('load', { document: { app: panel({}) }, icons: { star: { outline: ['M0 0h24'] } } }));
 
@@ -176,7 +680,7 @@ describe('startRuntime in Chromium', () => {
         send(message('write', { writes: [], icons: { heart: { outline: ['M1 1h2'] } } }));
 
         // Assert
-        expect(ofType('snapshot')).toHaveLength(1);
+        expect(ofType('error')).toHaveLength(0);
         expect(handle.stats().dropped).toEqual({ invalid: 0, unknown: 0, oversized: 0, unhandled: 0, foreign: 0 });
     });
 
@@ -189,7 +693,6 @@ describe('startRuntime in Chromium', () => {
         send(message('write', { writes: [], icons: { big: { outline: ['M'.repeat(MAX_ICON_PATH_LENGTH + 1)] } } }));
 
         // Assert
-        expect(ofType('snapshot')).toHaveLength(0);
         expect(handle.stats().dropped.invalid).toBe(2);
     });
 
@@ -221,14 +724,15 @@ describe('startRuntime in Chromium', () => {
         expect(handle.stats().dropped).toEqual({ invalid: 2, unknown: 1, oversized: 1, unhandled: 0, foreign: 0 });
     });
 
-    it('should count command, locale and theme as unhandled while no application is mounted', () => {
+    it('should count command, locale, theme and write as unhandled while no application is mounted', () => {
         // Act
         send(message('command', { target: '$.app', command: 'open' }));
         send(message('locale', { locale: 'de' }));
         send(message('theme', { kind: 'mode', name: 'dark' }));
+        send(message('write', { writes: [] }));
 
         // Assert
-        expect(handle.stats().dropped.unhandled).toBe(3);
+        expect(handle.stats().dropped.unhandled).toBe(4);
         expect(posted()).toEqual([]);
     });
 
@@ -271,7 +775,6 @@ describe('startRuntime in Chromium', () => {
             const modal = find(host, 'x-rt-modal') as Commanded;
             const open = vi.fn();
             modal.commands = { open };
-            const before = ofType('snapshot').length;
 
             // Act
             send(message('command', { target: '$.app.children.nope', command: 'open' }));
@@ -281,15 +784,73 @@ describe('startRuntime in Chromium', () => {
             // Assert
             expect(errorCodes()).toEqual(['SUI-RUN-ON-TARGET', 'SUI-RUN-ON-COMMAND', 'SUI-RUN-ON-COMMAND']);
             expect(open).not.toHaveBeenCalled();
-            expect(ofType('snapshot')).toHaveLength(before);
+            expect(ofType('change')).toHaveLength(0);
             expect(textOf(host)).toContain('label:Ada');
+        });
+
+        it('should navigate with a navigate command message and run a component command on a node of a screen', () => {
+            // Arrange
+            const document = {
+                app: { component: 'app' },
+                screens: {
+                    home: { title: 'Home', root: panel({ who: { component: 'label', text: 'home' } }) },
+                    detail: { title: 'Detail', params: { id: { type: 'string', required: true } }, root: panel({ dlg: { component: 'modal' } }) }
+                },
+                start: 'home'
+            } as unknown as AppDocument;
+            send(message('load', { document }));
+            const visible = (): string[] =>
+                Array.from((find(host, 'x-rt-app') as Element).shadowRoot?.querySelector('[layout-host]')?.querySelectorAll('[data-sui-screen]') ?? [])
+                    .filter((element) => !(element as HTMLElement).hidden)
+                    .map((element) => element.getAttribute('data-sui-screen') as string);
+
+            // Act
+            send(message('command', { target: 'detail', command: 'navigate', value: { id: 'd1' } }));
+            const modal = find(host, 'x-rt-modal') as Commanded;
+            const open = vi.fn();
+            modal.commands = { open };
+            send(message('command', { target: '$.screens.detail.children.dlg', command: 'open' }));
+            send(message('command', { target: 'nowhere', command: 'navigate' }));
+            send(message('command', { target: 'detail', command: 'navigate', value: {} }));
+
+            // Assert
+            expect(visible()).toEqual(['detail']);
+            expect(open).toHaveBeenCalledTimes(1);
+            expect(errorCodes()).toEqual(['SUI-RUN-ON-COMMAND', 'SUI-RUN-ON-COMMAND']);
+        });
+
+        it('should switch the language of every screen with a locale message, a hidden one and one mounted later included', async () => {
+            // Arrange
+            const document = {
+                app: { component: 'app' },
+                screens: {
+                    home: { root: panel({ title: { component: 'heading' } }) },
+                    detail: { root: panel({ greeting: { component: 'heading' }, name: { component: 'heading', _text: 'Detail' } }), locales: { de: { children: { name: { _text: 'Einzelheit' } } } } }
+                },
+                start: 'home'
+            } as unknown as AppDocument;
+            send(message('load', { document }));
+
+            // Act
+            send(message('locale', { locale: 'de' }));
+            send(message('command', { target: 'detail', command: 'navigate' }));
+            await tick();
+            const german = textOf(host);
+            send(message('locale', { locale: 'en' }));
+            await tick();
+
+            // Assert
+            expect(german.match(/Ueberschrift/g)).toHaveLength(2);
+            expect(german).toContain('Einzelheit');
+            expect(textOf(host)).not.toContain('Ueberschrift');
+            expect(textOf(host)).toContain('Detail');
+            expect(ofType('error')).toHaveLength(0);
         });
 
         it('should change the text content with a locale overlay and leave $.data unchanged', async () => {
             // Arrange
             send(message('load', { document: modalDoc() }));
             send(message('write', { writes: [{ path: '$.data.name', value: 'Grace' }] }));
-            const dataBefore = JSON.stringify(ofType('snapshot').at(-1)?.['data']);
 
             // Act
             send(message('locale', { locale: 'de' }));
@@ -299,7 +860,8 @@ describe('startRuntime in Chromium', () => {
             expect(textOf(host)).toContain('Ueberschrift');
             expect(textOf(host)).toContain('label:Grace');
             expect(ofType('error')).toHaveLength(0);
-            expect(JSON.stringify(ofType('snapshot').at(-1)?.['data'])).toBe(dataBefore);
+            const paths = ofType('change').map((entry) => (entry['change'] as { path: string }).path);
+            expect(paths.filter((path) => path.startsWith('$.data'))).toEqual([]);
         });
 
         it('should post error for a language with no overlay', () => {
@@ -396,6 +958,30 @@ describe('startRuntime in Chromium', () => {
         expect(errors[0]?.statePath).toBe('$.app.children.go');
     });
 
+    it('should post a runtime error for an uncaught window error', () => {
+        // Arrange
+        send(message('load', { document: { app: panel({}) } }));
+
+        // Act
+        window.dispatchEvent(new ErrorEvent('error', { message: 'boom', error: new Error('boom') }));
+
+        // Assert
+        const errors = ofType('error')[0]?.['errors'] as { code: string }[];
+        expect(errors[0]?.code).toBe('SUI-RUN-BINDING');
+    });
+
+    it('should post no error for a ResizeObserver loop notice', () => {
+        // Arrange
+        send(message('load', { document: { app: panel({}) } }));
+
+        // Act
+        window.dispatchEvent(new ErrorEvent('error', { message: 'ResizeObserver loop completed with undelivered notifications.' }));
+        window.dispatchEvent(new ErrorEvent('error', { message: 'ResizeObserver loop limit exceeded' }));
+
+        // Assert
+        expect(ofType('error')).toHaveLength(0);
+    });
+
     it('should post emit from the dispatcher hook', () => {
         // Arrange
         const document: AppDocument = {
@@ -419,35 +1005,38 @@ describe('startRuntime in Chromium', () => {
 
         // Assert
         expect(handle.stats().dropped.invalid).toBe(1);
-        expect(ofType('snapshot')).toHaveLength(0);
+        expect(ofType('change')).toHaveLength(0);
     });
 
-    it('should never put a password value or a $.runtime path in a snapshot', async () => {
+    it('should never post a password value', async () => {
         // Arrange
+        const press = (target: string, value: unknown) => ({ press: { command: 'set', target, value } });
         const document: AppDocument = {
-            data: { pw: 'secret-linked', name: 'Ada' },
+            data: { account: { pw: 'secret-linked', user: 'ada' }, name: 'Ada' },
             app: panel({
-                pass: { component: 'input', inputType: 'password', '<-value': '$.data.pw' },
-                literal: { component: 'input', inputType: 'password', value: 'hunter2' },
-                plain: { component: 'input', value: 'visible' }
+                pass: { component: 'input', inputType: 'password', '<-value': '$.data.account.pw', on: press('$.data.account', { pw: 'secret-typed', user: 'grace' }) },
+                literal: { component: 'input', inputType: 'password', value: 'hunter2', on: press('.value', 'hunter3') },
+                plain: { component: 'input', value: 'visible', on: press('.value', 'shown') }
             })
         };
-        send(message('load', { document, state: { data: { pw: 'secret-linked', name: 'Ada' }, app: { children: { literal: { value: 'hunter2' } } } } }));
+        send(message('load', { document }));
+        const inputs = Array.from(host.querySelectorAll('*')).filter((element) => element.localName === 'x-rt-input');
+        const all = (root: ParentNode): Element[] =>
+            Array.from(root.querySelectorAll('*')).flatMap((element) => [element, ...(element.shadowRoot ? all(element.shadowRoot) : [])]);
+        const fields = inputs.length > 0 ? inputs : all(host).filter((element) => element.localName === 'x-rt-input');
 
         // Act
-        send(message('write', { writes: [{ path: '$.app.children.literal.value', value: 'hunter3' }] }));
-        send(message('write', { writes: [{ path: '$.data.name', value: 'Grace' }] }));
+        for (const field of fields) field.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
         await tick();
 
         // Assert
-        const snapshots = ofType('snapshot');
-        expect(snapshots.length).toBeGreaterThanOrEqual(2);
-        const text = JSON.stringify(snapshots);
-        expect(text).not.toContain('secret-linked');
+        expect(fields).toHaveLength(3);
+        const changes = ofType('change').map((entry) => entry['change']);
+        const text = JSON.stringify(changes);
+        expect(text).not.toContain('secret');
         expect(text).not.toContain('hunter');
-        expect(text).not.toContain('runtime');
-        expect(text).toContain('visible');
-        expect(text).toContain('Grace');
+        expect(changes).toContainEqual(expect.objectContaining({ path: '$.data.account', value: { user: 'grace' } }));
+        expect(changes).toContainEqual(expect.objectContaining({ path: '$.app.children.plain.value', value: 'shown' }));
     });
 
     it('should stop listening after dispose', () => {

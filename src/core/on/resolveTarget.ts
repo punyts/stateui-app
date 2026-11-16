@@ -3,6 +3,7 @@ import type { JsonValue } from '../types.js';
 import type { Frame, Located, ParsedTarget, TreeNode } from './types.js';
 
 const APP_STEP = 'app';
+const SCREENS_STEP = 'screens';
 
 /**
  * Walks `segments` down from a node. A step is a slot (a node-typed property), the `children` map or a child key;
@@ -35,12 +36,26 @@ function walk(start: TreeNode, startPath: string, segments: readonly string[]): 
     return isNodeValue(current) ? { kind: 'node', path, node } : undefined;
 }
 
+/** Every node below `node` (itself included) whose key is `name`: slot properties and `children` entries */
+function nodesNamed(node: TreeNode, path: string, key: string, name: string, found: { node: TreeNode; path: string }[]): void {
+    if (key === name) found.push({ node, path });
+    for (const [property, value] of Object.entries(node)) {
+        if (isNodeValue(value)) nodesNamed(value, `${path}.${property}`, property, name, found);
+        else if (property === 'children' && isObject(value)) {
+            for (const [child, item] of Object.entries(value)) {
+                if (isNodeValue(item)) nodesNamed(item, `${path}.children.${child}`, child, name, found);
+            }
+        }
+    }
+}
+
 /**
  * Resolves a parsed target against the resolved tree. `chain` runs from the root of the validated tree down to the
  * node that holds the `on` entry (which is its last frame); `rootPath` is the state path of the first frame.
  *
- * - Named ancestor: the nearest frame, the node itself included, whose key is `name` or whose `instances` list
- *   `name`; then the steps below it.
+ * - Named node: the nearest frame, the node itself included, whose key is `name` or whose `instances` list
+ *   `name`; when no ancestor has the name, the one node of the tree with that key (a sibling's form, a drawer
+ *   elsewhere). Then the steps below it.
  * - Own subtree: the steps below the node itself.
  * - Absolute: `$.app...` is walked from the root; any other `$.` path is `state` and not checked.
  * - `$row`: the record of a row template. `rowPath` is the path of the slot's `row` alias (the dispatcher) or any
@@ -74,11 +89,15 @@ export function resolveTarget(
                 return walk(frame.node, frame.path, target.segments);
             }
         }
-        return undefined;
+        const found: { node: TreeNode; path: string }[] = [];
+        nodesNamed(root.node, root.path, root.key, target.name, found);
+        return found.length === 1 ? walk((found[0] as { node: TreeNode }).node, (found[0] as { path: string }).path, target.segments) : undefined;
     }
 
     const path = `$.${target.segments.join('.')}`;
-    if (target.segments[0] !== APP_STEP) return { kind: 'state', path };
+    // In a screen, a path below its root `$.screens.{name}` names nodes as `$.app` paths do
+    const inScreen = target.segments[0] === SCREENS_STEP && (path === rootPath || path.startsWith(`${rootPath}.`));
+    if (target.segments[0] !== APP_STEP && !inScreen) return { kind: 'state', path };
     if (path === rootPath) return walk(root.node, rootPath, []);
     if (!path.startsWith(`${rootPath}.`)) return { kind: 'outside', path };
     return walk(root.node, rootPath, path.slice(rootPath.length + 1).split('.'));

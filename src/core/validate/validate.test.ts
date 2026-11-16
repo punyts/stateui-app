@@ -76,6 +76,17 @@ const LIBRARY: ComponentLibrary = {
     }
 };
 
+const ORDERS_LIBRARY: ComponentLibrary = {
+    ...LIBRARY,
+    ordersTable: {
+        tier: 'composed',
+        tree: {
+            component: 'panel',
+            children: { table: { component: 'records', columns: { status: { plain: { component: 'text' } }, actions: { plain: { component: 'text' } } } } }
+        }
+    }
+};
+
 const registered: (() => void)[] = [];
 
 afterEach(() => {
@@ -336,6 +347,42 @@ describe('validateDocument', () => {
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-ROW', '$.app.<-_value']]);
     });
 
+    it('should accept $row links in a row template of a list that sits directly in a node slot', () => {
+        const list = { component: 'list', row: { component: 'text', '<-_value': '$row.name' } };
+
+        expect(codes(doc({ component: 'modal', body: list }))).toEqual([]);
+        expect(codes(doc({ component: 'modal', body: { component: 'panel', children: { list } } }))).toEqual([]);
+    });
+
+    it('should report $row outside a row template once for a node that sits directly in a node slot', () => {
+        const errors = validateDocument(doc({ component: 'modal', body: { component: 'text', '<-_value': '$row.name' } }), LIBRARY).errors;
+
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-ROW', '$.app.body.<-_value']]);
+    });
+
+    it('should report $row outside a row template that sits beside a list in a node slot', () => {
+        const list = { component: 'list', row: { component: 'text', '<-_value': '$row.name' } };
+        const document = doc({ component: 'modal', body: list, footer: { component: 'text', '<-_value': '$row.name' } });
+
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LINK-ROW', '$.app.footer.<-_value']]);
+    });
+
+    it('should accept null that removes an entry of a map property in a composed override', () => {
+        const document = doc({ component: 'panel', children: { c: { component: 'ordersTable', children: { table: { columns: { actions: null } } } } } });
+
+        expect(validateDocument(document, ORDERS_LIBRARY)).toEqual({ valid: true, errors: [] });
+    });
+
+    it('should still report a null that is a value of a property that does not allow it', () => {
+        const document = doc({ component: 'panel', children: { c: { component: 'ordersTable', children: { table: { title: null } } } } });
+
+        expect(validateDocument(document, ORDERS_LIBRARY).errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-STATE-INVALID', '$.app.children.c.children.table.title']
+        ]);
+    });
+
     it('should report SUI-LINK-TARGET for a link target that is not allowed', () => {
         const errors = validateDocument(doc({ component: 'text', '<-_value': '$.theme.x' }), LIBRARY).errors;
 
@@ -440,7 +487,9 @@ describe('validateDocument', () => {
             children: { orders: { component: 'records', columns: { x: { plain: { component: 'text', '<-label': '$row.a' } } } } }
         });
 
-        expect(codes(document)).toEqual(['SUI-LINK-ROW', 'SUI-LINK-ROW']);
+        expect(validateDocument(document, LIBRARY).errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LINK-ROW', '$.app.children.orders.columns.x.plain.<-label']
+        ]);
     });
 
     it('should report SUI-ON-EVENT from the on validator', () => {
@@ -479,7 +528,7 @@ describe('validateDocument', () => {
 
         const errors = validateDocument(doc({ component: 'panel' }), LIBRARY).errors;
 
-        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'first', 'second']);
+        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'step', 'paint', 'label', 'scenes', 'logic', 'route', 'app', 'first', 'second']);
         expect(calls).toEqual(['first', 'second']);
         expect(errors.map((error) => error.statePath)).toEqual(['$.app.a', '$.app.b']);
     });
@@ -711,5 +760,282 @@ describe('validateDocument child components', () => {
         const result = validateDocument(doc({ component: 'stack', children: { a: { component: 'text' } } }), catalog);
 
         expect(result.errors.map((error) => error.code)).toEqual(['SUI-NODE-CHILD']);
+    });
+});
+
+describe('validateDocument shape components', () => {
+    function parsed(json: Record<string, unknown>): Shape {
+        const result = parseShape({ summary: 'Test', ...json }, 'test.state.json');
+        expect(result.errors).toEqual([]);
+        return result.shape as Shape;
+    }
+
+    // Fixture shapes and a fixture slot: no drawing component exists in this library
+    const SHAPES: ComponentLibrary = {
+        ...LIBRARY,
+        dot: { tier: 'shape', shape: parsed({ properties: { r: { type: 'number', default: 4 } } }) },
+        bar: { tier: 'shape', shape: parsed({ properties: { width: { type: 'number', default: 1 } } }) },
+        sketch: {
+            tier: 'root',
+            tag: 'ui-sketch',
+            shape: parsed({ properties: { shapes: { type: 'node', childComponents: ['dot'] }, plain: { type: 'node' } }, childComponents: ['dot'] })
+        },
+        marker: { tier: 'composed', tree: { component: 'dot', r: 9 } }
+    };
+
+    function found(document: unknown, library: ComponentLibrary | Parameters<typeof libraryFromCatalog>[0] = SHAPES): { code: string; statePath?: string }[] {
+        return validateDocument(document, library).errors.map((error) => ({ code: error.code, statePath: error.statePath }));
+    }
+
+    it('should accept a shape under a slot that names it, with its properties merged and checked', () => {
+        const document = doc({ component: 'sketch', shapes: { component: 'dot', r: 2 }, children: { a: { component: 'dot' } } });
+
+        expect(found(document)).toEqual([]);
+    });
+
+    it('should check the properties of a shape node against its shape', () => {
+        const document = doc({ component: 'sketch', shapes: { component: 'dot', r: 'big' } });
+
+        expect(found(document)).toEqual([{ code: 'SUI-STATE-INVALID', statePath: '$.app.shapes.r' }]);
+    });
+
+    it('should accept a composed component that resolves to a named shape', () => {
+        expect(found(doc({ component: 'sketch', shapes: { component: 'marker' } }))).toEqual([]);
+    });
+
+    it('should refuse a shape under panel', () => {
+        const result = validateDocument(doc({ component: 'panel', children: { a: { component: 'dot' } } }), SHAPES);
+
+        expect(result.errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.a' }
+        ]);
+        expect(result.errors[0]?.message).toBe('Component "dot" at $.app.children.a is not accepted by its parent slot; it takes no shapes');
+    });
+
+    it('should refuse a shape in a node slot with no childComponents', () => {
+        expect(found(doc({ component: 'sketch', plain: { component: 'dot' } }))).toEqual([{ code: 'SUI-NODE-CHILD', statePath: '$.app.plain' }]);
+    });
+
+    it('should refuse a shape that the slot does not name', () => {
+        const result = validateDocument(doc({ component: 'sketch', shapes: { component: 'bar' } }), SHAPES);
+
+        expect(result.errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.shapes' }
+        ]);
+        expect(result.errors[0]?.message).toContain('it takes dot');
+    });
+
+    it('should refuse a shape at the root of the app or a screen, and accept one at the root of a composed tree', () => {
+        expect(found(doc({ component: 'dot' }))).toEqual([{ code: 'SUI-NODE-CHILD', statePath: '$.app' }]);
+        expect(found(doc({ component: 'panel' }, { composed: { spot: { component: 'dot' } } }))).toEqual([]);
+    });
+
+    it('should read a shape entry of a catalog with its tier and shape', () => {
+        const dot = (SHAPES['dot'] as { shape: Shape }).shape;
+        const catalog = {
+            components: [
+                { name: 'panel', tier: 'root' as const, tag: 'ui-panel', shape: (LIBRARY['panel'] as { shape: Shape }).shape },
+                { name: 'dot', tier: 'shape' as const, shape: dot }
+            ]
+        };
+
+        expect(libraryFromCatalog(catalog)['dot']).toEqual({ tier: 'shape', shape: dot });
+        expect(found(doc({ component: 'panel', children: { a: { component: 'dot' } } }), catalog)).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.a' }
+        ]);
+    });
+});
+
+describe('validateDocument $.server', () => {
+    const usesServer = doc({
+        component: 'panel',
+        children: {
+            save: { component: 'button', on: { press: [{ command: 'set', target: '$.server.token', value: 'x' }] } },
+            name: { component: 'text', _value: 'A $.server mention in text is fine' }
+        }
+    });
+
+    it('should refuse a link into $.server in every mode', () => {
+        const document = doc({ component: 'text', '<-_value': '$.server.apiKey' });
+
+        const results = [undefined, 'full', 'standalone'].map((mode) =>
+            validateDocument(document, LIBRARY, mode === undefined ? {} : { mode: mode as 'full' | 'standalone' })
+        );
+
+        for (const result of results) {
+            expect(result.valid).toBe(false);
+            expect(result.errors.map((error) => error.code)).toContain('SUI-LINK-SERVER');
+        }
+        expect(results[0]?.errors[0]?.message).toContain('$.server.apiKey');
+    });
+
+    it('should refuse a document that uses $.server in Standalone and Persisted mode', () => {
+        for (const mode of ['standalone', 'persisted'] as const) {
+            const result = validateDocument(usesServer, LIBRARY, { mode });
+
+            expect(result.valid).toBe(false);
+            expect(result.errors.filter((error) => error.code === 'SUI-DOC-SERVER')).toEqual([
+                expect.objectContaining({ statePath: '$.app.children.save.on.press.0.target' })
+            ]);
+            expect(result.errors.find((error) => error.code === 'SUI-DOC-SERVER')?.message).toContain(`${mode} mode`);
+        }
+    });
+
+    it('should allow a document that uses $.server in Full mode and without a mode', () => {
+        expect(codes(usesServer)).not.toContain('SUI-DOC-SERVER');
+        expect(validateDocument(usesServer, LIBRARY, { mode: 'full' }).errors.map((error) => error.code)).not.toContain('SUI-DOC-SERVER');
+    });
+
+    it('should accept a Standalone document that does not use $.server', () => {
+        const document = doc({ component: 'text', '<-_value': '$.data.serverName' }, { data: { serverName: '$.serverless' } });
+
+        expect(validateDocument(document, LIBRARY, { mode: 'standalone' })).toEqual({ valid: true, errors: [] });
+    });
+});
+
+const FIELD_LIBRARY: ComponentLibrary = Object.freeze({
+    ...LIBRARY,
+    numberField: {
+        tier: 'root',
+        tag: 'ui-number-field',
+        shape: shapeOf({ value: { type: ['number', 'string'], default: '' }, min: { type: 'number' }, step: { type: 'number', default: 0 } })
+    },
+    pagedList: {
+        tier: 'root',
+        tag: 'ui-paged-list',
+        shape: shapeOf({ items: { type: 'map', items: 'string', default: {} }, total: { type: 'number', default: 0 } })
+    }
+});
+
+describe('validateDocument: paged record keys', () => {
+    it('should accept position keys in the items of a node with an integer total', () => {
+        // Arrange
+        const items = Object.freeze({ '20': { id: 'a' }, '21': { id: 'b' } });
+        const document = doc({ component: 'pagedList', items: { ...items }, total: 42 });
+
+        // Act
+        const errors = validateDocument(document, FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-DOC-ORDER');
+
+        // Assert
+        expect(errors).toEqual([]);
+    });
+
+    it('should still report integer-like keys in the items of a node with no total', () => {
+        const document = doc({ component: 'pagedList', items: { '20': { id: 'a' } } });
+
+        const errors = validateDocument(document, FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-DOC-ORDER');
+
+        expect(errors.map((error) => error.statePath)).toEqual(['$.app.items.20']);
+    });
+});
+
+describe('validateDocument: number field min and step', () => {
+    const codes = (app: Node): { code: string; severity?: string; statePath?: string }[] =>
+        validateDocument(doc(app), FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-STATE-STEP');
+
+    it('should warn when min is not a multiple of step', () => {
+        // Arrange
+        const app = { component: 'numberField', min: 0.01, step: 1 } as Node;
+
+        // Act
+        const found = codes(app);
+
+        // Assert
+        expect(found).toHaveLength(1);
+        expect(found[0]?.severity).toBe('warning');
+        expect(found[0]?.statePath).toBe('$.app');
+        expect(validateDocument(doc(app), FIELD_LIBRARY).valid).toBe(true);
+    });
+
+    it('should name the fix in the message', () => {
+        const message = validateDocument(doc({ component: 'numberField', min: 0.5, step: 1 } as Node), FIELD_LIBRARY).errors[0]?.message;
+
+        expect(message).toContain('min: 0');
+        expect(message).toContain('divides min');
+    });
+
+    it('should accept a min that is a multiple of step, including decimals', () => {
+        expect(codes({ component: 'numberField', min: 0, step: 1 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', min: 0.3, step: 0.1 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', min: -10, step: 5 } as Node)).toEqual([]);
+    });
+
+    it('should not warn with no step, a zero step or no min', () => {
+        expect(codes({ component: 'numberField', min: 0.01 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', min: 0.01, step: 0 } as Node)).toEqual([]);
+        expect(codes({ component: 'numberField', step: 1 } as Node)).toEqual([]);
+    });
+
+    it('should warn for a fractional step that min does not divide', () => {
+        expect(codes({ component: 'numberField', min: 0.25, step: 0.1 } as Node)).toHaveLength(1);
+    });
+
+    it('should find the field inside a composed tree and a child', () => {
+        const document = doc(
+            { component: 'panel', children: { amount: { component: 'numberField', min: 1.5, step: 1 } } },
+            { composed: { money: { component: 'numberField', min: 0.01, step: 1 } } }
+        );
+
+        const paths = validateDocument(document, FIELD_LIBRARY).errors.filter((error) => error.code === 'SUI-STATE-STEP').map((error) => error.statePath);
+
+        expect(paths).toEqual(['$.app.children.amount', '$.composed.money']);
+    });
+});
+
+describe('validateDocument app icons', () => {
+    const icons = { chat: { outline: ['M4 5h16v11H9l-5 4z'] } };
+
+    it("should accept a name of the app's own icons before asking isIconName", () => {
+        // Arrange
+        const document = doc({ component: 'icon', name: 'chat' }, { icons });
+
+        // Act
+        const result = validateDocument(document, LIBRARY, { isIconName: (name) => name === 'circle' });
+
+        // Assert
+        expect(result.errors).toEqual([]);
+    });
+
+    it('should still report a name that is neither an app icon nor in the icon set', () => {
+        // Arrange
+        const document = doc({ component: 'icon', name: 'missing' }, { icons });
+
+        // Act
+        const result = validateDocument(document, LIBRARY, { isIconName: (name) => name === 'circle' });
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-STATE-INVALID', '$.app.name']]);
+    });
+
+    it('should take a list of ephemeral state paths, and report one that is not a path as SUI-DOC-EPHEMERAL', () => {
+        const errorsOf = (ephemeral: unknown) => validateDocument({ app: { component: 'page' }, ephemeral } as unknown as JsonObject, LIBRARY).errors.filter((error) => error.code === 'SUI-DOC-EPHEMERAL');
+
+        expect(errorsOf(['$.app.cursor', '$.data.presence.*'])).toEqual([]);
+        expect(errorsOf(['$.server.key', 'cursor', '$.app.cursor', '$.app.cursor']).map((error) => error.statePath)).toEqual(['$.ephemeral.0', '$.ephemeral.1', '$.ephemeral.3']);
+        expect(errorsOf('$.app.cursor').map((error) => error.statePath)).toEqual(['$.ephemeral']);
+    });
+
+    it('should report an app icon that holds more than path data as SUI-DOC-ICON at its path', () => {
+        // Arrange
+        const document = doc({ component: 'panel' }, { icons: { chat: { outline: ['url(#x)'] } } });
+
+        // Act
+        const errors = validateDocument(document, LIBRARY).errors;
+
+        // Assert
+        expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-DOC-ICON', '$.icons.chat.outline.0']]);
+    });
+});
+
+describe('validateDocument unknown icon message', () => {
+    it('should say an unknown icon name is in neither the app icons nor the icon set', () => {
+        // Arrange
+        const document = doc({ component: 'icon', name: 'missing' });
+
+        // Act
+        const [error] = validateDocument(document, LIBRARY, { isIconName: () => false }).errors;
+
+        // Assert
+        expect(error?.message).toContain('"missing" is neither one of the app\'s own icons nor an icon of the set');
     });
 });

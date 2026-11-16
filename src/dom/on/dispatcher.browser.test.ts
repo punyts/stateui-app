@@ -31,6 +31,18 @@ const library: ComponentLibrary = {
         tier: 'root',
         tag: 'x-on-dialog',
         shape: shapeOf({ open: { type: 'boolean', default: true }, children: { type: 'map', items: 'string', default: {} } }, ['close'], ['close', 'select'])
+    },
+    // A drawing and its shapes (G1.7): a shape has no element, so the drawing raises its events with detail.shape
+    drawing: {
+        tier: 'root',
+        tag: 'x-on-drawing',
+        shape: shapeOf({ title: { type: 'string', default: '' }, children: { type: 'map', items: 'string', default: {} } }, ['press'], [])
+    },
+    dot: { tier: 'shape', shape: shapeOf({ r: { type: 'number', default: 1 } }, ['press', 'hover'], []) },
+    group: { tier: 'shape', shape: shapeOf({ children: { type: 'map', items: 'string', default: {} } }, ['press', 'hover'], []) },
+    repeat: {
+        tier: 'shape',
+        shape: shapeOf({ records: { type: ['array', 'object'] }, row: { type: 'node', row: true } }, ['press', 'hover'], [])
     }
 };
 
@@ -39,6 +51,7 @@ defineComponent({
     template: '<sui-node repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
 });
 defineComponent({ tag: 'x-on-button', template: '<b>button</b>' });
+defineComponent({ tag: 'x-on-drawing', template: '<i>drawing</i>' });
 defineComponent({
     tag: 'x-on-dialog',
     template: '<i>dialog</i><sui-node repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
@@ -52,11 +65,12 @@ interface Fixture {
     element(path: string): HTMLElement;
 }
 
-const tags: Record<string, string> = { panel: 'x-on-panel', button: 'x-on-button', dialog: 'x-on-dialog' };
+const tags: Record<string, string> = { panel: 'x-on-panel', button: 'x-on-button', dialog: 'x-on-dialog', drawing: 'x-on-drawing' };
 
 function mountApp(app: unknown, data: unknown = {}): Fixture {
     setNodeResolver((name) => tags[name]);
-    const store = createStore<unknown>({ app, data });
+    // As mountApp builds it: the events have their own branch from the start
+    const store = createStore<unknown>({ app, data, raised: {} });
     const host = document.body.appendChild(document.createElement('div'));
     mount(host, store);
     const root = host.appendChild(document.createElement('sui-node'));
@@ -101,6 +115,25 @@ describe('on dispatch in Chromium', () => {
         document.body.replaceChildren();
     });
 
+    it('should write every event into $.raised by the node path, each time, and leave the node alone', () => {
+        // Arrange: a button with no on entry
+        const fixture = mountApp(panel({ save: { component: 'button' } }));
+        // The first press makes the missing parents in one write, so the branch is watched, not the leaf
+        const heard: string[] = [];
+        fixture.store.on('$.$all', (path, _value, _old, action) => {
+            if (typeof path === 'string' && path.startsWith('$.raised.') && !String(action).endsWith('-child')) heard.push(path);
+        });
+
+        // Act
+        raise(fixture.element('$.app.children.save'), 'press');
+        raise(fixture.element('$.app.children.save'), 'press');
+
+        // Assert
+        expect(fixture.store.get('$.raised')).toEqual({ app: { children: { save: { press: true } } } });
+        expect(heard).toEqual(['$.raised.app', '$.raised.app.children.save.press']);
+        expect(fixture.store.get('$.app.children.save')).toEqual({ component: 'button' });
+    });
+
     it('should run set when press is raised and change the store', () => {
         // Arrange
         const { store, element } = mountApp(
@@ -126,6 +159,50 @@ describe('on dispatch in Chromium', () => {
 
         // Assert
         expect(store.get('$.app.children.b.enabled')).toBe(false);
+    });
+
+    it('should copy the value at from with set, a copy that later writes do not change', () => {
+        // Arrange
+        const { store, element } = mountApp(
+            panel({
+                b: { component: 'button', on: { press: [{ command: 'set', target: '$.data.chosen', from: '$.data.colors.blue' }, { command: 'set', target: '.enabled', from: '$.data.flag' }] } }
+            }),
+            { colors: { blue: { hex: '#00f' } }, flag: false }
+        );
+
+        // Act
+        raise(element('$.app.children.b'), 'press');
+        store.set('$.data.colors.blue.hex', '#11f' as never);
+
+        // Assert
+        expect(store.get('$.data.chosen')).toEqual({ hex: '#00f' });
+        expect(store.get('$.app.children.b.enabled')).toBe(false);
+    });
+
+    it('should fail a set whose from has no value and write nothing', () => {
+        // Arrange
+        const { store, hooks, element } = mountApp(
+            panel({ b: { component: 'button', on: { press: { command: 'set', target: '$.data.chosen', from: '$.data.missing' } } } }),
+            { chosen: 'old' }
+        );
+
+        // Act
+        raise(element('$.app.children.b'), 'press');
+
+        // Assert
+        expect(store.get('$.data.chosen')).toBe('old');
+        expect(hooks.onError).toHaveBeenCalled();
+    });
+
+    it('should emit the value at from as the payload', () => {
+        // Arrange
+        const { hooks, element } = mountApp(panel({ b: { component: 'button', on: { press: { command: 'emit', target: 'picked', from: '$.data.pick' } } } }), { pick: 'k2' });
+
+        // Act
+        raise(element('$.app.children.b'), 'press');
+
+        // Assert
+        expect(hooks.onEmit).toHaveBeenCalledWith('picked', 'k2');
     });
 
     it('should run a list in order', () => {
@@ -431,5 +508,335 @@ describe('ui-file-transfer in Chromium', () => {
         expect(transferFile).not.toHaveBeenCalled();
         expect(respond).not.toHaveBeenCalled();
         dispatcher.dispose();
+    });
+});
+
+describe('ui-file-read in Chromium', () => {
+    const read = { file: { id: 'f1', name: 'a.png', size: 1, type: 'image/png' }, data: new ArrayBuffer(1) };
+
+    afterEach(() => {
+        setNodeResolver(undefined);
+        for (const host of Array.from(document.body.children)) unmount(host);
+        document.body.replaceChildren();
+    });
+
+    function request(id: unknown, signal?: AbortSignal) {
+        const respond = vi.fn<(result: Promise<unknown>) => void>();
+        const detail = { id, respond, ...(signal ? { signal } : {}) };
+        return { respond, detail };
+    }
+
+    it('should hand the id and the signal to hooks.readFile and respond with its promise', async () => {
+        // Arrange
+        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const readFile = vi.fn(() => Promise.resolve(read));
+        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, readFile } });
+        const controller = new AbortController();
+        const { respond, detail } = request('f1', controller.signal);
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-read', detail);
+
+        // Assert
+        expect(readFile).toHaveBeenCalledWith('f1', { signal: controller.signal });
+        expect(respond).toHaveBeenCalledTimes(1);
+        await expect(respond.mock.calls[0]?.[0]).resolves.toEqual(read);
+        dispatcher.dispose();
+    });
+
+    it('should leave the request unanswered when the host gives no readFile hook', () => {
+        // Arrange
+        const { element } = mountApp(panel({ b: { component: 'button' } }));
+        const { respond, detail } = request('f1');
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-read', detail);
+
+        // Assert
+        expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a detail that is not a read request and stop listening after dispose', () => {
+        // Arrange
+        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const readFile = vi.fn(() => Promise.resolve(read));
+        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { readFile } });
+        const { respond, detail } = request('f1');
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-file-read', request(5).detail);
+        raise(element('$.app.children.b'), 'ui-file-read', request('').detail);
+        second.dispose();
+        raise(element('$.app.children.b'), 'ui-file-read', detail);
+
+        // Assert
+        expect(readFile).not.toHaveBeenCalled();
+        expect(respond).not.toHaveBeenCalled();
+        dispatcher.dispose();
+    });
+});
+
+describe('ui-load-3d in Chromium', () => {
+    const chunk = { version: '0.1.0', createScene3d: () => ({}) };
+
+    afterEach(() => {
+        setNodeResolver(undefined);
+        for (const host of Array.from(document.body.children)) unmount(host);
+        document.body.replaceChildren();
+    });
+
+    function request() {
+        const respond = vi.fn<(result: Promise<unknown>) => void>();
+        return { respond, detail: { respond } };
+    }
+
+    it('should respond with the promise of hooks.load3d and stop the event', async () => {
+        // Arrange
+        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const load3d = vi.fn(() => Promise.resolve(chunk));
+        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, load3d } });
+        const outside = vi.fn();
+        document.body.addEventListener('ui-load-3d', outside);
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        expect(load3d).toHaveBeenCalledTimes(1);
+        expect(respond).toHaveBeenCalledTimes(1);
+        await expect(respond.mock.calls[0]?.[0]).resolves.toBe(chunk);
+        expect(outside).not.toHaveBeenCalled();
+        document.body.removeEventListener('ui-load-3d', outside);
+        dispatcher.dispose();
+    });
+
+    it('should hand on the rejection of hooks.load3d', async () => {
+        // Arrange
+        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const failure = Object.assign(new Error('The 3D chunk script could not be loaded'), { code: 'load_failed' });
+        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, load3d: () => Promise.reject(failure) } });
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        await expect(respond.mock.calls[0]?.[0]).rejects.toBe(failure);
+        dispatcher.dispose();
+    });
+
+    it('should leave the request unanswered when the host gives no load3d hook', () => {
+        // Arrange
+        const { element } = mountApp(panel({ b: { component: 'button' } }));
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a detail without respond and stop listening after dispose', () => {
+        // Arrange
+        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const load3d = vi.fn(() => Promise.resolve(chunk));
+        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { load3d } });
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', { respond: 'no' });
+        raise(element('$.app.children.b'), 'ui-load-3d');
+        second.dispose();
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        expect(load3d).not.toHaveBeenCalled();
+        expect(respond).not.toHaveBeenCalled();
+        dispatcher.dispose();
+    });
+});
+
+describe('shape events from a drawing in Chromium', () => {
+    const MAP = '$.app.children.map';
+    const SEATS = `${MAP}.children.seats`;
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        errorSpy = vi.spyOn(report, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+        setNodeResolver(undefined);
+        errorSpy.mockRestore();
+        for (const host of Array.from(document.body.children)) unmount(host);
+        document.body.replaceChildren();
+    });
+
+    const pick = (what: string) => ({ press: { command: 'set', target: '$.data.picked', value: what } });
+    const pickLabel = { press: { command: 'set', target: '$.data.picked', value: '$row.label' } };
+
+    /** A drawing `map` with its own press entry and the given shapes */
+    const drawing = (children: Record<string, unknown>) =>
+        panel({ map: { component: 'drawing', on: { press: { command: 'set', target: '$.data.drawing', value: true } }, children } });
+
+    /** Raises `name` on the drawing as its controller does, naming `shape` */
+    const raiseOn = (fixture: Fixture, shape: string, name = 'press'): void =>
+        raise(fixture.element(MAP), name, { shape, key: shape.slice(shape.lastIndexOf('.') + 1), x: 1, y: 2 });
+
+    it("should run the on entry of the shape detail.shape names, not the drawing's own", () => {
+        // Arrange
+        const fixture = mountApp(drawing({ a: { component: 'dot', on: pick('a') }, b: { component: 'dot', on: pick('b') } }), { picked: '', drawing: false });
+
+        // Act
+        raiseOn(fixture, `${MAP}.children.b`);
+
+        // Assert
+        expect(fixture.store.get('$.data.picked')).toBe('b');
+        expect(fixture.store.get('$.data.drawing')).toBe(false);
+    });
+
+    it("should hand the detail to the shape's entry as the payload", () => {
+        // Arrange
+        const fixture = mountApp(drawing({ a: { component: 'dot', on: { press: { command: 'emit', target: 'chosen' } } } }));
+
+        // Act
+        raiseOn(fixture, `${MAP}.children.a`);
+
+        // Assert
+        expect(fixture.hooks.onEmit).toHaveBeenCalledWith('chosen', { shape: `${MAP}.children.a`, key: 'a', x: 1, y: 2 });
+    });
+
+    it("should hear an event only shapes declare (hover) and run the shape's entry for it", () => {
+        // Arrange
+        const fixture = mountApp(drawing({ a: { component: 'dot', on: { hover: { command: 'set', target: '$.data.hovered', value: 'a' } } } }), { hovered: '' });
+
+        // Act
+        raiseOn(fixture, `${MAP}.children.a`, 'hover');
+
+        // Assert
+        expect(fixture.store.get('$.data.hovered')).toBe('a');
+    });
+
+    it("should run the drawing's own entry for an event without detail.shape", () => {
+        // Arrange
+        const fixture = mountApp(drawing({ a: { component: 'dot', on: pick('a') } }), { picked: '', drawing: false });
+
+        // Act
+        raise(fixture.element(MAP), 'press', { key: 'map' });
+
+        // Assert
+        expect(fixture.store.get('$.data.drawing')).toBe(true);
+        expect(fixture.store.get('$.data.picked')).toBe('');
+    });
+
+    it("should refuse a shape outside the drawing, run nothing and report SUI-RUN-DRAW with the drawing's path", () => {
+        // Arrange
+        const fixture = mountApp(
+            panel({
+                map: { component: 'drawing', children: { a: { component: 'dot', on: pick('a') } } },
+                other: { component: 'drawing', children: { x: { component: 'dot', on: pick('x') } } }
+            }),
+            { picked: '' }
+        );
+
+        // Act
+        raiseOn(fixture, '$.app.children.other.children.x');
+        raiseOn(fixture, MAP);
+        raiseOn(fixture, `${MAP}x.children.a`);
+
+        // Assert
+        expect(fixture.store.get('$.data.picked')).toBe('');
+        const draws = errorSpy.mock.calls.filter((call: unknown[]) => (call[1] as { code?: string } | undefined)?.code === 'SUI-RUN-DRAW');
+        expect(draws).toHaveLength(3);
+        expect(draws.every((call: unknown[]) => (call[1] as { state?: string }).state === MAP)).toBe(true);
+        expect(fixture.hooks.onError).toHaveBeenCalledTimes(3);
+        expect((fixture.hooks.onError.mock.calls[0]?.[0] as BuildError).statePath).toBe(MAP);
+    });
+
+    it('should do nothing for a shape below the drawing that is not there', () => {
+        // Arrange
+        const fixture = mountApp(drawing({ a: { component: 'dot', on: pick('a') } }), { picked: '' });
+
+        // Act
+        raiseOn(fixture, `${MAP}.children.gone`);
+
+        // Assert
+        expect(fixture.store.get('$.data.picked')).toBe('');
+        expect(fixture.hooks.onError).not.toHaveBeenCalled();
+    });
+
+    it("should run the row template's entry for a repeat copy with $row pointing at the record of its key", () => {
+        // Arrange
+        const records = [
+            { id: 's1', label: 'first' },
+            { id: 's2', label: 'second' }
+        ];
+        const fixture = mountApp(drawing({ seats: { component: 'repeat', records, row: { component: 'dot', on: pickLabel } } }), { picked: '' });
+
+        // Act
+        raiseOn(fixture, `${SEATS}.rows.s2`);
+
+        // Assert
+        expect(fixture.store.get('$.data.picked')).toBe('second');
+    });
+
+    it('should key the copies of records without distinct ids by index, and of a map by its keys', () => {
+        // Arrange
+        const row = { component: 'dot', on: pickLabel };
+        const fixture = mountApp(
+            drawing({
+                seats: { component: 'repeat', records: [{ label: 'zero' }, { label: 'one' }], row },
+                marks: { component: 'repeat', records: { north: { label: 'N' }, south: { label: 'S' } }, row }
+            }),
+            { picked: '' }
+        );
+
+        // Act
+        raiseOn(fixture, `${SEATS}.rows.1`);
+        const byIndex = fixture.store.get('$.data.picked');
+        raiseOn(fixture, `${MAP}.children.marks.rows.south`);
+
+        // Assert
+        expect(byIndex).toBe('one');
+        expect(fixture.store.get('$.data.picked')).toBe('S');
+    });
+
+    it("should run the entry of a shape inside a copy's group, with $row and a ^name target resolving through the repeat's frames", () => {
+        // Arrange
+        const dot = {
+            component: 'dot',
+            on: {
+                press: [
+                    { command: 'set', target: '$.data.picked', value: '$row.label' },
+                    { command: 'set', target: '^map.title', from: '$row.label' }
+                ]
+            }
+        };
+        const fixture = mountApp(
+            drawing({ seats: { component: 'repeat', records: { k1: { label: 'one' } }, row: { component: 'group', children: { dot } } } }),
+            { picked: '' }
+        );
+
+        // Act
+        raiseOn(fixture, `${SEATS}.rows.k1.children.dot`);
+
+        // Assert
+        expect(fixture.store.get('$.data.picked')).toBe('one');
+        expect(fixture.store.get(`${MAP}.title`)).toBe('one');
+        expect(fixture.hooks.onError).not.toHaveBeenCalled();
+    });
+
+    it('should run nothing for a copy whose record is not in the set', () => {
+        // Arrange
+        const fixture = mountApp(drawing({ seats: { component: 'repeat', records: { k1: { label: 'one' } }, row: { component: 'dot', on: pickLabel } } }), { picked: '' });
+
+        // Act
+        raiseOn(fixture, `${SEATS}.rows.k9`);
+
+        // Assert
+        expect(fixture.store.get('$.data.picked')).toBe('');
+        expect(fixture.hooks.onError).not.toHaveBeenCalled();
     });
 });

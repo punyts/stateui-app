@@ -20,8 +20,16 @@ describe('generateLayoutBase', () => {
         const base = generateLayoutBase();
 
         // Assert
-        expect(base).toContain(':host {\n    display: block;\n    container-type: inline-size;\n}');
-        expect(base).toContain('[layout-host] {\n    display: block;\n    container-type: inline-size;\n}');
+        expect(base).toContain(':host {\n    display: block;\n    container-type: var(--layout-contain, inline-size);\n}');
+        expect(base).toContain('[layout-host] {\n    display: block;\n    container-type: var(--layout-contain, inline-size);\n}');
+    });
+
+    it('should stack the children of a layout host without a layout as a column with the default gap, at low specificity', () => {
+        // Arrange and Act
+        const base = generateLayoutBase();
+
+        // Assert
+        expect(base).toContain('[layout-host]:where(:not([layout])) {\n    display: flex;\n    flex-direction: column;\n    gap: var(--ui-space-gap-md);\n}');
     });
 });
 
@@ -34,12 +42,44 @@ describe('generateLayoutSheet', () => {
         expect(sheet).toContain(`[layout-host][layout=column][layout-gap="${gap}"] {\n    gap: var(--ui-space-gap-${gap});\n}`);
     });
 
+    it.each(['column', 'row', 'grid', 'region'] as const)('should give a %s container the md gap when its layout names no gap', (type) => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet(type);
+
+        // Assert
+        expect(sheet).toMatch(new RegExp(`\\[layout-host\\]\\[layout=${type}\\] \\{[^}]*gap: var\\(--ui-space-gap-md\\);`));
+    });
+
     it('should map layout-gap=none to no gap', () => {
         // Arrange and Act
         const sheet = generateLayoutSheet('grid');
 
         // Assert
         expect(sheet).toContain('[layout-gap="none"] {\n    gap: 0;\n}');
+    });
+
+    it('should keep the items that do not grow at their width in a row with a growing item', () => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet('row');
+
+        // Assert
+        expect(sheet).toContain(
+            '[layout=row]:has(> sui-node > [grow]:not([grow="0"])) > sui-node > :is(:not([grow]), [grow="0"]) {\n    flex-shrink: 0;\n}'
+        );
+        expect(sheet).toContain('[layout=row] > sui-node > [grow]:not([grow="0"]) {\n    min-width: 0;\n}');
+        expect(generateLayoutSheet('column')).not.toContain(':is(:not([grow]), [grow="0"])');
+    });
+
+    it('should wrap a row and cap its items at the row width below the sm breakpoint', () => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet('row');
+
+        // Assert
+        expect(sheet).toContain(
+            '@container (width < 480px) {\n    [layout-host][layout=row]:not([layout-wrap="false"]) {\n        flex-wrap: wrap;\n    }\n    [layout=row] > sui-node > * {\n        max-inline-size: 100%;\n    }\n}'
+        );
+        expect(sheet.indexOf('flex-wrap: wrap;\n    }\n    [layout=row]')).toBeLessThan(sheet.indexOf('[layout-collapse-below="sm"]'));
+        expect(generateLayoutSheet('column')).not.toContain('max-inline-size');
     });
 
     it('should draw grid columns from --layout-cols', () => {
@@ -104,7 +144,8 @@ describe('generateLayoutSheet', () => {
         const tokens = [...sheet.matchAll(/var\((--ui-[a-z0-9-]+)/g)].map((match) => match[1]);
 
         // Assert
-        expect(conditions.length).toBe(12);
+        // Twelve collapse queries (three types, four breakpoints) and the narrow row
+        expect(conditions.length).toBe(13);
         expect(conditions.some((condition) => condition.includes('var('))).toBe(false);
         expect(tokens.length).toBeGreaterThan(0);
         expect(tokens.every((token) => /^--ui-space-gap-(sm|md|lg)$/.test(token ?? ''))).toBe(true);
@@ -116,9 +157,23 @@ describe('generateLayoutSheet', () => {
         const sheet = generateLayoutSheet('adhoc');
 
         // Assert
-        expect(sheet).toContain('[layout=adhoc] > sui-node > * {\n    position: absolute;\n}');
+        expect(sheet).toContain('[layout=adhoc] > sui-node > * {\n    position: absolute;\n    box-sizing: border-box;\n    max-width: 100%;\n}');
+        expect(sheet).toContain('max-width: calc(100% - attr(x type(<length-percentage>), 0px) - attr(right type(<length-percentage>), 0px));');
+        expect(sheet).toContain('[layout=adhoc] > sui-node > [max-width] {\n        max-width: min(attr(max-width type(<length-percentage>)), calc(100%');
+        expect(sheet).toContain('max-height: attr(max-height type(<length-percentage>));');
         expect(sheet).toContain('left: attr(x type(<length-percentage>));');
         expect(sheet).toContain('height: attr(height type(<length-percentage>));');
+        expect(sheet).toContain('[layout=adhoc] > sui-node > [z] {\n        z-index: attr(z type(<integer>));\n    }');
+        expect(sheet).toContain('[layout-host][layout=adhoc][layout-clip=""] {\n    overflow: clip;\n}');
+    });
+
+    it.each(['column', 'row', 'grid'] as const)('should size a child of a %s by its height attribute', (type) => {
+        // Arrange and Act
+        const sheet = generateLayoutSheet(type);
+
+        // Assert
+        expect(sheet).toContain(`[layout=${type}] > sui-node > [height] {\n        block-size: attr(height type(<length-percentage>));`);
+        expect(sheet.includes('flex-shrink: 0;\n    }\n}')).toBe(type === 'column');
     });
 });
 

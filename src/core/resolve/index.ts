@@ -1,4 +1,4 @@
-export { checkComposedNames, resolveNode } from './resolveNode.js';
+export { checkComposedNames, entryShape, resolveNode } from './resolveNode.js';
 export { cloneJson, mergeValues } from './merge.js';
 export type {
     ComponentLibrary,
@@ -7,5 +7,6 @@ export type {
     LibraryEntry,
     ResolveOptions,
     ResolveResult,
-    RootEntry
+    RootEntry,
+    ShapeEntry
 } from './types.js';

@@ -1,18 +1,24 @@
 import { isIconsMap } from './icons.js';
 import {
+    CHUNK_HASH_PATTERN,
+    CHUNK_NAMES,
+    MAX_CHANGE_ID_LENGTH,
     MAX_ERROR_TEXT,
     MAX_ERRORS,
     MAX_FILE_BYTES,
     MAX_FILE_ID_LENGTH,
     MAX_FILE_NAME_LENGTH,
     MAX_FILE_TYPE_LENGTH,
+    MAX_INSPECT_CHILDREN,
+    MAX_INSPECT_NODES,
     MAX_NAME_LENGTH,
     MAX_NONCE_LENGTH,
     MAX_PATH_LENGTH,
     MAX_WRITES,
     MESSAGE_BYTE_LIMITS
 } from './limits.js';
-import { FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { CHANGE_OPS, FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { isAppEvent } from '../core/types.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
 
 /** Why a message was dropped */
@@ -21,10 +27,28 @@ export type DropReason = 'invalid' | 'unknown' | 'oversized';
 export type ValidationResult = { ok: true; message: RuntimeMessage } | { ok: false; reason: DropReason };
 
 const encoder = new TextEncoder();
-const WRITE_PATH = /^\$\.(data|app)(\.[^.\s]+)*$/;
+/**
+ * The synced branches, which changes and writes reach; `$.route` is protected, so a write to it is refused by the
+ * store. `$.raised` holds the events the nodes raised (`dom/on/raised.ts`)
+ */
+const SYNC_PATH = /^\$\.(data|app|screens|route|theme|locale|raised)(\.[^.\s]+)*$/;
+/** The sync status the host writes */
+const STATUS_PATH = /^\$\.runtime\.sync(\.[^.\s]+)*$/;
+const MODES = ['standalone', 'persisted', 'full'];
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 const NAME = /^[A-Za-z][A-Za-z0-9_.:-]*$/;
 const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+/**
+ * A key chord: modifiers in the order mod, shift, alt, then a letter, a digit, `-`, `=` or `escape`. A chord with no
+ * `mod` (a bare key such as `v`, or `shift+s`) goes to the host only while the person is not typing
+ */
+export const KEY_CHORD = /^(mod\+)?(shift\+)?(alt\+)?([a-z0-9=-]|escape)$/;
+/** The most key chords a `load` names */
+export const MAX_KEYS = 16;
+
+function isKeyChord(value: unknown): value is string {
+    return typeof value === 'string' && KEY_CHORD.test(value);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -52,10 +76,42 @@ function isStateSnapshot(message: Record<string, unknown>): boolean {
     return isJsonObject(message['data']) && isJsonObject(message['app']);
 }
 
-/** True when `path` is a state path below `$.data` or `$.app` that a write may reach */
-export function isWritablePath(path: unknown): path is string {
-    if (typeof path !== 'string' || path.length > MAX_PATH_LENGTH || !WRITE_PATH.test(path)) return false;
+/** An `AppInstance`: `app` and `screens` objects, and optionally a route with a screen name, data and active overlay names */
+function isInstance(value: unknown): boolean {
+    if (!isJsonObject(value) || !hasOnlyKeys(value, ['app', 'screens', 'route', 'theme', 'data'])) return false;
+    if (!isRecord(value['app']) || !isRecord(value['screens'])) return false;
+    const route = value['route'];
+    if (route !== undefined && !(isRecord(route) && hasOnlyKeys(route, ['screen', 'params']) && isText(route['screen'], MAX_NAME_LENGTH))) return false;
+    const theme = value['theme'];
+    if (theme !== undefined && !(isRecord(theme) && hasOnlyKeys(theme, ['active']) && (theme['active'] === undefined || isRecord(theme['active'])))) return false;
+    return value['data'] === undefined || isRecord(value['data']);
+}
+
+/** The `chunks` of a `load`: an object of known chunk names (`CHUNK_NAMES`), each a hash of 16 lower-case hex characters */
+function isChunks(value: unknown): boolean {
+    if (!isRecord(value)) return false;
+    return Object.entries(value).every(([name, hash]) => (CHUNK_NAMES as readonly string[]).includes(name) && typeof hash === 'string' && CHUNK_HASH_PATTERN.test(hash));
+}
+
+function isSafePath(path: unknown, pattern: RegExp): path is string {
+    if (typeof path !== 'string' || path.length > MAX_PATH_LENGTH || !pattern.test(path)) return false;
     return path.split('.').every((segment) => !FORBIDDEN_SEGMENTS.has(segment));
+}
+
+/**
+ * True when `path` is a state path a write may reach: a synced branch (`$.data`, `$.app`, `$.screens`, `$.route`,
+ * `$.theme`, `$.locale`) or the sync status (`$.runtime.sync`)
+ */
+export function isWritablePath(path: unknown): path is string {
+    return isSafePath(path, SYNC_PATH) || isSafePath(path, STATUS_PATH);
+}
+
+/** A change of a synced branch: a writer-made id, the path, the op and a value unless it deletes */
+function isRuntimeChange(value: unknown): boolean {
+    if (!isRecord(value) || !Object.keys(value).every((key) => ['id', 'path', 'op', 'value'].includes(key))) return false;
+    if (!isText(value['id'], MAX_CHANGE_ID_LENGTH) || !isSafePath(value['path'], SYNC_PATH)) return false;
+    if (typeof value['op'] !== 'string' || !(CHANGE_OPS as readonly string[]).includes(value['op'])) return false;
+    return value['op'] === 'delete' ? value['value'] === undefined : 'value' in value && isJson(value['value']);
 }
 
 function isPathWrite(value: unknown): boolean {
@@ -116,14 +172,79 @@ function isFileResult(m: Record<string, unknown>): boolean {
     );
 }
 
+/** A `fileData`: the reference and a buffer of exactly its size, or a failure like `fileResult`'s */
+function isFileData(m: Record<string, unknown>): boolean {
+    if (!isPositiveInteger(m['requestId'])) return false;
+    if (m['ok'] === true) {
+        return (
+            hasOnlyKeys(m, ['requestId', 'ok', 'file', 'data']) &&
+            isFileReference(m['file']) &&
+            isArrayBuffer(m['data']) &&
+            m['data'].byteLength === (m['file'] as { size: number }).size
+        );
+    }
+    return isFileResult(m);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isPoint(value: unknown): boolean {
+    return isRecord(value) && Object.keys(value).every((key) => key === 'x' || key === 'y') && isFiniteNumber(value['x']) && isFiniteNumber(value['y']);
+}
+
+function isRect(value: unknown): boolean {
+    return isRecord(value) && Object.keys(value).every((key) => ['x', 'y', 'width', 'height'].includes(key)) && ['x', 'y', 'width', 'height'].every((key) => isFiniteNumber(value[key]));
+}
+
+function isTracks(value: unknown): boolean {
+    return value === undefined || (Array.isArray(value) && value.length <= MAX_INSPECT_CHILDREN && value.every(isFiniteNumber));
+}
+
+function isInspectedArea(value: unknown): boolean {
+    return (
+        isRecord(value) &&
+        Object.keys(value).every((key) => ['rect', 'settings', 'flow', 'gap', 'columns', 'rows'].includes(key)) &&
+        isRect(value['rect']) &&
+        isRecord(value['settings']) &&
+        Object.entries(value['settings']).every(([name, setting]) => isText(name, MAX_NAME_LENGTH) && isText(setting, MAX_NAME_LENGTH)) &&
+        ['row', 'column', 'grid', 'free'].includes(value['flow'] as string) &&
+        isRecord(value['gap']) &&
+        isFiniteNumber(value['gap']['row']) &&
+        isFiniteNumber(value['gap']['column']) &&
+        isTracks(value['columns']) &&
+        isTracks(value['rows'])
+    );
+}
+
+function isInspectedNode(value: unknown): boolean {
+    return (
+        isRecord(value) &&
+        Object.keys(value).every((key) => ['path', 'component', 'layout', 'rect', 'area', 'children'].includes(key)) &&
+        (value['area'] === undefined || isInspectedArea(value['area'])) &&
+        isText(value['path'], MAX_PATH_LENGTH) &&
+        isText(value['component'], MAX_NAME_LENGTH) &&
+        (value['layout'] === undefined || isText(value['layout'], MAX_NAME_LENGTH)) &&
+        isRect(value['rect']) &&
+        Array.isArray(value['children']) &&
+        value['children'].length <= MAX_INSPECT_CHILDREN &&
+        value['children'].every((child) => isRecord(child) && Object.keys(child).every((key) => key === 'path' || key === 'rect') && isText(child['path'], MAX_PATH_LENGTH) && isRect(child['rect']))
+    );
+}
+
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
-        hasOnlyKeys(m, ['document', 'state', 'icons']) &&
+        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks', 'keys']) &&
+        (m['mode'] === undefined || MODES.includes(m['mode'] as string)) &&
         isJsonObject(m['document']) &&
         isRecord(m['document']['app']) &&
         (m['state'] === undefined || (isRecord(m['state']) && isStateSnapshot(m['state']))) &&
-        (m['icons'] === undefined || isIconsMap(m['icons'])),
+        (m['instance'] === undefined || isInstance(m['instance'])) &&
+        (m['icons'] === undefined || isIconsMap(m['icons'])) &&
+        (m['chunks'] === undefined || isChunks(m['chunks'])) &&
+        (m['keys'] === undefined || (Array.isArray(m['keys']) && m['keys'].length <= MAX_KEYS && m['keys'].every(isKeyChord))),
     write: (m) =>
         hasOnlyKeys(m, ['writes', 'icons']) &&
         Array.isArray(m['writes']) &&
@@ -137,12 +258,36 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['value'] === undefined || isJson(m['value'])),
     locale: (m) => hasOnlyKeys(m, ['locale']) && typeof m['locale'] === 'string' && m['locale'].length <= MAX_NAME_LENGTH && LOCALE.test(m['locale']),
     theme: (m) => hasOnlyKeys(m, ['kind', 'name']) && isText(m['kind'], MAX_NAME_LENGTH) && isText(m['name'], MAX_NAME_LENGTH),
+    event: (m) =>
+        hasOnlyKeys(m, ['name', 'payload']) &&
+        isAppEvent(m['name']) &&
+        (m['payload'] === undefined || isJson(m['payload'])),
     ready: (m) => hasOnlyKeys(m, []),
-    snapshot: (m) => hasOnlyKeys(m, ['data', 'app']) && isStateSnapshot(m),
+    change: (m) => hasOnlyKeys(m, ['change']) && isRuntimeChange(m['change']),
     emit: (m) => hasOnlyKeys(m, ['name', 'payload']) && isText(m['name'], MAX_NAME_LENGTH) && NAME.test(m['name']) && (m['payload'] === undefined || isJson(m['payload'])),
     error: (m) => hasOnlyKeys(m, ['errors']) && Array.isArray(m['errors']) && m['errors'].length > 0 && m['errors'].length <= MAX_ERRORS && m['errors'].every(isProtocolError),
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
+    key: (m) => hasOnlyKeys(m, ['key']) && isKeyChord(m['key']),
+    inspect: (m) =>
+        hasOnlyKeys(m, ['id', 'at', 'paths']) &&
+        isInteger(m['id']) &&
+        (m['at'] !== undefined) !== (m['paths'] !== undefined) &&
+        (m['at'] === undefined || isPoint(m['at'])) &&
+        (m['paths'] === undefined || (Array.isArray(m['paths']) && m['paths'].length <= MAX_INSPECT_NODES && m['paths'].every((path) => isText(path, MAX_PATH_LENGTH)))),
+    watch: (m) => hasOnlyKeys(m, ['paths']) && Array.isArray(m['paths']) && m['paths'].length <= MAX_INSPECT_NODES && m['paths'].every((path) => isText(path, MAX_PATH_LENGTH)),
+    watched: (m) =>
+        hasOnlyKeys(m, ['nodes']) &&
+        Array.isArray(m['nodes']) &&
+        m['nodes'].length <= MAX_INSPECT_NODES &&
+        m['nodes'].every((node) => isRecord(node) && hasOnlyKeys(node, ['path', 'rect']) && isText(node['path'], MAX_PATH_LENGTH) && isRect(node['rect'])),
+    inspected: (m) =>
+        hasOnlyKeys(m, ['id', 'at', 'nodes']) &&
+        isInteger(m['id']) &&
+        (m['at'] === undefined || isText(m['at'], MAX_PATH_LENGTH)) &&
+        Array.isArray(m['nodes']) &&
+        m['nodes'].length <= MAX_INSPECT_NODES &&
+        m['nodes'].every(isInspectedNode),
     file: (m) =>
         hasOnlyKeys(m, ['requestId', 'name', 'size', 'mediaType', 'data']) &&
         isPositiveInteger(m['requestId']) &&
@@ -159,7 +304,11 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         isInteger(m['loaded']) &&
         isInteger(m['total']) &&
         (m['loaded'] as number) <= (m['total'] as number),
-    fileResult: isFileResult
+    fileResult: isFileResult,
+    fileRead: (m) => hasOnlyKeys(m, ['requestId', 'id']) && isPositiveInteger(m['requestId']) && isText(m['id'], MAX_FILE_ID_LENGTH),
+    fileData: isFileData,
+    fileRelease: (m) => hasOnlyKeys(m, ['requestId', 'id']) && isPositiveInteger(m['requestId']) && isText(m['id'], MAX_FILE_ID_LENGTH),
+    fileReleased: (m) => (m['ok'] === true ? hasOnlyKeys(m, ['requestId', 'ok']) && isPositiveInteger(m['requestId']) : isFileResult(m))
 };
 
 function isMessageType(value: unknown): value is MessageType {
@@ -188,7 +337,7 @@ export function validateMessage(value: unknown): ValidationResult {
     const size = byteLength(value);
     if (size === undefined) return { ok: false, reason: 'invalid' };
     if (size > MESSAGE_BYTE_LIMITS[value['type']]) return { ok: false, reason: 'oversized' };
-    if (value['type'] === 'file' && isArrayBuffer(value['data']) && value['data'].byteLength > MAX_FILE_BYTES) {
+    if ((value['type'] === 'file' || value['type'] === 'fileData') && isArrayBuffer(value['data']) && value['data'].byteLength > MAX_FILE_BYTES) {
         return { ok: false, reason: 'oversized' };
     }
     if (value['v'] !== PROTOCOL_VERSION || !isText(value['nonce'], MAX_NONCE_LENGTH)) return { ok: false, reason: 'invalid' };

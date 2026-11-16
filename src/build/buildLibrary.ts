@@ -7,14 +7,19 @@ import type { BuildError } from '../core/errors/index.js';
 import { validateComponentOverlay, validateLocaleOverlay } from '../core/locale/index.js';
 import { resolveNode } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
-import { buildDefaults, collectComponentTokens, parseShape } from '../core/shape/index.js';
-import type { Shape } from '../core/shape/index.js';
+import { MAX_SUMMARY_LENGTH, buildDefaults, categoryError, collectComponentTokens, normalizePurpose, parseShape, purposesError } from '../core/shape/index.js';
+import type { ComponentCategory } from '../core/shape/index.js';
+import type { Shape, ShapePartials } from '../core/shape/index.js';
 import type { ComponentToken } from '../core/theme/index.js';
 import { generateSharedSheet } from '../dom/articulation/index.js';
 import { checkTokens, lintCss } from './lint/index.js';
 import { applyTokenFallbacks } from './tokenFallbacks.js';
 import type { JsonObject, Node } from '../core/types.js';
-import { composedEntry, emitCatalog, rootEntry, sizeError, sizeOf } from './catalog.js';
+import { composedEntry, emitCatalog, rootEntry, shapeEntry, sizeError, sizeOf } from './catalog.js';
+import { buildPatterns } from './patterns.js';
+import { buildPresets } from './presets.js';
+import type { ThemePresetCatalogEntry } from './presets.js';
+import type { PatternCatalogEntry } from './patterns.js';
 import { buildThemeSection } from './theme.js';
 import type { CatalogSize, ComponentCatalogEntry } from './catalog.js';
 import { compileCheck } from './check.js';
@@ -23,7 +28,7 @@ import { loadStateUI } from './dom.js';
 import type { StateUIModule } from './dom.js';
 import { emitIndex, emitIndexTypes, emitModule, emitModuleTypes } from './emit.js';
 import { buildFailure } from './failures.js';
-import { inlineIncludes } from './includes.js';
+import { inlineIncludes, readShapePartials } from './includes.js';
 import { SHARED_SHEET_LINES, prependSharedSheet } from './sharedSheet.js';
 import { LAYOUT_SHEET_LINES, checkLayoutHost, prependLayoutSheets } from './layoutSheets.js';
 import { emitOverlay, inFile, overlayFileName, readOverlay } from './overlays.js';
@@ -64,7 +69,8 @@ async function compileComponent(
     sourceDir: string,
     component: ScannedComponent,
     options: BuildOptions,
-    library: LibraryTokens
+    library: LibraryTokens,
+    partials: ShapePartials
 ): Promise<Compiled> {
     const errors: BuildError[] = [...(library.conflicts.get(component.files.state as string) ?? [])];
     const files = new Map<string, string>();
@@ -90,11 +96,12 @@ async function compileComponent(
     let defaultState: JsonObject = {};
     let shape: Shape | undefined;
     if (stateText !== undefined) {
-        const result = parseShape(stateText, stateFile);
+        const result = parseShape(stateText, stateFile, { partials });
         errors.push(...result.errors);
         if (result.shape) {
             shape = result.shape;
             defaultState = buildDefaults(result.shape);
+            if (options.requireSearchKeys === true) errors.push(...missingSearchKeys(shape, stateFile, false));
         }
     }
     if (sizeOf(component.group) === undefined) errors.push(sizeError(component.name, viewFile));
@@ -146,7 +153,7 @@ async function compileComponent(
         `${component.name}.js`,
         emitModule({
             name: component.name,
-            tag: component.tag,
+            tag: component.tag as string,
             template: view,
             ...(css === undefined ? {} : { styles: css }),
             defaultState,
@@ -157,11 +164,72 @@ async function compileComponent(
     return { files, errors, ...(shape === undefined ? {} : { shape }) };
 }
 
+/**
+ * Reads a shape component: its state file and locale overlays, checked as a root component's are. It gives no module,
+ * register entry or CSS, only the shape for its catalog entry and the overlay files
+ */
+async function compileShape(sourceDir: string, component: ScannedComponent, options: BuildOptions, partials: ShapePartials): Promise<Compiled> {
+    const errors: BuildError[] = [];
+    const files = new Map<string, string>();
+    const stateFile = component.files.state as string;
+    let stateText: string | undefined;
+    try {
+        stateText = (await readFile(join(sourceDir, stateFile), 'utf8')).replace(/\r\n?/g, '\n');
+    } catch {
+        errors.push(buildFailure('file', stateFile, 'could not be read'));
+    }
+    let shape: Shape | undefined;
+    if (stateText !== undefined) {
+        const result = parseShape(stateText, stateFile, { partials });
+        errors.push(...result.errors);
+        shape = result.shape;
+        if (shape !== undefined && options.requireSearchKeys === true) errors.push(...missingSearchKeys(shape, stateFile, false));
+    }
+    if (sizeOf(component.group) === undefined) errors.push(sizeError(component.name, stateFile));
+    for (const [code, file] of Object.entries(component.locales)) {
+        const read = await readOverlay(sourceDir, code, file, errors);
+        if (read === undefined || shape === undefined) continue;
+        const problems = inFile(validateComponentOverlay(code, read.overlay, shape), file);
+        errors.push(...problems);
+        if (problems.length === 0) files.set(overlayFileName(component.name, code), emitOverlay(read.overlay));
+    }
+    if (errors.length > 0) return { files: new Map(), errors };
+    return { files, errors, ...(shape === undefined ? {} : { shape }) };
+}
+
+/** The errors for search keys a file leaves out, under `requireSearchKeys`; a composed file also needs `summary` */
+function missingSearchKeys(keys: { summary?: string; category?: string; purposes?: string[] }, file: string, composed: boolean): BuildError[] {
+    return [
+        ...(composed && keys.summary === undefined ? [buildError('SUI-BUILD-SUMMARY', { file, limit: MAX_SUMMARY_LENGTH })] : []),
+        ...(keys.category === undefined ? [categoryError(file)] : []),
+        ...(keys.purposes === undefined ? [purposesError(file, 'is missing')] : [])
+    ];
+}
+
+/**
+ * `SUI-BUILD-PURPOSE-DUPLICATE` for each purpose phrase that repeats one of an earlier component (in name order),
+ * compared lowercased, trimmed and with inner spaces collapsed, across root and composed components
+ */
+function duplicatePurposes(entries: readonly ComponentCatalogEntry[], files: ReadonlyMap<string, string>): BuildError[] {
+    const owners = new Map<string, string>();
+    const errors: BuildError[] = [];
+    for (const entry of [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+        for (const phrase of entry.purposes ?? []) {
+            const key = normalizePurpose(phrase);
+            const owner = owners.get(key);
+            if (owner === undefined) owners.set(key, entry.name);
+            else if (owner !== entry.name) errors.push(buildError('SUI-BUILD-PURPOSE-DUPLICATE', { key: phrase, component: entry.name, file: files.get(entry.name) ?? entry.name, other: owner }));
+        }
+    }
+    return errors;
+}
+
 /** A composed component read from disk, waiting for the whole library to check its overlays */
 interface PendingComposed {
     component: ScannedComponent;
     tree: Node;
     exposes: ExposedPath[];
+    search: { summary?: string; category?: ComponentCategory; purposes?: string[] };
     size: CatalogSize;
     overlays: ReadOverlay[];
 }
@@ -170,7 +238,12 @@ interface PendingComposed {
 function libraryOf(entries: readonly ComponentCatalogEntry[]): ComponentLibrary {
     const library: Record<string, ComponentLibrary[string]> = {};
     for (const entry of entries) {
-        library[entry.name] = entry.tier === 'root' ? { tier: 'root', tag: entry.tag, shape: entry.shape } : { tier: 'composed', tree: entry.tree };
+        library[entry.name] =
+            entry.tier === 'root'
+                ? { tier: 'root', tag: entry.tag, shape: entry.shape }
+                : entry.tier === 'shape'
+                  ? { tier: 'shape', shape: entry.shape }
+                  : { tier: 'composed', tree: entry.tree };
     }
     return library;
 }
@@ -207,14 +280,14 @@ async function readComposed(sourceDir: string, file: string, errors: BuildError[
  * tokens of the whole library. Shape errors are left for the component's own build; a group conflict is reported once
  * per state file and fails that component
  */
-async function collectLibraryTokens(sourceDir: string, components: readonly ScannedComponent[]): Promise<LibraryTokens> {
+async function collectLibraryTokens(sourceDir: string, components: readonly ScannedComponent[], partials: ShapePartials): Promise<LibraryTokens> {
     const sources: { file: string; shape: Shape }[] = [];
     for (const component of components) {
         const file = component.files.state;
         if (component.tier !== 'root' || file === undefined) continue;
         try {
             const text = (await readFile(join(sourceDir, file), 'utf8')).replace(/\r\n?/g, '\n');
-            const result = parseShape(text, file);
+            const result = parseShape(text, file, { partials });
             if (result.shape) sources.push({ file, shape: result.shape });
         } catch {
             continue;
@@ -234,7 +307,7 @@ async function collectLibraryTokens(sourceDir: string, components: readonly Scan
  * stylesheet with StateUI, and writes one module per root component (plus its compiled controller) and an
  * index to `outDir`. A component with an error gets no module and the others are still built, so one run
  * reports every problem. Composed components have no module. Also writes `catalog.json`, which describes every
- * component that built, root and composed, sorted by name. Output depends on the sources only, so two
+ * component that built, root and composed, sorted by name, the patterns of `patternsDir` and the theme presets of `presetsDir`. Output depends on the sources only, so two
  * builds of the same input are byte-identical. Files in `outDir` from earlier builds are not removed
  */
 export async function buildLibrary(sourceDir: string, outDir: string, options: BuildOptions = {}): Promise<BuildResult> {
@@ -244,7 +317,8 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
     const scan = scanLibrary(fileMap as FileMap);
     const errors: BuildError[] = [...scan.errors];
 
-    const library = await collectLibraryTokens(sourceDir, scan.components);
+    const partials = await readShapePartials(options.sharedShapeDir);
+    const library = await collectLibraryTokens(sourceDir, scan.components, partials);
     errors.push(
         ...lintCss(generateSharedSheet(), { file: 'generated shared sheet', tokens: library.tokens })
     );
@@ -263,15 +337,33 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
             }
             const parsed = await readComposed(sourceDir, file, errors);
             if (parsed?.tree === undefined) continue;
+            if (options.requireSearchKeys === true) {
+                const missing = missingSearchKeys(parsed, file, true);
+                errors.push(...missing);
+                if (missing.length > 0) continue;
+            }
             const overlays: ReadOverlay[] = [];
             for (const [code, localeFile] of Object.entries(component.locales)) {
                 const read = await readOverlay(sourceDir, code, localeFile, errors);
                 if (read !== undefined) overlays.push(read);
             }
-            pending.push({ component, tree: parsed.tree, exposes: parsed.exposes, size, overlays });
+            const search = {
+                ...(parsed.summary === undefined ? {} : { summary: parsed.summary }),
+                ...(parsed.category === undefined ? {} : { category: parsed.category }),
+                ...(parsed.purposes === undefined ? {} : { purposes: parsed.purposes })
+            };
+            pending.push({ component, tree: parsed.tree, exposes: parsed.exposes, search, size, overlays });
             continue;
         }
-        const compiled = await compileComponent(stateui, sourceDir, component, options, library);
+        if (component.tier === 'shape') {
+            const compiled = await compileShape(sourceDir, component, options, partials);
+            errors.push(...compiled.errors);
+            if (compiled.errors.length > 0 || compiled.shape === undefined) continue;
+            for (const [file, text] of compiled.files) output.set(file, text);
+            entries.push(shapeEntry(component, compiled.shape, sizeOf(component.group) as CatalogSize));
+            continue;
+        }
+        const compiled = await compileComponent(stateui, sourceDir, component, options, library, partials);
         errors.push(...compiled.errors);
         if (compiled.errors.length > 0) continue;
         for (const [file, text] of compiled.files) output.set(file, text);
@@ -289,20 +381,34 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
         ];
         errors.push(...problems);
         if (problems.length > 0 || item.overlays.length !== Object.keys(item.component.locales).length) continue;
-        entries.push(composedEntry(item.component, item.tree, item.size, item.exposes));
+        entries.push(composedEntry(item.component, item.tree, item.size, item.exposes, item.search));
         for (const read of item.overlays) output.set(overlayFileName(item.component.name, read.code), emitOverlay(read.overlay));
     }
 
+    const sourceFiles = new Map(scan.components.map((component) => [component.name, component.files.state ?? component.files.composed ?? component.files.view ?? component.name]));
+    errors.push(...duplicatePurposes(entries, sourceFiles));
+
+    const componentTokens = collectComponentTokens(entries.flatMap((entry) => (entry.tier === 'root' ? [{ file: entry.name, shape: entry.shape }] : []))).tokens;
     output.set('index.js', emitIndex(
             built.map((entry) => entry.component.name),
-            collectComponentTokens(
-                entries.flatMap((entry) => (entry.tier === 'root' ? [{ file: entry.name, shape: entry.shape }] : []))
-            ).tokens
+            componentTokens
         ));
     output.set('index.d.ts', emitIndexTypes());
     const themeSection = buildThemeSection({ descriptions: options.tokenDescriptions });
     errors.push(...themeSection.errors);
-    const { catalog, text } = emitCatalog(entries, themeSection.theme);
+    let patterns: PatternCatalogEntry[] = [];
+    if (options.patternsDir !== undefined) {
+        const builtPatterns = await buildPatterns(options.patternsDir, libraryOf(entries));
+        errors.push(...builtPatterns.errors);
+        patterns = builtPatterns.patterns;
+    }
+    let themePresets: ThemePresetCatalogEntry[] = [];
+    if (options.presetsDir !== undefined) {
+        const builtPresets = await buildPresets(options.presetsDir, componentTokens);
+        errors.push(...builtPresets.errors);
+        themePresets = builtPresets.themePresets;
+    }
+    const { catalog, text } = emitCatalog(entries, themeSection.theme, patterns, themePresets);
     output.set('catalog.json', text);
 
     const files = [...output.keys()].sort();

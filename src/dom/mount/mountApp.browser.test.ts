@@ -2,6 +2,7 @@ import { report } from '@punyts/core';
 import { defineComponent } from '@punyts/stateui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
+import { applyLinks, runtimePath, resolveRowLinks } from '../../core/index.js';
 import { parseShape } from '../../core/shape/index.js';
 import { DEFAULT_TOKENS } from '../../core/theme/index.js';
 import type { Shape } from '../../core/shape/index.js';
@@ -36,6 +37,16 @@ const library: ComponentLibrary = {
         tag: 'x-mount-records',
         shape: shapeOf({ title: { type: 'string', default: '' }, row: { type: 'node', row: true } })
     },
+    rows: {
+        tier: 'root',
+        tag: 'x-mount-rows',
+        shape: shapeOf({ row: { type: 'node', row: true }, slots: { type: 'any', runtime: true, default: {} } })
+    },
+    shell: {
+        tier: 'root',
+        tag: 'x-mount-shell',
+        shape: shapeOf({ body: { type: 'node' } })
+    },
     greeting: {
         tier: 'composed',
         tree: { component: 'label', text: 'Hello' }
@@ -48,6 +59,11 @@ defineComponent({
 });
 defineComponent({ tag: 'x-mount-label', template: '<p>{{ $.text }}</p>' });
 defineComponent({ tag: 'x-mount-button', template: '<b>button</b>' });
+defineComponent({
+    tag: 'x-mount-rows',
+    template: '<sui-node repeat="{{ $k,$i,$v in $.slots }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
+});
+defineComponent({ tag: 'x-mount-shell', template: '<sui-node state=".body"></sui-node>' });
 defineComponent({ tag: 'x-mount-records', template: '<i>{{ $.title }}</i>' });
 
 /** Every text node below `root`, crossing shadow roots */
@@ -147,6 +163,18 @@ describe('mountApp in Chromium', () => {
         expect(store?.get('$.runtime.nodes')).toEqual({});
         expect(store?.get('$.runtime.icons')).toEqual({});
         expect(store?.get('$.runtime.empty')).toEqual({});
+    });
+
+    it("should start $.runtime.icons with the document's own icons", () => {
+        // Arrange
+        const host = freshHost();
+        const icons = { chat: { outline: ['M4 5h16v11H9l-5 4z'] } };
+
+        // Act
+        const app = start(host, { app: panel({}), icons });
+
+        // Assert
+        expect(app.store?.get('$.runtime.icons')).toEqual(icons);
     });
 
     it('should take the locale from the document and never the runtime branch', () => {
@@ -315,5 +343,192 @@ describe('mountApp in Chromium', () => {
         expect(app.errors).toEqual([]);
         expect(template?.['<-text']).toBe('$row.name');
         expect(app.store?.get('$.app.title')).toBe('Ada');
+    });
+
+    it('should render the rows of a list whose row template has $row links and sits directly in a node slot', () => {
+        // Arrange
+        const host = freshHost();
+        const doc: AppDocument = {
+            data: { records: [{ name: 'Ada' }, { name: 'Grace' }, { name: 'Lin' }] },
+            app: { component: 'shell', body: { component: 'rows', row: { component: 'label', '<-text': '$row.name' } } } as AppDocument['app']
+        };
+
+        // Act
+        const remove = registerMountStep('rows', {
+            start: ({ store }) => {
+                const template = store.get<Record<string, unknown>>('$.app.body.row');
+                const pool = `${runtimePath('$.app.body')}.slots`;
+                const segments = pool.split('.');
+                for (let length = 3; length <= segments.length; length++) {
+                    const prefix = segments.slice(0, length).join('.');
+                    if (store.get(prefix) === undefined) store.set(prefix, {});
+                }
+                [0, 1, 2].forEach((index) => {
+                    const path = `${pool}.${index}`;
+                    const rewritten = resolveRowLinks(template as never, `${path}.row`, { path });
+                    store.set(path, rewritten.tree);
+                    store.link(`${path}.row`, `$.data.records.${index}`);
+                    expect(applyLinks(store, rewritten.links)).toEqual([]);
+                });
+                store.delete('$.app.body.slots');
+                store.link('$.app.body.slots', pool);
+            }
+        });
+        const app = start(host, doc);
+        remove();
+
+        // Assert
+        expect(app.errors).toEqual([]);
+        expect(textOf(host)).toContain('Ada');
+        expect(textOf(host)).toContain('Grace');
+        expect(textOf(host)).toContain('Lin');
+    });
+
+    describe('writeNode', () => {
+        const DOC: AppDocument = Object.freeze({
+            data: Object.freeze({ total: 'ten', other: 'eleven' }),
+            app: Object.freeze(panel({ stat: Object.freeze({ component: 'label', '<-text': '$.data.total' }) }))
+        }) as AppDocument;
+        const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+        it('should link a node swapped in for a linked node', async () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const errors = app.writeNode('$.app.children.stat', { component: 'label', '<-text': '$.data.other' } as never);
+            await tick();
+
+            // Assert
+            expect(errors).toEqual([]);
+            expect(app.store?.get('$.app.children.stat.text' as never)).toBe('eleven');
+            expect(textOf(host)).toContain('eleven');
+        });
+
+        it('should expand a composed component and fill defaults in a written node', async () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const errors = app.writeNode('$.app.children.hi', { component: 'greeting' } as never);
+            await tick();
+
+            // Assert
+            expect(errors).toEqual([]);
+            expect(app.store?.get('$.app.children.hi.mood' as never)).toBe('plain');
+            expect(textOf(host)).toContain('Hello');
+        });
+
+        it('should remove a node and its links', () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const removed = app.removeNode('$.app.children.stat');
+            app.store?.set('$.data.total' as never, 'changed' as never);
+
+            // Assert
+            expect(removed).toBe(true);
+            expect(app.store?.get('$.app.children.stat' as never)).toBeUndefined();
+            expect(textOf(host)).not.toContain('changed');
+        });
+
+        it('should refuse a node outside the app tree or under a missing parent', () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+
+            // Act
+            const outside = app.writeNode('$.data.x', { component: 'label' } as never);
+            const orphan = app.writeNode('$.app.children.none.children.x', { component: 'label' } as never);
+
+            // Assert
+            expect(outside.map((error) => error.code)).toEqual(['SUI-RUN-WRITE']);
+            expect(orphan.map((error) => error.code)).toEqual(['SUI-RUN-WRITE']);
+        });
+    });
+});
+
+describe('mountApp with a shape component in Chromium', () => {
+    // A fixture shape and a fixture slot that names it: no drawing component exists in this library
+    const shapes: ComponentLibrary = {
+        ...library,
+        dot: { tier: 'shape', shape: shapeOf({ r: { type: 'number', default: 4 } }) },
+        sketch: {
+            tier: 'root',
+            tag: 'x-mount-sketch',
+            shape: (() => {
+                const result = parseShape({ summary: 'Fixture', properties: { mark: { type: 'node', childComponents: ['dot'] } } }, 'fixture.state.json');
+                if (!result.shape) throw new Error(JSON.stringify(result.errors));
+                return result.shape;
+            })()
+        }
+    };
+    defineComponent({ tag: 'x-mount-sketch', template: '<s>sketch</s>' });
+    const apps: MountedApp[] = [];
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        errorSpy = vi.spyOn(report, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+        for (const app of apps.splice(0)) app.dispose();
+        errorSpy.mockRestore();
+        document.body.replaceChildren();
+    });
+
+    it('should report a shape under panel once as SUI-NODE-CHILD and render no element', () => {
+        // Arrange
+        const host = freshHost();
+        const doc: AppDocument = { app: panel({ hello: { component: 'label', text: 'Hi' }, spot: { component: 'dot' } }) };
+
+        // Act
+        const app = mountApp(host, doc, shapes);
+        apps.push(app);
+
+        // Assert
+        expect(app.store).toBeUndefined();
+        expect(app.errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.spot' }
+        ]);
+        expect(host.querySelectorAll('*')).toHaveLength(0);
+    });
+
+    it('should mount a shape in a slot that names it without an element for the shape', () => {
+        // Arrange
+        const host = freshHost();
+        const doc: AppDocument = { app: { component: 'sketch', mark: { component: 'dot', r: 2 } } as AppDocument['app'] };
+
+        // Act
+        const app = mountApp(host, doc, shapes);
+        apps.push(app);
+
+        // Assert
+        expect(app.errors).toEqual([]);
+        expect(app.store?.get('$.app.mark' as never)).toEqual({ component: 'dot', r: 2 });
+        expect(find(host, 'x-mount-sketch')).toBeDefined();
+        expect(textOf(host)).toContain('sketch');
+    });
+
+    it('should refuse a written shape node that <sui-node> would render', async () => {
+        // Arrange
+        const host = freshHost();
+        const app = mountApp(host, { app: panel({ hello: { component: 'label', text: 'Hi' } }) }, shapes);
+        apps.push(app);
+
+        // Act
+        const errors = app.writeNode('$.app.children.spot', { component: 'dot' } as never);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+        // Assert
+        expect(errors.map((error) => ({ code: error.code, statePath: error.statePath }))).toEqual([
+            { code: 'SUI-NODE-CHILD', statePath: '$.app.children.spot' }
+        ]);
+        expect(app.store?.get('$.app.children.spot' as never)).toBeUndefined();
+        expect(errorSpy).not.toHaveBeenCalled();
     });
 });

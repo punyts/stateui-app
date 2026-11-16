@@ -212,7 +212,7 @@ describe('theme overlays in Chromium', () => {
 
         it('should reject a themes name that clashes with a shipped overlay and an active name that does not exist', () => {
             // Arrange / Act
-            const clash = start(undefined, { themes: { dark: { kind: 'mode', tokens: {} } } });
+            const clash = start(undefined, { themes: { default: { kind: 'brand', tokens: {} } } });
             const unknown = start({ active: { mode: 'sepia' } });
 
             // Assert
@@ -254,6 +254,25 @@ describe('theme overlays in Chromium', () => {
             expect(first).toBe(computed('#09090b'));
             expect(getComputedStyle(target).backgroundColor).toBe(computed('#ffffff'));
             expect(app.store?.get('$.theme.active.mode')).toBe('system');
+        });
+
+        it("should pick the document's own light and dark modes, each over the shipped one, when following the system", () => {
+            // Arrange
+            const media = fakeMedia({ [DARK]: true });
+            const themes: AppDocument['themes'] = {
+                light: { kind: 'mode', tokens: { color: { accent: { base: '#204080' } } } },
+                dark: { kind: 'mode', tokens: { color: { accent: { base: '#f0c040' } } } }
+            };
+            start({ active: { mode: 'system' } }, { themes }, media.hooks);
+            const target = deepest(host) as HTMLElement;
+            const dark = [getComputedStyle(target).color, getComputedStyle(target).backgroundColor];
+
+            // Act
+            media.set(DARK, false);
+
+            // Assert
+            expect(dark).toEqual([computed('#f0c040'), computed('#09090b')]);
+            expect([getComputedStyle(target).color, getComputedStyle(target).backgroundColor]).toEqual([computed('#204080'), computed('#ffffff')]);
         });
 
         it('should stop following when mode is set to an explicit name and resume when set back to system', () => {

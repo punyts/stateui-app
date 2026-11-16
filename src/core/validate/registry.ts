@@ -1,5 +1,10 @@
 import { validateLayouts, validatePlacements } from '../layout/index.js';
+import { createLogicIndex, readLogic } from '../logic/index.js';
 import { validateOn } from '../on/index.js';
+import { validateAppRoot, validateRoutes } from './route.js';
+import { validatePaints, validateShapeLabels } from './paint.js';
+import { validateSceneCount } from './scenes.js';
+import { validateSteps } from './steps.js';
 import type { DocumentValidator } from './types.js';
 
 const validators = new Map<string, DocumentValidator>();
@@ -22,6 +27,20 @@ export function documentValidators(): [string, DocumentValidator][] {
     return [...validators.entries()];
 }
 
-registerDocumentValidator('on', (context) => validateOn(context.tree, context.library));
+registerDocumentValidator('on', (context) => [
+    ...validateOn(context.tree, context.library),
+    ...Object.entries(context.screens ?? {}).flatMap(([name, tree]) => validateOn(tree, context.library, { path: `$.screens.${name}`, app: context.tree }))
+]);
 registerDocumentValidator('layout', validateLayouts);
 registerDocumentValidator('placement', validatePlacements);
+registerDocumentValidator('step', validateSteps);
+registerDocumentValidator('paint', validatePaints);
+registerDocumentValidator('label', validateShapeLabels);
+registerDocumentValidator('scenes', validateSceneCount);
+registerDocumentValidator('logic', (context) => {
+    if (context.document.logic === undefined) return [];
+    const index = createLogicIndex(context.tree, context.library, undefined, { trees: context.screens ?? {} });
+    return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain }).errors;
+});
+registerDocumentValidator('route', validateRoutes);
+registerDocumentValidator('app', validateAppRoot);

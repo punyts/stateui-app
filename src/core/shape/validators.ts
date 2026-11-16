@@ -1,6 +1,16 @@
+import { parsePathData } from '../geometry/pathData.js';
+import { isColor } from '../theme/value.js';
 import type { JsonValue } from '../types.js';
-import { MAX_PATTERN_INPUT, MAX_PATTERN_LENGTH } from './types.js';
-import type { Bounds, PropertyType, ValidatorOptions } from './types.js';
+import {
+    MAX_COLOR_LENGTH,
+    MAX_PATH_COMMANDS,
+    MAX_PATH_DATA_LENGTH,
+    MAX_PATTERN_INPUT,
+    MAX_PATTERN_LENGTH,
+    MAX_POINTS,
+    OBJECT_FIELD_TYPES
+} from './types.js';
+import type { Bounds, FieldValidators, FileRefOptions, ObjectField, ObjectFieldType, PropertyType, ValidatorOptions } from './types.js';
 
 type ValidatorName = keyof ValidatorOptions;
 
@@ -93,12 +103,226 @@ function sameJson(a: JsonValue, b: JsonValue): boolean {
     return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** A token reference of two or more dotted steps, as the theme writes it (`{color.accent.base}`); only the syntax is checked */
+const TOKEN_REFERENCE = /^\{[a-z0-9]+(?:\.[a-z0-9]+)+\}$/;
+
+/** A paint name: the key of a gradient in a drawing's `paints` */
+const PAINT_NAME = /^[a-z][A-Za-z0-9_-]*$/;
+
+/** A UUID in its canonical form, any version */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A media type such as `image/png` or `image/svg+xml` */
+const MEDIA_TYPE = /^[a-z]+\/[a-z0-9][a-z0-9.+-]*$/;
+
+/** The head of a `data:` URL: its media type, the optional parameters and `;base64` */
+const DATA_URL = /^data:([a-z]+\/[a-z0-9][a-z0-9.+-]*)((?:;[a-z0-9-]+=[a-z0-9.+-]+)*)(;base64)?,/i;
+
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** The keys of a file reference */
+const FILE_REF_KEYS = ['id', 'name', 'size', 'type'];
+
+/** The validators a field of `fields` may carry */
+const FIELD_VALIDATOR_NAMES: readonly (keyof FieldValidators)[] = ['color', 'pathData', 'points', 'vector', 'fields', 'fileRef', 'range', 'oneOf'];
+
+/** The keys of one field of `fields` */
+const OBJECT_FIELD_KEYS = ['type', 'values', 'required', 'validators'];
+
+/** The JSON kind of a value, named as the property types are */
+function kindOf(value: JsonValue): PropertyType | 'null' {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'array';
+    return typeof value as 'string' | 'number' | 'boolean' | 'object';
+}
+
+function isFiniteNumber(value: JsonValue | undefined): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function parseTrue(options: JsonValue): true | undefined {
+    return options === true ? true : undefined;
+}
+
+/** The three forms a value of the `color` validator takes */
+export type ColorForm = 'literal' | 'token' | 'paint';
+
+/**
+ * The form of a colour value, as the `color` validator reads it: `token` for a reference `{group.name...}`, `literal`
+ * for a colour the theme accepts (`transparent`, hex, `rgb()`, `rgba()`, `hsl()`, `hsla()`), `paint` for the name of
+ * an entry of a drawing's `paints`, and undefined for anything else or a string over `MAX_COLOR_LENGTH`. A literal
+ * wins over a paint name, so `transparent` is a colour. The document check and the renderers' paint resolution use it
+ */
+export function colorForm(value: string): ColorForm | undefined {
+    if (value.length > MAX_COLOR_LENGTH) return undefined;
+    if (TOKEN_REFERENCE.test(value)) return 'token';
+    if (isColor(value)) return 'literal';
+    if (PAINT_NAME.test(value)) return 'paint';
+    return undefined;
+}
+
+function isColorValue(value: string): boolean {
+    return colorForm(value) !== undefined;
+}
+
+function isPathData(value: string): boolean {
+    if (value.length > MAX_PATH_DATA_LENGTH || value.trim() === '') return false;
+    const result = parsePathData(value);
+    return result.ok && result.commands.length <= MAX_PATH_COMMANDS;
+}
+
+function isPoints(value: JsonValue[]): boolean {
+    if (value.length > MAX_POINTS) return false;
+    return value.every((point) => Array.isArray(point) && point.length === 2 && isFiniteNumber(point[0]) && isFiniteNumber(point[1]));
+}
+
+function parseFileRef(options: JsonValue): FileRefOptions | undefined {
+    if (!isObject(options) || Object.keys(options).some((key) => key !== 'types' && key !== 'dataUrl')) return undefined;
+    const { types, dataUrl } = options;
+    if (!Array.isArray(types) || types.length === 0) return undefined;
+    if (!types.every((type): type is string => typeof type === 'string' && MEDIA_TYPE.test(type))) return undefined;
+    if (new Set(types).size !== types.length) return undefined;
+    if (dataUrl !== undefined && typeof dataUrl !== 'boolean') return undefined;
+    // A data URL is only ever an image, so `dataUrl` needs an image type to accept
+    if (dataUrl === true && !types.some((type) => type.startsWith('image/'))) return undefined;
+    return dataUrl === undefined ? { types } : { types, dataUrl };
+}
+
+/** True when the value is a `data:` URL of an image type in `types`, with a well-formed base64 body when it says `;base64` */
+function isImageDataUrl(value: string, types: readonly string[]): boolean {
+    const head = DATA_URL.exec(value);
+    if (head === null) return false;
+    const type = (head[1] as string).toLowerCase();
+    if (!type.startsWith('image/') || !types.includes(type)) return false;
+    return head[3] === undefined || BASE64.test(value.slice(head[0].length));
+}
+
+/**
+ * True when the value is a file reference of a listed type. A string is a `data:` URL of a listed image type with
+ * `dataUrl`; without it a `data:` URL is refused and any other string is not a file, so it is left to the property's
+ * other validators (a colour or a file: `color` checks the string, `fileRef` the reference)
+ */
+function isFileRef(value: JsonValue, options: FileRefOptions): boolean {
+    if (typeof value === 'string') return options.dataUrl === true ? isImageDataUrl(value, options.types) : !/^\s*data:/i.test(value);
+    if (!isObject(value)) return true;
+    if (Object.keys(value).some((key) => !FILE_REF_KEYS.includes(key))) return false;
+    const { id, name, size, type } = value;
+    return (
+        typeof id === 'string' &&
+        UUID.test(id) &&
+        typeof name === 'string' &&
+        typeof size === 'number' &&
+        Number.isInteger(size) &&
+        size >= 0 &&
+        typeof type === 'string' &&
+        options.types.includes(type)
+    );
+}
+
+function isObjectFieldType(value: JsonValue | undefined): value is ObjectFieldType {
+    return (OBJECT_FIELD_TYPES as readonly unknown[]).includes(value);
+}
+
+/** The types of a field's `type`: a type, or a non-empty list of distinct types; undefined for anything else */
+function parseFieldTypes(type: JsonValue | undefined): ObjectFieldType[] | undefined {
+    if (isObjectFieldType(type)) return [type];
+    if (!Array.isArray(type) || type.length === 0 || !type.every(isObjectFieldType)) return undefined;
+    return new Set(type).size === type.length ? type : undefined;
+}
+
+/** The types a field's value may have */
+const fieldTypes = (field: ObjectField): readonly ObjectFieldType[] => (Array.isArray(field.type) ? field.type : [field.type]);
+
+/** Reads the validators of one field: only the field validators, each well formed and applying to one of the field's types */
+function parseFieldValidators(options: JsonValue, types: readonly ObjectFieldType[]): FieldValidators | undefined {
+    if (!isObject(options)) return undefined;
+    const parsed: Record<string, unknown> = {};
+    for (const [name, value] of Object.entries(options)) {
+        if (!(FIELD_VALIDATOR_NAMES as readonly string[]).includes(name)) return undefined;
+        const rule = VALIDATORS[name as keyof FieldValidators] as ValidatorRule<ValidatorName>;
+        const result = rule.parse(value);
+        if (result === undefined || !types.some((type) => rule.applies(type))) return undefined;
+        parsed[name] = result;
+    }
+    return parsed as FieldValidators;
+}
+
+function parseObjectField(options: JsonValue): ObjectField | undefined {
+    if (!isObject(options) || Object.keys(options).some((key) => !OBJECT_FIELD_KEYS.includes(key))) return undefined;
+    const { type, values, required, validators } = options;
+    const types = parseFieldTypes(type);
+    if (types === undefined) return undefined;
+    const field: ObjectField = { type: types.length === 1 ? types[0]! : types };
+    if (values !== undefined) {
+        if (!Array.isArray(values) || values.length === 0 || !values.every((value) => types.some((one) => fitsFieldType(one, value)))) return undefined;
+        field.values = values;
+    }
+    if (required !== undefined) {
+        if (typeof required !== 'boolean') return undefined;
+        field.required = required;
+    }
+    if (validators !== undefined) {
+        const parsed = parseFieldValidators(validators, types);
+        if (parsed === undefined) return undefined;
+        field.validators = parsed;
+    }
+    return field;
+}
+
+function parseFields(options: JsonValue): Record<string, ObjectField> | undefined {
+    if (!isObject(options) || Object.keys(options).length === 0) return undefined;
+    const fields: Record<string, ObjectField> = {};
+    for (const [name, value] of Object.entries(options)) {
+        if (name === '') return undefined;
+        const field = parseObjectField(value);
+        if (field === undefined) return undefined;
+        fields[name] = field;
+    }
+    return fields;
+}
+
+function fitsFieldType(type: ObjectFieldType, value: JsonValue): boolean {
+    if (type === 'number') return isFiniteNumber(value);
+    if (type === 'object') return isObject(value);
+    return kindOf(value) === type;
+}
+
+/**
+ * True when a value fits a field: it has one of the field's types, it is one of `values` when they hold an entry of
+ * that type, and it passes each validator that applies to that type (with one type, every validator applies)
+ */
+function fitsField(field: ObjectField, value: JsonValue): boolean {
+    const type = fieldTypes(field).find((one) => fitsFieldType(one, value));
+    if (type === undefined) return false;
+    const values = field.values?.filter((allowed) => fitsFieldType(type, allowed)) ?? [];
+    if (values.length > 0 && !values.some((allowed) => sameJson(allowed, value))) return false;
+    for (const [name, options] of Object.entries(field.validators ?? {})) {
+        const rule = VALIDATORS[name as keyof FieldValidators] as ValidatorRule<ValidatorName>;
+        if (rule.applies(type) && !rule.check(value, options as never)) return false;
+    }
+    return true;
+}
+
+function hasFields(value: JsonValue, fields: Record<string, ObjectField>): boolean {
+    if (!isObject(value)) return true;
+    if (Object.keys(value).some((key) => !Object.hasOwn(fields, key))) return false;
+    return Object.entries(fields).every(([name, field]) => {
+        const entry = Object.hasOwn(value, name) ? value[name] : undefined;
+        return entry === undefined ? field.required !== true : fitsField(field, entry);
+    });
+}
+
 /** The closed set of validators. Adding one is a change here, never in a shape file */
 export const VALIDATORS: { [K in ValidatorName]: ValidatorRule<K> } = {
     oneOf: {
         parse: (options) => (Array.isArray(options) && options.length > 0 ? options : undefined),
         applies: () => true,
         check: (value, options) => options.some((option) => sameJson(option, value))
+    },
+    eachOf: {
+        parse: (options) => (Array.isArray(options) && options.length > 0 ? options : undefined),
+        applies: (type) => type === 'array',
+        check: (value, options) => !Array.isArray(value) || value.every((entry) => options.some((option) => sameJson(option, entry)))
     },
     pattern: {
         parse: (options) => (typeof options === 'string' && compile(options) !== undefined ? options : undefined),
@@ -124,6 +348,38 @@ export const VALIDATORS: { [K in ValidatorName]: ValidatorRule<K> } = {
         parse: (options) => parseBounds(options, true),
         applies: (type) => type === 'string' || type === 'array',
         check: (value, options) => (typeof value === 'string' || Array.isArray(value)) && inBounds(value.length, options)
+    },
+    // The graphics validators below pass a value of a type they do not apply to: the property's type check has
+    // already refused it unless the property lists several types (`drawImage.src` is a string or an object)
+    color: {
+        parse: parseTrue,
+        applies: (type) => type === 'string',
+        check: (value) => typeof value !== 'string' || isColorValue(value)
+    },
+    pathData: {
+        parse: parseTrue,
+        applies: (type) => type === 'string',
+        check: (value) => typeof value !== 'string' || isPathData(value)
+    },
+    points: {
+        parse: parseTrue,
+        applies: (type) => type === 'array',
+        check: (value) => !Array.isArray(value) || isPoints(value)
+    },
+    vector: {
+        parse: (options) => (options === 2 || options === 3 ? options : undefined),
+        applies: (type) => type === 'array',
+        check: (value, options) => !Array.isArray(value) || (value.length === options && value.every(isFiniteNumber))
+    },
+    fields: {
+        parse: parseFields,
+        applies: (type) => type === 'object',
+        check: (value, options) => hasFields(value, options)
+    },
+    fileRef: {
+        parse: parseFileRef,
+        applies: (type) => type === 'string' || type === 'object',
+        check: (value, options) => isFileRef(value, options)
     }
 };
 

@@ -261,6 +261,16 @@ describe('validateTokenValue', () => {
         ['dimension', '50%'],
         ['dimension', 'calc({scale.space.3} * {density.factor})'],
         ['dimension', 'calc(4px + (2rem - 1px) * 2)'],
+        ['dimension', 'clamp(32px, 6vw, 56px)'],
+        ['dimension', 'clamp(34px, 3vw + 22px, 56px)'],
+        ['dimension', 'min(100%, 40vw - 8px)'],
+        ['dimension', 'min(100%, 40rem)'],
+        ['dimension', 'max(1rem, calc(2vw + 4px))'],
+        ['inset', '48px'],
+        ['inset', '48px 24px'],
+        ['inset', '0 24px 8px'],
+        ['inset', '1px 2px 3px 4px'],
+        ['inset', '{space.inset.lg} {space.inset.md}'],
         ['number', '2'],
         ['number', '0.75'],
         ['duration', '200ms'],
@@ -271,6 +281,10 @@ describe('validateTokenValue', () => {
         ['shadow', 'none'],
         ['shadow', '0 1px 3px 0 rgba(0, 0, 0, 0.1)'],
         ['shadow', '0 1px 3px 0 #000, 0 8px 24px -2px rgba(0, 0, 0, 0.2)'],
+        ['shadow', '0 1px 3px rgba(0, 0, 0, 0.1)'],
+        ['shadow', '0 1px #d2d2d7'],
+        ['shadow', 'inset 0 1px 0 0 rgba(0, 0, 0, 0.1)'],
+        ['shadow', 'rgba(0, 0, 0, 0.1) 0 1px 3px'],
         ['fontFamily', "system-ui, 'Segoe UI', sans-serif"],
         ['fontWeight', '400'],
         ['fontWeight', 'bold'],
@@ -290,8 +304,17 @@ describe('validateTokenValue', () => {
         ['duration', '0'],
         ['easing', 'bounce'],
         ['easing', 'cubic-bezier(2, 0, 0.2, 1)'],
-        ['shadow', '0 1px 3px rgba(0, 0, 0, 0.1)'],
+        ['dimension', '4vw'],
+        ['dimension', 'clamp(1px, 2px)'],
+        ['dimension', 'min(1px) max(2px)'],
+        ['dimension', 'clamp(1px, 2em, 3px)'],
+        ['inset', '1px 2px 3px 4px 5px'],
+        ['inset', '1px red'],
         ['shadow', 'inset'],
+        ['shadow', '0 rgba(0, 0, 0, 0.1)'],
+        ['shadow', '0 1px 3px'],
+        ['shadow', 'inset inset 0 1px #000'],
+        ['shadow', '0 #000 1px'],
         ['fontFamily', 'a; b'],
         ['fontFamily', ''],
         ['fontWeight', '950'],
@@ -310,7 +333,7 @@ describe('validateTokenValue', () => {
     it.each(['url(x)', 'a@b', 'a;b', 'expression(1)', 'a{b', 'a}b', '{bad path}', 'URL(x)'])(
         'should reject the injection "%s" in every type',
         (text) => {
-            for (const type of ['color', 'dimension', 'number', 'duration', 'easing', 'shadow', 'fontFamily', 'fontWeight'] as const) {
+            for (const type of ['color', 'dimension', 'inset', 'number', 'duration', 'easing', 'shadow', 'fontFamily', 'fontWeight'] as const) {
                 expect(validateTokenValue(type, text)).toBe(false);
             }
         }
@@ -321,6 +344,12 @@ describe('validateTokenValue', () => {
         expect(validateTokenValue('dimension', '{palette.blue.600}')).toBe(false);
         expect(validateTokenValue('color', '{palette.blue.9999}')).toBe(false);
         expect(validateTokenValue('color', '{x.y}', (path) => (path === 'x.y' ? 'color' : undefined))).toBe(true);
+    });
+
+    it('should accept a dimension reference as an inset and inside clamp()', () => {
+        expect(validateTokenValue('inset', '{space.inset.md}')).toBe(true);
+        expect(validateTokenValue('inset', '{palette.blue.600} 4px')).toBe(false);
+        expect(validateTokenValue('dimension', 'clamp({space.inset.sm}, 4vw, {space.inset.lg})')).toBe(true);
     });
 
     it('should reject a reference inside a larger non-calc value', () => {

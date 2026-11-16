@@ -80,12 +80,31 @@ describe('shared properties in parseShape', () => {
         expect(errorsOf({ shared: { tone: { default: 'purple' } } })).toEqual([
             expect.objectContaining({ code: 'SUI-BUILD-DEFAULT', file: FILE })
         ]);
-        expect(errorsOf({ shared: { tone: { values: ['a'] } } })).toEqual([expect.objectContaining({ code: 'SUI-BUILD-KEY', file: FILE })]);
+        expect(errorsOf({ shared: { tone: { label: 'a' } } })).toEqual([expect.objectContaining({ code: 'SUI-BUILD-KEY', file: FILE })]);
         expect(errorsOf({ shared: { tone: 'accent' } })).toEqual([expect.objectContaining({ code: 'SUI-BUILD-SHAPE', file: FILE })]);
         expect(errorsOf({ shared: ['tone'] })).toEqual([expect.objectContaining({ code: 'SUI-BUILD-SHAPE', file: FILE })]);
     });
 
-    it.each(['size', 'tone', 'variant', 'density', 'elevation', 'textRole', 'hidden'])(
+    it('should narrow a shared property to the values the component paints, and check the default against them', () => {
+        // Arrange and Act
+        const shape = shapeOf({ shared: { variant: { default: 'outline', values: ['outline', 'soft', 'ghost'] } } });
+
+        // Assert
+        expect(shape.properties.variant).toMatchObject({ values: ['outline', 'soft', 'ghost'], default: 'outline' });
+        expect(check(shape, { variant: 'ghost' })).toEqual([]);
+        expect(check(shape, { variant: 'solid' })).not.toEqual([]);
+    });
+
+    it('should report values outside the closed list, a repeated or empty list, and a default the list leaves out', () => {
+        expect(errorsOf({ shared: { variant: { values: ['outline', 'plain'] } } })).toEqual([expect.objectContaining({ code: 'SUI-BUILD-SHAPE', file: FILE })]);
+        expect(errorsOf({ shared: { variant: { values: ['soft', 'soft'] } } })).not.toEqual([]);
+        expect(errorsOf({ shared: { variant: { values: [] } } })).not.toEqual([]);
+        expect(errorsOf({ shared: { variant: { default: 'solid', values: ['outline', 'ghost'] } } })).toEqual([
+            expect.objectContaining({ code: 'SUI-BUILD-DEFAULT', file: FILE })
+        ]);
+    });
+
+    it.each(['size', 'tone', 'variant', 'density', 'elevation', 'corners', 'textRole', 'hidden'])(
         'should reject an own property named %s and name it in the error',
         (name) => {
             // Act

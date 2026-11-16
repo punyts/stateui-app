@@ -3,9 +3,11 @@ import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import type { ComponentToken } from '../core/theme/index.js';
 import { typesOf } from '../core/shape/index.js';
-import type { PropertyShape, Shape } from '../core/shape/index.js';
+import type { ComponentCategory, ObjectField, PropertyShape, Shape, ValidatorOptions } from '../core/shape/index.js';
 import type { ExposedPath, ScannedComponent } from '../core/convention/index.js';
 import type { JsonObject, JsonValue, Node } from '../core/types.js';
+import type { PatternCatalogEntry } from './patterns.js';
+import type { ThemePresetCatalogEntry } from './presets.js';
 import type { ThemeSection } from './theme.js';
 
 /** The size of a component, from the group folder it sits in */
@@ -40,7 +42,6 @@ export interface CatalogSlot {
 
 interface EntryBase {
     name: string;
-    tag: string;
     size: CatalogSize;
     /** The language codes that have a locale overlay, in code order */
     locales: string[];
@@ -48,9 +49,16 @@ interface EntryBase {
     example: Node;
 }
 
+/** The keys search reads: the category and the purpose phrases. An entry carries each when its file declares it */
+export interface SearchKeys {
+    category?: ComponentCategory;
+    purposes?: string[];
+}
+
 /** The catalog entry of a root component */
-export interface RootCatalogEntry extends EntryBase, ShapeExtras {
+export interface RootCatalogEntry extends EntryBase, ShapeExtras, SearchKeys {
     tier: 'root';
+    tag: string;
     summary: string;
     /** What `validateNode` needs; the server validates a node against it without a DOM */
     shape: Shape;
@@ -68,19 +76,46 @@ export interface RootCatalogEntry extends EntryBase, ShapeExtras {
 }
 
 /** The catalog entry of a composed component: its default tree, without the `exposes` key, and the exposed paths */
-export interface ComposedCatalogEntry extends EntryBase {
+export interface ComposedCatalogEntry extends EntryBase, SearchKeys {
     tier: 'composed';
+    tag: string;
+    /** One line from the composed file; absent when the file has none */
+    summary?: string;
     tree: Node;
     /** The override paths that are the component's intended interface, in file order; absent when the file lists none */
     exposes?: ExposedPath[];
 }
 
-export type ComponentCatalogEntry = RootCatalogEntry | ComposedCatalogEntry;
+/**
+ * The catalog entry of a shape component: a state file only, drawn by a graphics renderer. It has no tag, slots,
+ * commands or layout, since nothing mounts it as an element
+ */
+export interface ShapeCatalogEntry extends EntryBase, SearchKeys {
+    tier: 'shape';
+    summary: string;
+    /** What `validateNode` needs */
+    shape: Shape;
+    /** The component's own properties */
+    own: string[];
+    /** The content (`_`) properties, with `map.field` for fields inside map items */
+    content: string[];
+    events: string[];
+    /** The shapes its `children` accept (`drawGroup`); absent when it takes no children */
+    childComponents?: string[];
+    /** The component tokens the shape declares; absent when it declares none */
+    tokens?: ComponentToken[];
+}
+
+export type ComponentCatalogEntry = RootCatalogEntry | ComposedCatalogEntry | ShapeCatalogEntry;
 
 /** The content of `catalog.json` */
 export interface Catalog {
     /** Every component that built, sorted by name */
     components: ComponentCatalogEntry[];
+    /** Every pattern that passed its checks, sorted by kind then name; empty without `patternsDir` */
+    patterns: PatternCatalogEntry[];
+    /** Every theme preset that passed its checks, sorted by name; empty without `presetsDir` */
+    themePresets: ThemePresetCatalogEntry[];
     /** Every language that a component that built has an overlay for, sorted */
     locales: string[];
     /** The theme tokens a node override may set and the shipped overlays; see `buildThemeSection` */
@@ -139,12 +174,63 @@ function slotsOf(properties: Record<string, PropertyShape>): CatalogSlot[] {
     return slots;
 }
 
+/** A UUID that the `fileRef` validator accepts, for samples */
+const SAMPLE_FILE_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * A value of the type that passes the graphics validators (`color`, `pathData`, `points`, `vector`, `fields`,
+ * `fileRef`) set on it; undefined when none of them is set for the type
+ */
+function graphicsSample(type: string, validators: ValidatorOptions): JsonValue | undefined {
+    const { color, pathData, points, vector, fields, fileRef, length } = validators;
+    if (type === 'string') {
+        if (color !== undefined) return '#000000';
+        if (pathData !== undefined) return 'M0 0';
+        const image = fileRef?.dataUrl === true ? fileRef.types.find((name) => name.startsWith('image/')) : undefined;
+        if (image !== undefined) return `data:${image};base64,`;
+    }
+    if (type === 'array') {
+        if (vector !== undefined) return new Array<number>(vector).fill(0);
+        if (points !== undefined) return Array.from({ length: length?.min ?? 0 }, () => [0, 0]);
+    }
+    if (type === 'object') {
+        if (fileRef !== undefined) return { id: SAMPLE_FILE_ID, name: 'file', size: 0, type: fileRef.types[0] as string };
+        if (fields !== undefined) {
+            const sample: JsonObject = {};
+            for (const [name, field] of Object.entries(fields)) {
+                if (field.required === true) sample[name] = fieldSample(field);
+            }
+            return sample;
+        }
+    }
+    return undefined;
+}
+
+/** A value that passes one field of the `fields` validator */
+function fieldSample(field: ObjectField): JsonValue {
+    const validators = field.validators ?? {};
+    if (field.values !== undefined) return field.values[0] as JsonValue;
+    if (validators.oneOf !== undefined) return validators.oneOf[0] as JsonValue;
+    // A field of several types (`transition.duration`) is sampled as its first
+    const type = Array.isArray(field.type) ? field.type[0]! : field.type;
+    const graphics = graphicsSample(type, validators);
+    if (graphics !== undefined) return graphics;
+    if (type === 'number') return validators.range?.min ?? validators.range?.max ?? 0;
+    if (type === 'string') return '';
+    if (type === 'boolean') return false;
+    if (type === 'array') return [];
+    return {};
+}
+
 /** A value of the first allowed type; undefined for a `node`, which has no stand-alone value */
 function sampleValue(property: PropertyShape): JsonValue | undefined {
     if (property.default !== undefined) return property.default;
     if (property.values !== undefined) return property.values[0];
     const { range, length } = property.validators;
-    switch (typesOf(property)[0]) {
+    const type = typesOf(property)[0];
+    const graphics = type === undefined ? undefined : graphicsSample(type, property.validators);
+    if (graphics !== undefined) return graphics;
+    switch (type) {
         case 'string':
             return 'x'.repeat(length?.min ?? 1);
         case 'number':
@@ -192,6 +278,13 @@ export function exampleNode(name: string, shape: Shape): Node {
     return node;
 }
 
+function searchKeysOf(source: SearchKeys): SearchKeys {
+    return {
+        ...(source.category === undefined ? {} : { category: source.category }),
+        ...(source.purposes === undefined ? {} : { purposes: source.purposes })
+    };
+}
+
 function extrasOf(source: ShapeExtras): ShapeExtras {
     return {
         ...(source.tokens === undefined ? {} : { tokens: source.tokens }),
@@ -206,9 +299,10 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
     return {
         name: component.name,
         tier: 'root',
-        tag: component.tag,
+        tag: component.tag as string,
         size,
         summary: shape.summary,
+        ...searchKeysOf(shape),
         shape: {
             summary: shape.summary,
             properties: shape.properties,
@@ -233,18 +327,49 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
     };
 }
 
-/** The entry of a composed component: the default tree (no `exposes` key) and the exposed paths from `parseComposed` */
+/** The entry of a shape component that built: its summary, search keys, shape, own and content properties, events, the components its `children` accept and tokens */
+export function shapeEntry(component: ScannedComponent, shape: CatalogShape, size: CatalogSize): ShapeCatalogEntry {
+    return {
+        name: component.name,
+        tier: 'shape',
+        size,
+        summary: shape.summary,
+        ...searchKeysOf(shape),
+        shape: {
+            summary: shape.summary,
+            properties: shape.properties,
+            shared: shape.shared,
+            events: shape.events,
+            commands: shape.commands,
+            layout: shape.layout,
+            ...(shape.childComponents === undefined ? {} : { childComponents: shape.childComponents }),
+            ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
+        },
+        own: Object.keys(shape.properties).filter((name) => !isArticulationName(name)),
+        content: contentNames(shape.properties),
+        events: shape.events,
+        locales: Object.keys(component.locales),
+        example: exampleNode(component.name, shape),
+        ...(shape.childComponents === undefined ? {} : { childComponents: shape.childComponents }),
+        ...(shape.tokens === undefined ? {} : { tokens: shape.tokens })
+    };
+}
+
+/** The entry of a composed component: the default tree (no `exposes` or search keys), the exposed paths and the search keys from `parseComposed` */
 export function composedEntry(
     component: ScannedComponent,
     tree: Node,
     size: CatalogSize,
-    exposes: readonly ExposedPath[] = []
+    exposes: readonly ExposedPath[] = [],
+    search: SearchKeys & { summary?: string } = {}
 ): ComposedCatalogEntry {
     return {
         name: component.name,
         tier: 'composed',
-        tag: component.tag,
+        tag: component.tag as string,
         size,
+        ...(search.summary === undefined ? {} : { summary: search.summary }),
+        ...searchKeysOf(search),
         tree,
         locales: Object.keys(component.locales),
         example: { component: component.name },
@@ -252,10 +377,15 @@ export function composedEntry(
     };
 }
 
-/** The catalog and the text of `catalog.json`: entries sorted by name, the list of languages sorted, the theme section, four-space indent, LF newline at the end */
-export function emitCatalog(entries: readonly ComponentCatalogEntry[], theme: ThemeSection): { catalog: Catalog; text: string } {
+/** The catalog and the text of `catalog.json`: entries sorted by name, the patterns as given, the list of languages sorted, the theme section, four-space indent, LF newline at the end */
+export function emitCatalog(
+    entries: readonly ComponentCatalogEntry[],
+    theme: ThemeSection,
+    patterns: readonly PatternCatalogEntry[] = [],
+    themePresets: readonly ThemePresetCatalogEntry[] = []
+): { catalog: Catalog; text: string } {
     const components = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     const locales = [...new Set(components.flatMap((entry) => entry.locales))].sort();
-    const catalog: Catalog = { components, locales, theme };
+    const catalog: Catalog = { components, patterns: [...patterns], themePresets: [...themePresets], locales, theme };
     return { catalog, text: `${JSON.stringify(catalog, null, 4)}\n` };
 }

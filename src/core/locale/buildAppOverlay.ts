@@ -1,5 +1,5 @@
 import { buildDefaults } from '../shape/index.js';
-import { cloneJson, mergeValues, resolveNode } from '../resolve/index.js';
+import { cloneJson, entryShape, mergeValues, resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary, DocumentComposed } from '../resolve/index.js';
 import { isNodeValue, isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
@@ -83,7 +83,8 @@ class Assembler {
         if (overlay === undefined) return undefined;
         const { library } = this.options;
         const entry = library !== undefined && Object.hasOwn(library, node.component) ? library[node.component] : undefined;
-        const defaults = entry?.tier === 'root' ? buildDefaults(entry.shape) : undefined;
+        const shape = entryShape(entry);
+        const defaults = shape === undefined ? undefined : buildDefaults(shape);
         const picked = this.pick(overlay, node, defaults, library !== undefined, path);
         return Object.keys(picked).length === 0 ? undefined : { path, overlay: picked };
     }

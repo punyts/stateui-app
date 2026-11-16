@@ -1,15 +1,17 @@
 import { buildError, isValid } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
+import { appIconNames } from '../icons/appIcons.js';
 import { checkLimits } from '../limits.js';
 import { checkExposes, EXPOSES_KEY } from '../convention/index.js';
 import { resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary, LibraryEntry } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
 import type { AppDocument, JsonObject, JsonValue, Node } from '../types.js';
-import { checkOrderedKeys, checkRoot } from './document.js';
+import { checkOrderedKeys, checkRoot, checkServerUse, screenRoots } from './document.js';
+import type { ResolvedTree } from '../on/index.js';
 import { documentValidators } from './registry.js';
-import type { CatalogSource, DocumentValidation, ValidateDocumentOptions } from './types.js';
-import { checkTree } from './tree.js';
+import type { CatalogSource, DocumentValidation, DocumentValidationContext, ValidateDocumentOptions } from './types.js';
+import { checkTree, childRefusal } from './tree.js';
 
 const APP_PATH = '$.app';
 
@@ -17,25 +19,25 @@ function isCatalog(source: ComponentLibrary | CatalogSource): source is CatalogS
     return Array.isArray((source as { components?: unknown }).components);
 }
 
+/** One catalog entry as the resolver reads it */
+function libraryEntry(component: CatalogSource['components'][number]): LibraryEntry {
+    if (component.tier === 'shape') return { tier: 'shape', shape: component.shape };
+    if (component.tier === 'composed') return { tier: 'composed', tree: component.tree };
+    return {
+        tier: 'root',
+        tag: component.tag,
+        shape: component.placement === undefined ? component.shape : { ...component.shape, placement: component.placement }
+    };
+}
+
 /**
- * The library the resolver and validators read, from the entries of `catalog.json`. The catalog keeps a declared
- * `placement` beside `shape`; it goes back into the shape, where the layout validator reads it
+ * The library the resolver and validators read, from the entries of `catalog.json`, each with its tier. The catalog
+ * keeps a declared `placement` beside `shape`; it goes back into the shape, where the layout validator reads it. A
+ * shape component keeps its shape and has no tag
  */
 export function libraryFromCatalog(catalog: CatalogSource): ComponentLibrary {
     const library: Record<string, LibraryEntry> = {};
-    for (const component of catalog.components) {
-        library[component.name] =
-            component.tier === 'root'
-                ? {
-                      tier: 'root',
-                      tag: component.tag,
-                      shape:
-                          component.placement === undefined
-                              ? component.shape
-                              : { ...component.shape, placement: component.placement }
-                  }
-                : { tier: 'composed', tree: component.tree };
-    }
+    for (const component of catalog.components) library[component.name] = libraryEntry(component);
     return library;
 }
 
@@ -44,12 +46,22 @@ function located(errors: readonly BuildError[]): BuildError[] {
     return errors.map((error) => (error.statePath === undefined ? { ...error, statePath: '$' } : error));
 }
 
+/**
+ * The root of the app or of a screen renders as an element, so it takes no shape component. A composed tree may have
+ * a shape at its root: where it is used, its slot decides
+ */
+function rootRefusal(root: Node, path: string, library: ComponentLibrary): BuildError[] {
+    const refused = typeof root.component === 'string' ? childRefusal(library, root.component, undefined) : undefined;
+    return refused === undefined ? [] : [refused(path)];
+}
+
 function runChecks(
     document: Record<string, JsonValue>,
     library: ComponentLibrary,
     options: ValidateDocumentOptions
 ): BuildError[] {
     const errors: BuildError[] = [...checkRoot(document), ...checkOrderedKeys(document)];
+    if (options.mode === 'standalone' || options.mode === 'persisted') errors.push(...checkServerUse(document, options.mode));
     const app = document['app'];
     if (!isObject(app) || typeof app['component'] !== 'string') return errors;
 
@@ -57,7 +69,16 @@ function runChecks(
     const data = document['data'];
 
     const resolved = resolveNode(app as Node, library, composed);
+    errors.push(...rootRefusal(resolved.node, APP_PATH, library));
     errors.push(...resolved.errors, ...checkTree(resolved.node, resolved.instances, APP_PATH, library, data, options));
+
+    const screens: Record<string, ResolvedTree> = {};
+    for (const screen of screenRoots(document)) {
+        const result = resolveNode(screen.root as Node, library, composed, { path: screen.path });
+        errors.push(...rootRefusal(result.node, screen.path, library));
+        errors.push(...result.errors, ...checkTree(result.node, result.instances, screen.path, library, data, options));
+        screens[screen.name] = { node: result.node, instances: result.instances };
+    }
 
     for (const [name, tree] of Object.entries(composed)) {
         if (!isObject(tree) || typeof tree['component'] !== 'string') continue;
@@ -77,7 +98,13 @@ function runChecks(
         }
     }
 
-    const context = { document: document as unknown as AppDocument, library, tree: { node: resolved.node, instances: resolved.instances } };
+    const context: DocumentValidationContext = {
+        document: document as unknown as AppDocument,
+        library,
+        tree: { node: resolved.node, instances: resolved.instances },
+        screens,
+        ...(options.hasToken !== undefined && { hasToken: options.hasToken })
+    };
     for (const [name, validator] of documentValidators()) {
         try {
             errors.push(...validator(context));
@@ -86,6 +113,17 @@ function runChecks(
         }
     }
     return errors;
+}
+
+/**
+ * The options with the app's own icon names accepted before the caller's `isIconName`: a name the document's `icons`
+ * defines is an icon whether or not the icon set has it. Without an `isIconName` no icon name is checked
+ */
+function withAppIcons(document: Record<string, JsonValue>, options: ValidateDocumentOptions): ValidateDocumentOptions {
+    const own = appIconNames(document['icons']);
+    const isIconName = options.isIconName;
+    if (own.size === 0 || isIconName === undefined) return options;
+    return { ...options, isIconName: (name) => own.has(name) || isIconName(name) };
 }
 
 /**
@@ -116,7 +154,7 @@ export function validateDocument(
                     : runChecks(
                           document as Record<string, JsonValue>,
                           isCatalog(catalog) ? libraryFromCatalog(catalog) : catalog,
-                          options
+                          withAppIcons(document as Record<string, JsonValue>, options)
                       );
         }
     } catch {

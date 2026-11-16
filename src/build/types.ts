@@ -29,12 +29,38 @@ export interface BuildOptions {
      * `SUI-BUILD` error with the line. Lines reported after an include count the inlined text. Off by default
      */
     sharedCssDir?: string;
+    /**
+     * A folder of shared shape partials, `<name>.json`, each an object of only `properties`, `events` and `tokens`.
+     * A state file's `includes: ["<name>", ...]` merges them under its own before the shape is read, an own property
+     * or token winning over an included one, so the catalog shows the merged result; a name with no file is
+     * `SUI-BUILD-SHAPE`. Applies to root and shape-tier components. Without it every included name is unknown
+     */
+    sharedShapeDir?: string;
     /** The descriptions of the semantic tokens by dotted path; the library's own `tokens.descriptions.json` by default */
     tokenDescriptions?: Readonly<Record<string, string>>;
     /** Applied in order, each to the output of the one before; none by default */
     cssTransforms?: readonly CssTransform[];
     /** Run on the CSS before any transform, so the lines they report match the file; none by default */
     cssChecks?: readonly CssCheck[];
+    /**
+     * When true, a root component without `category` or `purposes` and a composed file without `summary`, `category`
+     * or `purposes` is an error (`SUI-BUILD-CATEGORY`, `SUI-BUILD-PURPOSES`, `SUI-BUILD-SUMMARY`). When false (the
+     * default) they are accepted and the catalog entry leaves the keys out. A present value that breaks its rule and a
+     * purpose phrase that repeats another component's are errors either way
+     */
+    requireSearchKeys?: boolean;
+    /**
+     * A folder of patterns, `<kind>/<name>/<name>.pattern.json` with the kind `screen`. They are read after
+     * the components are built and checked against them; each one that passes is in the catalog's `patterns`, and each
+     * problem is a build error. Without it the catalog's `patterns` is empty
+     */
+    patternsDir?: string;
+    /**
+     * A folder of theme presets, `<name>.preset.json`, each a theme part (`tokens`, `overlays`) with a one-line
+     * `summary`. Each one that passes the token and overlay checks is in the catalog's `themePresets`, and each problem
+     * is a build error. Without it the catalog's `themePresets` is empty
+     */
+    presetsDir?: string;
 }
 
 /** A root component that built: its scan record and the files written for it, relative to the out folder */
@@ -50,6 +76,6 @@ export interface BuildResult {
     errors: BuildError[];
     /** Every file written, relative to the out folder, sorted */
     files: string[];
-    /** The content of `catalog.json`: every component that built, sorted by name */
+    /** The content of `catalog.json`: every component that built, sorted by name, and the patterns that passed */
     catalog: Catalog;
 }

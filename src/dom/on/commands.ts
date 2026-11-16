@@ -1,6 +1,6 @@
 import type { Frame, Located, OnCommand, TreeNode } from '../../core/on/index.js';
 import { findProvider, findRowProvider, parseTarget, resolveTarget } from '../../core/on/index.js';
-import { cloneJson } from '../../core/resolve/index.js';
+import { cloneJson, entryShape } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { Shape } from '../../core/shape/index.js';
 import type { JsonValue } from '../../core/types.js';
@@ -32,33 +32,79 @@ export interface CommandContext {
     rootPath: string;
     library: ComponentLibrary;
     host: Element;
-    store: { get(path: string): unknown; set(path: string, value: never): boolean };
+    store: { get(path: string): unknown; set(path: string, value: never, options?: { always?: boolean }): boolean };
     payload: unknown;
     emit(name: string, payload: unknown): void;
+    /** Moves `$.route` to a screen; returns why it cannot. Absent in an app without screens */
+    navigate?(screen: string, params: JsonValue | undefined): string | undefined;
 }
 
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
+/** The root that holds an absolute node path: `$.screens.{name}` for a screen's nodes, else `$.app` */
+function holdingRoot(path: string): string {
+    const SCREENS = '$.screens.';
+    return path.startsWith(SCREENS) ? `${SCREENS}${path.slice(SCREENS.length).split('.')[0] as string}` : '$.app';
+}
+
+/**
+ * Resolves a target against the node's own root; a path under another root (a screen naming `$.app.toasts`, or the
+ * app naming a screen's node) is resolved from the root that holds it, read from the store, as validation accepts it
+ */
 function locate(text: string, context: CommandContext): Located | undefined {
     const parsed = parseTarget(text);
-    return parsed ? resolveTarget(parsed, context.relative, context.rootPath, context.rowPath) : undefined;
+    if (!parsed) return undefined;
+    const located = resolveTarget(parsed, context.relative, context.rootPath, context.rowPath);
+    if (located?.kind !== 'outside') return located;
+    const rootPath = holdingRoot(located.path);
+    const node: unknown = context.store.get(rootPath);
+    if (rootPath === context.rootPath || typeof node !== 'object' || node === null || typeof (node as TreeNode).component !== 'string') return located;
+    const frame: Frame = { path: rootPath, key: rootPath.slice(rootPath.lastIndexOf('.') + 1), node: node as TreeNode, instances: [] };
+    return resolveTarget(parsed, [frame], rootPath);
 }
 
 function isRowValue(value: JsonValue | undefined): value is string {
     return typeof value === 'string' && (value === '$row' || value.startsWith('$row.'));
 }
 
-/** A command's `value`: `$row` and `$row.path` are read from the record the slot shows, anything else is as written */
+/**
+ * A command's argument: the value at `from` when it is set, else `value`, where `$row` and `$row.path` are read from
+ * the record the slot shows and anything else is as written
+ */
 function valueOf(command: OnCommand, context: CommandContext): JsonValue | undefined {
+    if (command.from !== undefined) {
+        const located = locate(command.from, context);
+        if (!located || located.kind === 'node') throw new CommandFailure(`from ${command.from} is not a value`, command.from);
+        const path = located.kind === 'property' ? [located.path, located.property, ...located.rest].join('.') : located.path;
+        const read: unknown = context.store.get(path);
+        return read === undefined ? undefined : cloneJson(read as JsonValue);
+    }
     const value = command.value;
     if (!isRowValue(value)) return value;
     if (context.rowPath === undefined) throw new CommandFailure(`${value} is used outside a row template`);
     const read: unknown = context.store.get(`${context.rowPath}${value.slice('$row'.length)}`);
     return read as JsonValue | undefined;
+}
+
+/** `navigate` params: `$row` and `$row.path` values read from the record the slot shows, at any depth */
+function withRows(value: JsonValue | undefined, context: CommandContext): JsonValue | undefined {
+    if (isRowValue(value)) {
+        if (context.rowPath === undefined) throw new CommandFailure(`${value} is used outside a row template`);
+        const read: unknown = context.store.get(`${context.rowPath}${value.slice('$row'.length)}`);
+        return read === undefined ? undefined : cloneJson(read as JsonValue);
+    }
+    if (Array.isArray(value)) return value.map((item) => withRows(item, context) ?? null);
+    if (value === null || typeof value !== 'object') return value;
+    const result: Record<string, JsonValue> = {};
+    for (const [key, item] of Object.entries(value)) {
+        const read = withRows(item, context);
+        if (read !== undefined) result[key] = read;
+    }
+    return result;
 }
 
 /** The state path a `set` or `toggle` target writes to; throws when the target names no writable property */
@@ -78,7 +124,8 @@ function writePath(command: OnCommand, context: CommandContext): string {
 
 function write(path: string, value: JsonValue, context: CommandContext): void {
     const copy = value !== null && typeof value === 'object' ? cloneJson(value) : value;
-    if (!context.store.set(path, copy as never)) throw new CommandFailure(`the store refused the write to ${path}`);
+    // A command is an action: a set of the value the path already holds still reaches state sync and the logic
+    if (!context.store.set(path, copy as never, { always: true })) throw new CommandFailure(`the store refused the write to ${path}`);
 }
 
 /**
@@ -143,16 +190,26 @@ function runComponentCommand(command: OnCommand, context: CommandContext): void 
 /** Runs one command; throws when it fails */
 export function runCommand(command: OnCommand, context: CommandContext): void {
     if (command.command === 'set') {
-        if (!('value' in command)) throw new CommandFailure('set needs a value');
-        write(writePath(command, context), valueOf(command, context) as JsonValue, context);
+        if (!('value' in command) && command.from === undefined) throw new CommandFailure('set needs a value or from');
+        const value = valueOf(command, context);
+        if (value === undefined && command.from !== undefined) throw new CommandFailure(`from ${command.from} has no value`, command.from);
+        write(writePath(command, context), value as JsonValue, context);
     } else if (command.command === 'toggle') {
         const path = writePath(command, context);
         const current = context.store.get(path);
-        if (typeof current !== 'boolean') throw new CommandFailure(`${path} does not hold a boolean`);
-        write(path, !current, context);
+        if (current !== undefined && current !== null && typeof current !== 'boolean') {
+            throw new CommandFailure(`${path} holds ${JSON.stringify(current)}, not a boolean`);
+        }
+        write(path, current !== true, context);
     } else if (command.command === 'emit') {
         if (command.target === undefined) throw new CommandFailure('emit needs an event name');
-        context.emit(command.target, 'value' in command ? valueOf(command, context) : context.payload);
+        context.emit(command.target, 'value' in command || command.from !== undefined ? valueOf(command, context) : context.payload);
+    } else if (command.command === 'navigate') {
+        if (command.target === undefined) throw new CommandFailure('navigate needs a screen name');
+        if (context.navigate === undefined) throw new CommandFailure(`the app has no screens, so it cannot navigate to "${command.target}"`);
+        const params = command.from !== undefined ? valueOf(command, context) : withRows(command.value, context);
+        const reason = context.navigate(command.target, params);
+        if (reason !== undefined) throw new CommandFailure(reason);
     } else {
         runComponentCommand(command, context);
     }

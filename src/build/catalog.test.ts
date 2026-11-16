@@ -6,7 +6,7 @@ import { parseShape, validateNode } from '../core/shape/index.js';
 import type { PropertyShape, Shape } from '../core/shape/index.js';
 import type { ScannedComponent } from '../core/convention/index.js';
 import type { Node } from '../core/types.js';
-import { composedEntry, emitCatalog, exampleNode, rootEntry, sizeOf } from './catalog.js';
+import { composedEntry, emitCatalog, exampleNode, rootEntry, shapeEntry, sizeOf } from './catalog.js';
 import type { CatalogShape, ComponentCatalogEntry } from './catalog.js';
 import { buildLibrary } from './index.js';
 import { buildThemeSection } from './theme.js';
@@ -184,6 +184,127 @@ describe('composedEntry', () => {
     });
 });
 
+describe('shapeEntry', () => {
+    it('should give a shape component its summary, search keys, own and content properties, events and tokens, and no tag', () => {
+        const shape = parsed({
+            summary: 'A bar of a bar chart',
+            category: 'graphics',
+            purposes: ['show one value as a bar', 'compare values side by side', 'draw a bar of a chart'],
+            tokenGroup: 'bar',
+            tokens: { fill: '{color.accent.base}' },
+            events: ['press'],
+            properties: { _label: { type: 'string', kind: 'content' }, value: { type: 'number', required: true } }
+        });
+        const { tag: _tag, ...component } = scanned('bar', 'atoms', { de: 'atoms/bar/bar.locale.de.json' });
+
+        const entry = shapeEntry({ ...component, tier: 'shape' }, shape, 'atom');
+
+        expect(entry).toEqual({
+            name: 'bar',
+            tier: 'shape',
+            size: 'atom',
+            summary: 'A bar of a bar chart',
+            category: 'graphics',
+            purposes: ['show one value as a bar', 'compare values side by side', 'draw a bar of a chart'],
+            shape: {
+                summary: shape.summary,
+                properties: shape.properties,
+                shared: shape.shared,
+                events: ['press'],
+                commands: [],
+                layout: false,
+                tokens: shape.tokens
+            },
+            own: ['_label', 'value'],
+            content: ['_label'],
+            events: ['press'],
+            locales: ['de'],
+            example: { component: 'bar', value: 0 },
+            tokens: [{ path: 'bar.fill', group: 'bar', type: 'color', default: '{color.accent.base}' }]
+        });
+        expect(validateNode(entry.shape, entry.example, '$.app')).toEqual([]);
+    });
+
+    it('should keep the shapes a group shape takes in its children, in the shape and on the entry', () => {
+        const shape = parsed({ summary: 'A group of shapes', childComponents: ['bar', 'dot'], properties: {} });
+        const { tag: _tag, ...component } = scanned('group', 'molecules');
+
+        const entry = shapeEntry({ ...component, tier: 'shape' }, shape, 'molecule');
+
+        expect(entry.shape.childComponents).toEqual(['bar', 'dot']);
+        expect(entry.childComponents).toEqual(['bar', 'dot']);
+    });
+
+    it('should list the options of the graphics validators, with the field list of fields, in the catalog text', () => {
+        const viewBox = {
+            x: { type: 'number', required: true },
+            y: { type: 'number', required: true },
+            width: { type: 'number', required: true, validators: { range: { min: 0 } } },
+            height: { type: 'number', required: true, validators: { range: { min: 0 } } }
+        };
+        const shape = parsed({
+            summary: 'A shape with every graphics validator',
+            properties: {
+                fill: { type: 'string', validators: { color: true } },
+                d: { type: 'string', validators: { pathData: true } },
+                points: { type: 'array', validators: { points: true } },
+                origin: { type: 'array', validators: { vector: 2 } },
+                viewBox: { type: 'object', validators: { fields: viewBox } },
+                src: { type: ['string', 'object'], validators: { fileRef: { types: ['image/png'], dataUrl: true } } }
+            }
+        });
+        const { tag: _tag, ...component } = scanned('figure');
+
+        const entry = shapeEntry({ ...component, tier: 'shape' }, shape, 'atom');
+        const text = emitCatalog([entry], THEME).text;
+        const written = (JSON.parse(text) as { components: { shape: Shape }[] }).components[0]?.shape.properties;
+
+        expect(written?.viewBox?.validators).toEqual({ fields: viewBox });
+        expect(written?.fill?.validators).toEqual({ color: true });
+        expect(written?.d?.validators).toEqual({ pathData: true });
+        expect(written?.points?.validators).toEqual({ points: true });
+        expect(written?.origin?.validators).toEqual({ vector: 2 });
+        expect(written?.src?.validators).toEqual({ fileRef: { types: ['image/png'], dataUrl: true } });
+    });
+
+    it('should give an example that passes the graphics validators of its required properties', () => {
+        const shape = parsed({
+            summary: 'A shape whose required properties all carry graphics validators',
+            properties: {
+                fill: { type: 'string', required: true, validators: { color: true } },
+                d: { type: 'string', required: true, validators: { pathData: true } },
+                points: { type: 'array', required: true, validators: { points: true, length: { min: 2, max: 2 } } },
+                origin: { type: 'array', required: true, validators: { vector: 3 } },
+                src: { type: ['object', 'string'], required: true, validators: { fileRef: { types: ['image/png'] } } },
+                image: { type: 'string', required: true, validators: { fileRef: { types: ['model/gltf-binary', 'image/webp'], dataUrl: true } } },
+                material: {
+                    type: 'object',
+                    required: true,
+                    validators: {
+                        fields: {
+                            color: { type: 'string', required: true, validators: { color: true } },
+                            opacity: { type: 'number', required: true, validators: { range: { min: 0.5, max: 1 } } },
+                            side: { type: 'string', required: true, values: ['front', 'back'] },
+                            blend: { type: 'string', required: true, validators: { oneOf: ['normal', 'add'] } },
+                            map: { type: 'object', required: true, validators: { fileRef: { types: ['image/jpeg'] } } },
+                            offset: { type: 'array', required: true, validators: { vector: 2 } },
+                            flat: { type: 'boolean', required: true },
+                            note: { type: 'string', required: true },
+                            optional: { type: 'number' }
+                        }
+                    }
+                }
+            }
+        });
+
+        const example = exampleNode('figure', shape);
+
+        expect(example).toMatchObject({ fill: '#000000', d: 'M0 0', points: [[0, 0], [0, 0]], origin: [0, 0, 0], image: 'data:image/webp;base64,' });
+        expect(example.material).not.toHaveProperty('optional');
+        expect(validateNode(shape, example, '$.app')).toEqual([]);
+    });
+});
+
 describe('emitCatalog', () => {
     it('should sort entries by name and give the same text for any input order', () => {
         const entries: ComponentCatalogEntry[] = ['zeta', 'alpha', 'mid'].map((name) =>
@@ -266,5 +387,31 @@ describe('catalog.json from buildLibrary', () => {
         expect(result.errors.map((error) => error.file)).toEqual(['misc/one/one.view.html', 'misc/two/two.composed.json']);
         expect(result.catalog.components).toEqual([]);
         expect(result.built).toEqual([]);
+    });
+});
+
+describe('search keys in catalog entries', () => {
+    const PURPOSES: readonly string[] = Object.freeze(['show a list of records', 'sort rows by a column', 'pick rows to act on']);
+
+    it('should put category and purposes at the top of a root entry, not in its shape', () => {
+        const entry = rootEntry(scanned('table'), parsed({ summary: 'x', category: 'data', purposes: PURPOSES }), 'atom');
+
+        expect(entry).toMatchObject({ category: 'data', purposes: PURPOSES });
+        expect(entry.shape).not.toHaveProperty('category');
+        expect(entry.shape).not.toHaveProperty('purposes');
+    });
+
+    it('should leave the keys out of a root entry whose shape has none', () => {
+        const entry = rootEntry(scanned('table'), parsed({ summary: 'x' }), 'atom');
+
+        expect(entry).not.toHaveProperty('category');
+        expect(entry).not.toHaveProperty('purposes');
+    });
+
+    it('should give a composed entry its summary, category and purposes', () => {
+        const entry = composedEntry(scanned('confirm'), { component: 'modal' } as Node, 'composite', [], { summary: 'Asks first', category: 'overlays', purposes: PURPOSES });
+
+        expect(entry).toMatchObject({ tier: 'composed', summary: 'Asks first', category: 'overlays', purposes: PURPOSES });
+        expect(composedEntry(scanned('confirm'), { component: 'modal' } as Node, 'composite')).not.toHaveProperty('summary');
     });
 });

@@ -79,7 +79,7 @@ export function emitIndexTypes(): string {
         'export interface ComponentTokenEntry {',
         '    readonly path: string;',
         '    readonly group: string;',
-        "    readonly type: 'color' | 'dimension' | 'number' | 'duration' | 'easing' | 'shadow' | 'fontFamily' | 'fontWeight';",
+        "    readonly type: 'color' | 'dimension' | 'inset' | 'number' | 'duration' | 'easing' | 'shadow' | 'fontFamily' | 'fontWeight';",
         '    readonly default: string;',
         '}',
         '',

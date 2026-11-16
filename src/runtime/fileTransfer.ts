@@ -1,5 +1,5 @@
-import { FILE_IDLE_TIMEOUT_MS, MAX_FILE_BYTES } from './limits.js';
-import type { FileErrorCode, FileProgressMessage, FileReference, FileResultMessage } from './messages.js';
+import { FILE_IDLE_TIMEOUT_MS, FILE_RELEASE_TIMEOUT_MS, MAX_FILE_BYTES } from './limits.js';
+import type { FileErrorCode, FileProgressMessage, FileReference, FileReleasedMessage, FileResultMessage } from './messages.js';
 
 /** How far a transfer has come, in bytes of the file */
 export interface FileProgress {
@@ -21,6 +21,14 @@ export interface TransferFileOptions {
  */
 export type TransferFile = (file: File, options?: TransferFileOptions) => Promise<FileReference>;
 
+/**
+ * The hook components use to give a stored file back, so a field that saves often does not fill the app's quota. It
+ * resolves when the host answered `ok`: the file is gone, was never there (releasing twice is fine), or is kept because
+ * the app or its live state still references it. It rejects with a `FileTransferError` (`offline` when the host does
+ * not answer within `FILE_RELEASE_TIMEOUT_MS`, `internal`, or the code of the host)
+ */
+export type ReleaseFile = (id: string) => Promise<void>;
+
 /** What `transferFile` rejects with: `code` is the `fileResult` code, or `offline`, `cancelled`, `too_large` or `internal` raised here */
 export class FileTransferError extends Error {
     readonly code: FileErrorCode;
@@ -36,6 +44,8 @@ export interface FileTransferPort {
     /** Posts a `file` with its `data` buffer in the transfer list; false when the message was not sent */
     sendFile(message: { requestId: number; name: string; size: number; mediaType: string; data: ArrayBuffer }): boolean;
     sendCancel(requestId: number): void;
+    /** Posts a `fileRelease`; false when the message was not sent */
+    sendRelease(requestId: number, id: string): boolean;
 }
 
 export interface FileTransfers {
@@ -44,7 +54,13 @@ export interface FileTransfers {
     progress(message: FileProgressMessage): void;
     /** Routes a `fileResult`; a request that is not waiting is ignored */
     result(message: FileResultMessage): void;
-    /** Cancels every waiting transfer: posts `fileCancel` and rejects each with `cancelled` */
+    releaseFile: ReleaseFile;
+    /** Routes a `fileReleased`; a request that is not waiting is ignored */
+    released(message: FileReleasedMessage): void;
+    /**
+     * Cancels every waiting transfer (posts `fileCancel` and rejects each with `cancelled`) and rejects every waiting
+     * release with `cancelled`; the host may still remove the file
+     */
     cancelAll(): void;
 }
 
@@ -56,9 +72,16 @@ interface Pending {
     abort: (() => void) | undefined;
 }
 
-/** The state of the transfers a runtime has under way. Bytes pass through; nothing is kept in the store */
+interface PendingRelease {
+    resolve(): void;
+    reject(error: FileTransferError): void;
+    timer: ReturnType<typeof setTimeout>;
+}
+
+/** The state of the transfers and releases a runtime has under way. Bytes pass through; nothing is kept in the store */
 export function createFileTransfers(port: FileTransferPort): FileTransfers {
     const pending = new Map<number, Pending>();
+    const releases = new Map<number, PendingRelease>();
     let lastId = 0;
 
     function finish(requestId: number): Pending | undefined {
@@ -109,8 +132,32 @@ export function createFileTransfers(port: FileTransferPort): FileTransfers {
         });
     }
 
+    function finishRelease(requestId: number): PendingRelease | undefined {
+        const entry = releases.get(requestId);
+        if (!entry) return undefined;
+        releases.delete(requestId);
+        clearTimeout(entry.timer);
+        return entry;
+    }
+
+    function releaseFile(id: string): Promise<void> {
+        lastId += 1;
+        const requestId = lastId;
+        return new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                finishRelease(requestId)?.reject(new FileTransferError('offline', 'The host did not answer'));
+            }, FILE_RELEASE_TIMEOUT_MS);
+            releases.set(requestId, { resolve, reject, timer });
+            if (!port.sendRelease(requestId, id)) {
+                finishRelease(requestId);
+                reject(new FileTransferError('internal', 'The release could not be sent'));
+            }
+        });
+    }
+
     return {
         transferFile,
+        releaseFile,
         progress(message): void {
             const entry = pending.get(message.requestId);
             if (!entry) return;
@@ -123,8 +170,15 @@ export function createFileTransfers(port: FileTransferPort): FileTransfers {
             if (message.ok) entry.resolve(message.file);
             else entry.reject(new FileTransferError(message.code, message.message));
         },
+        released(message): void {
+            const entry = finishRelease(message.requestId);
+            if (!entry) return;
+            if (message.ok) entry.resolve();
+            else entry.reject(new FileTransferError(message.code, message.message));
+        },
         cancelAll(): void {
             for (const requestId of [...pending.keys()]) cancel(requestId);
+            for (const requestId of [...releases.keys()]) finishRelease(requestId)?.reject(new FileTransferError('cancelled', 'The release was cancelled'));
         }
     };
 }

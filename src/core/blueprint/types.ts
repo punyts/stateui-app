@@ -1,0 +1,198 @@
+import type { ExposedPath } from '../convention/composed.js';
+import type { AppIcon } from '../icons/appIcons.js';
+import type { LogicDocument } from '../logic/types.js';
+import type { ComponentCategory } from '../shape/categories.js';
+import type { ValidatorOptions } from '../shape/types.js';
+import type { OverlayKind } from '../theme/overlays/types.js';
+import type { JsonObject, JsonValue, Node } from '../types.js';
+
+/** The roots of the owner tree that hold build-time parts and the owner's data, each keyed by part name */
+export const PART_KINDS = ['apps', 'themes', 'logic', 'models', 'data', 'components', 'patterns'] as const;
+
+export type PartKind = (typeof PART_KINDS)[number];
+
+/** A part of the owner named by its kind and name; the storing adapter adds the immutable `id` */
+export interface PartRef {
+    kind: PartKind;
+    name: string;
+}
+
+/** The types a model field, a logic module param or a screen param can have: a subset of `PROPERTY_TYPES` */
+export const FIELD_TYPES = ['string', 'number', 'integer', 'boolean', 'array', 'object', 'any', 'url'] as const;
+
+export type FieldType = (typeof FIELD_TYPES)[number];
+
+/** A typed value declaration, as a component property is typed: a model field, a module param or a screen param */
+export interface FieldDeclaration {
+    type: FieldType;
+    default?: JsonValue;
+    /** Meaningful when there is no default */
+    required?: boolean;
+    /** The library's closed validator set */
+    validators?: ValidatorOptions;
+    /**
+     * A model's string field only: a server with embeddings makes the field of each record searchable by meaning, which
+     * the `similar` server call answers; other servers ignore it
+     */
+    embed?: boolean;
+}
+
+export type ParamDeclaration = FieldDeclaration;
+
+/** An app name binds an owner dataset */
+export interface DatasetBinding {
+    dataset: string;
+}
+
+/** An app name holds each persona's own records of a model */
+export interface PersonaBinding {
+    model: string;
+    scope: 'persona';
+}
+
+export type DataBinding = DatasetBinding | PersonaBinding;
+
+/** One owner logic module an app uses, with the values of its params */
+export interface ModuleUse {
+    params?: JsonObject;
+}
+
+/** The owner parts an app uses; owner paths appear only here */
+export interface BlueprintUses {
+    /** The themes the app offers; the first is the default */
+    themes?: string[];
+    /** Binding name (`$.data.{name}`) to dataset or persona model */
+    data?: Record<string, DataBinding>;
+    /** Module name to its param values */
+    logic?: Record<string, ModuleUse>;
+    /** Alias (`$.external.{alias}`) to what this app's logic reads from outside it, read only: another app's state, or another owner's dataset */
+    external?: Record<string, ExternalUse>;
+}
+
+/**
+ * A path of another app's state an app reads: the person's own state of that app (`app` is its id), from `path`
+ * down. It shows at `$.external.{alias}`, read only and never stored, and the app's logic runs on its changes
+ */
+export interface ExternalAppUse {
+    app: string;
+    path: string;
+}
+
+/**
+ * A dataset another owner shared with this app's owner, read only: `owner` is the id of the workspace that has it,
+ * `dataset` its name. Its records show at `$.external.{alias}` as a record map while the share holds
+ */
+export interface ExternalDataUse {
+    owner: string;
+    dataset: string;
+}
+
+/** What an app reads from outside it */
+export type ExternalUse = ExternalAppUse | ExternalDataUse;
+
+/** One screen: a root node the app node lays out (its `placement` places it in the app's `layout`) */
+export interface BlueprintScreen {
+    title?: string;
+    params?: Record<string, ParamDeclaration>;
+    root: Node;
+    /** Overlays of the screen's content by language code, relative to the screen's root */
+    locales?: Record<string, JsonObject>;
+}
+
+/** An app definition: its own nodes and logic plus references to the owner's parts */
+export interface AppBlueprint {
+    title?: string;
+    uses?: BlueprintUses;
+    /** The screen shown first; a key of `screens` */
+    start: string;
+    /** The app node (`{ "component": "app" }`): the layout of the visible screens, the document title and the toasts */
+    app: Node;
+    screens: Record<string, BlueprintScreen>;
+    /** The app's own units, which may touch its screens */
+    logic?: LogicDocument;
+    /** Locale name to messages */
+    locales?: Record<string, JsonObject>;
+    /** The app's own icons by name, each outline path data in a 24×24 view box; a name here wins over the icon set's */
+    icons?: Record<string, AppIcon>;
+    /** State paths whose changes reach everyone using the app but are never stored (a pointer, presence); `*` matches one segment */
+    ephemeral?: string[];
+}
+
+/** One named overlay of a theme part */
+export interface ThemePartOverlay {
+    kind: OverlayKind;
+    /** Sparse tokens within the groups `KIND_GROUPS` allows for the kind */
+    tokens: JsonObject;
+}
+
+/** A named theme: base tokens and overlays by name */
+export interface ThemePart {
+    tokens: JsonObject;
+    overlays?: Record<string, ThemePartOverlay>;
+}
+
+/** A dataset a module needs, by the model its records follow */
+export interface ModuleNeed {
+    model: string;
+}
+
+/** Reusable logic over data: it names no node, declares the data it needs and the params it takes */
+export interface LogicModule extends LogicDocument {
+    needs: Record<string, ModuleNeed>;
+    params: Record<string, ParamDeclaration>;
+}
+
+/** The shape of records: fields in order */
+export interface ModelPart {
+    fields: Record<string, FieldDeclaration>;
+}
+
+/** The owner's records, keyed by record key, optionally following a model */
+export interface DatasetPart {
+    model?: string;
+    records: Record<string, JsonObject>;
+}
+
+/** An owner's composed component: a node tree, its exposed paths and the search keys */
+export interface ComposedPart {
+    tree: Node;
+    exposes: ExposedPath[];
+    summary?: string;
+    category?: ComponentCategory;
+    purposes?: string[];
+}
+
+/** A place in a pattern where content goes */
+export interface PatternSlot {
+    path: string;
+    description: string;
+}
+
+/** The kinds of pattern: a screen (an app is its screens; there is no shell to pattern) */
+export const PATTERN_KINDS = ['screen'] as const;
+
+export type PatternKind = (typeof PATTERN_KINDS)[number];
+
+/** The types of a pattern param; `path` is a state path string, such as `$.data.products` */
+export const PATTERN_PARAM_TYPES = ['string', 'number', 'boolean', 'path'] as const;
+
+export type PatternParamType = (typeof PATTERN_PARAM_TYPES)[number];
+
+/** A value a pattern takes, written at its paths */
+export interface PatternParam {
+    type: PatternParamType;
+    default?: JsonValue;
+    required?: boolean;
+    paths: string[];
+    description: string;
+}
+
+/** A screen pattern (the `*.pattern.json` format); the kind stands in for a category */
+export interface PatternPart {
+    kind: PatternKind;
+    summary: string;
+    purposes: string[];
+    tree: Node;
+    slots: Record<string, PatternSlot>;
+    params: Record<string, PatternParam>;
+}

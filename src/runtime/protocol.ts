@@ -1,14 +1,22 @@
 export { isIconsMap } from './icons.js';
 export * from './limits.js';
-export { FILE_ERROR_CODES, INBOUND_TYPES, MESSAGE_TYPES, OUTBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
+export { APP_EVENTS, CHANGE_OPS, FILE_ERROR_CODES, INBOUND_TYPES, MESSAGE_TYPES, OUTBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
 export type {
+    AppEventName,
+    ChangeMessage,
+    ChangeOp,
     CommandMessage,
     EmitMessage,
     ErrorMessage,
+    EventMessage,
     FileCancelMessage,
+    FileDataMessage,
     FileErrorCode,
     FileMessage,
     FileProgressMessage,
+    FileReadMessage,
+    FileReleaseMessage,
+    FileReleasedMessage,
     FileReference,
     FileResultMessage,
     IconData,
@@ -16,6 +24,11 @@ export type {
     IconsMap,
     InboundMessage,
     InboundType,
+    InspectedMessage,
+    InspectedNode,
+    InspectMessage,
+    InspectRect,
+    KeyMessage,
     LoadMessage,
     LocaleMessage,
     MessageType,
@@ -26,11 +39,15 @@ export type {
     PongMessage,
     ProtocolError,
     ReadyMessage,
+    RuntimeChange,
+    RuntimeChunks,
     RuntimeMessage,
-    SnapshotMessage,
+    RuntimeMode,
     StateSnapshotData,
     ThemeMessage,
+    WatchedMessage,
+    WatchMessage,
     WriteMessage
 } from './messages.js';
-export { isWritablePath, validateMessage } from './validate.js';
+export { isWritablePath, KEY_CHORD, MAX_KEYS, validateMessage } from './validate.js';
 export type { DropReason, ValidationResult } from './validate.js';

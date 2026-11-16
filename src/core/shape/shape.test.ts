@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, buildDefaults, isSafeUrl, parseShape, validateNode } from './index.js';
+import { COMPONENT_CATEGORIES, MAX_PATTERN_LENGTH, MAX_PURPOSE_LENGTH, MAX_SUMMARY_LENGTH, VALIDATORS, buildDefaults, checkPurposes, normalizePurpose, isSafeUrl, parseShape, validateNode } from './index.js';
 import type { Shape } from './index.js';
 import type { Node } from '../types.js';
 
@@ -252,6 +252,89 @@ describe('parseShape', () => {
 
             expect(parseCodes({ summary: 'x', properties: { a: { type: 'string', validators: { pattern } } } })).toEqual([]);
         });
+
+        it('should hold exactly the closed set of validator names', () => {
+            expect(Object.keys(VALIDATORS)).toEqual(['oneOf', 'eachOf', 'pattern', 'regex', 'range', 'length', 'color', 'pathData', 'points', 'vector', 'fields', 'fileRef']);
+        });
+
+        it.each([
+            ['color', 'string', true],
+            ['pathData', 'string', true],
+            ['points', 'array', true],
+            ['vector', 'array', 3],
+            ['fields', 'object', { x: { type: 'number' } }],
+            ['fileRef', 'string', { types: ['image/png'], dataUrl: true }],
+            ['fileRef', 'object', { types: ['image/png'] }]
+        ])('should accept the %s validator on type %s and keep its options', (name, type, options) => {
+            const shape = propertyShape({ type, validators: { [name]: options } });
+
+            expect(shape.properties.value?.validators).toEqual({ [name]: options });
+        });
+
+        it('should accept fileRef on a property that is a string or an object', () => {
+            const shape = propertyShape({ type: ['string', 'object'], validators: { fileRef: { types: ['image/png'] } } });
+
+            expect(shape.properties.value?.validators.fileRef).toEqual({ types: ['image/png'] });
+        });
+
+        it.each([
+            ['color', 'number'],
+            ['pathData', 'array'],
+            ['points', 'string'],
+            ['vector', 'object'],
+            ['fields', 'array'],
+            ['fileRef', 'number']
+        ])('should reject the %s validator on type %s', (name, type) => {
+            const options = { vector: 2, fields: { x: { type: 'number' } }, fileRef: { types: ['image/png'] } }[name] ?? true;
+
+            expect(parseCodes({ summary: 'x', properties: { a: { type, validators: { [name]: options } } } })).toEqual(['SUI-BUILD-SHAPE']);
+        });
+
+        it.each([
+            ['color', false],
+            ['color', {}],
+            ['pathData', 1],
+            ['points', { max: 2 }],
+            ['vector', 4],
+            ['vector', 1],
+            ['vector', '2'],
+            ['fields', {}],
+            ['fields', []],
+            ['fields', { x: { type: 'date' } }],
+            ['fields', { x: { type: 'number', min: 0 } }],
+            ['fields', { x: { type: 'number', required: 'yes' } }],
+            ['fields', { x: { type: 'number', values: [] } }],
+            ['fields', { x: { type: 'number', values: ['a'] } }],
+            ['fields', { x: { type: 'number', validators: { pattern: 'a' } } }],
+            ['fields', { x: { type: 'number', validators: { length: { max: 2 } } } }],
+            ['fields', { x: { type: 'number', validators: { color: true } } }],
+            ['fields', { x: { type: 'string', validators: { range: { min: 0 } } } }],
+            ['fields', { x: { type: 'string', validators: { color: false } } }],
+            ['fileRef', {}],
+            ['fileRef', { types: [] }],
+            ['fileRef', { types: ['png'] }],
+            ['fileRef', { types: ['image/png', 'image/png'] }],
+            ['fileRef', { types: ['image/png'], dataUrl: 'yes' }],
+            ['fileRef', { types: ['application/pdf'], dataUrl: true }],
+            ['fileRef', { types: ['image/png'], maxSize: 10 }]
+        ])('should reject malformed %s options %j', (name, options) => {
+            const type = { color: 'string', pathData: 'string', points: 'array', vector: 'array', fields: 'object', fileRef: 'object' }[name];
+
+            expect(parseCodes({ summary: 'x', properties: { a: { type, validators: { [name]: options } } } })).toEqual(['SUI-BUILD-SHAPE']);
+        });
+
+        it('should keep the field list of fields, with nested validators, on the shape', () => {
+            const fields = {
+                color: { type: 'string', required: true, validators: { color: true } },
+                map: { type: 'object', validators: { fileRef: { types: ['image/png'] } } },
+                opacity: { type: 'number', validators: { range: { min: 0, max: 1 } } },
+                side: { type: 'string', values: ['front', 'back'] },
+                kind: { type: 'string', validators: { oneOf: ['a', 'b'] } }
+            };
+            const shape = propertyShape({ type: 'object', validators: { fields } });
+
+            expect(shape.properties.value?.validators.fields).toEqual(fields);
+        });
     });
 
     describe('defaults in the shape', () => {
@@ -274,7 +357,7 @@ describe('parseShape', () => {
         });
 
         it('should reject an unsafe default URL', () => {
-            expect(parseCodes({ summary: 'x', properties: { a: { type: 'url', default: 'https://example.com' } } })).toEqual([
+            expect(parseCodes({ summary: 'x', properties: { a: { type: 'url', default: 'http://example.com' } } })).toEqual([
                 'SUI-BUILD-DEFAULT'
             ]);
         });
@@ -449,6 +532,16 @@ describe('validateNode', () => {
             expect(codes(typed, { value: 'a'.repeat(10000) })).toEqual([]);
         });
 
+        it('should name the input limit in the message of a value over it', () => {
+            const typed = propertyShape({ type: 'string', validators: { pattern: '^a+$' } });
+
+            const [over] = validateNode(typed, { component: 'test', value: 'a'.repeat(10001) } as Node, '$.app');
+            const [wrong] = validateNode(typed, { component: 'test', value: 'b' } as Node, '$.app');
+
+            expect(over?.message).toContain('10001 characters, over the 10000');
+            expect(wrong?.message).not.toContain('characters');
+        });
+
         it('should accept a value that is a short, compiling regular expression with the regex validator', () => {
             const typed = propertyShape({ type: 'string', default: '', validators: { regex: 120 } });
 
@@ -530,13 +623,14 @@ describe('validateNode', () => {
             'a/b:c',
             'data:image/png;base64,iVBORw0KGgo=',
             'data:image/svg+xml,%3Csvg%3E%3C/svg%3E',
-            'DATA:image/PNG;base64,AAAA'
+            'DATA:image/PNG;base64,AAAA',
+            'https://example.com/a.png'
         ])('should accept %s', (value) => {
             expect(codes(typed, { src: value })).toEqual([]);
         });
 
         it.each([
-            'https://example.com/a.png',
+            'https://user@example.com/a.png',
             'http://example.com',
             'javascript:alert(1)',
             'JavaScript:alert(1)',
@@ -567,6 +661,15 @@ describe('validateNode', () => {
 describe('isSafeUrl', () => {
     it('should accept a relative target with a colon after a slash', () => {
         expect(isSafeUrl('/a:b')).toBe(true);
+    });
+
+    it('should accept an https URL with a host, and refuse http, one with no host or with user info', () => {
+        expect(isSafeUrl('https://example.com/a.png')).toBe(true);
+        expect(isSafeUrl('HTTPS://example.com')).toBe(true);
+        expect(isSafeUrl('http://example.com/a.png')).toBe(false);
+        expect(isSafeUrl('https:///a.png')).toBe(false);
+        expect(isSafeUrl('https://user@example.com/')).toBe(false);
+        expect(isSafeUrl('https://exa mple.com/')).toBe(false);
     });
 
     it('should refuse a control character inside a data URL', () => {
@@ -604,5 +707,64 @@ describe('childComponents', () => {
 
     it('should reject an invalid list on a node property', () => {
         expect(parseCodes({ summary: 'x', properties: { footer: { type: 'node', childComponents: [] } } })).toEqual(['SUI-BUILD-SHAPE']);
+    });
+});
+
+describe('category and purposes', () => {
+    const PURPOSES: readonly string[] = Object.freeze(['show a list of records', 'sort rows by a column', 'pick rows to act on']);
+
+    it('should list the nine categories in index order', () => {
+        expect(COMPONENT_CATEGORIES).toEqual(['layout', 'navigation', 'forms', 'data', 'feedback', 'overlays', 'content', 'conversation', 'graphics']);
+    });
+
+    it('should keep a known category and the purpose phrases on the shape', () => {
+        const shape = shapeOf({ category: 'data', purposes: PURPOSES });
+
+        expect(shape.category).toBe('data');
+        expect(shape.purposes).toEqual(PURPOSES);
+    });
+
+    it('should leave both out when the file has neither', () => {
+        const shape = shapeOf();
+
+        expect(shape).not.toHaveProperty('category');
+        expect(shape).not.toHaveProperty('purposes');
+    });
+
+    it.each([['an unknown name', 'tables'], ['a different case', 'Data'], ['not a string', 3]])('should report a category that is %s', (_label, category) => {
+        const result = parseShape({ summary: 'x', category }, FILE);
+
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-BUILD-CATEGORY']);
+        expect(result.errors[0]?.message).toContain(COMPONENT_CATEGORIES.join(', '));
+        expect(result.errors[0]?.file).toBe(FILE);
+    });
+
+    it.each([
+        ['two phrases', PURPOSES.slice(0, 2)],
+        ['nine phrases', Array.from({ length: 9 }, (_, index) => `purpose number ${index}`)],
+        ['a phrase on two lines', [...PURPOSES.slice(0, 2), 'one\ntwo']],
+        ['a phrase over the limit', [...PURPOSES.slice(0, 2), 'x'.repeat(MAX_PURPOSE_LENGTH + 1)]],
+        ['an empty phrase', [...PURPOSES.slice(0, 2), '   ']],
+        ['a phrase that is not a string', [...PURPOSES.slice(0, 2), 7]],
+        ['not an array', 'show a list']
+    ])('should report purposes with %s', (_label, purposes) => {
+        expect(parseCodes({ summary: 'x', purposes })).toEqual(['SUI-BUILD-PURPOSES']);
+    });
+
+    it('should accept three and eight phrases and a phrase of exactly the limit', () => {
+        const eight = Array.from({ length: 8 }, (_, index) => `purpose number ${index}`);
+
+        expect(checkPurposes(PURPOSES)).toBeUndefined();
+        expect(checkPurposes(eight)).toBeUndefined();
+        expect(checkPurposes([...PURPOSES.slice(0, 2), 'x'.repeat(MAX_PURPOSE_LENGTH)])).toBeUndefined();
+    });
+
+    it('should say what is wrong', () => {
+        expect(checkPurposes(PURPOSES.slice(0, 2))).toBe('must list 3 to 8 phrases, not 2');
+        expect(checkPurposes([...PURPOSES.slice(0, 2), ''])).toBe('phrase 3 is empty');
+    });
+
+    it('should compare phrases lowercased, trimmed and with inner spaces collapsed', () => {
+        expect(normalizePurpose('  Sort   Rows\tby a Column ')).toBe('sort rows by a column');
     });
 });

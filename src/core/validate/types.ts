@@ -13,7 +13,8 @@ export interface DocumentValidation {
 /** A component entry of `catalog.json` as far as validation needs it; the build's `Catalog` entries fit it */
 export type CatalogComponent =
     | { name: string; tier: 'root'; tag: string; shape: Shape; placement?: Shape['placement'] }
-    | { name: string; tier: 'composed'; tree: Node };
+    | { name: string; tier: 'composed'; tree: Node }
+    | { name: string; tier: 'shape'; shape: Shape };
 
 /** The part of `catalog.json` that validation reads */
 export interface CatalogSource {
@@ -23,10 +24,25 @@ export interface CatalogSource {
 export interface ValidateDocumentOptions {
     /**
      * True when the name is in the icon list (the server reads the list from `icons.json`). Without it any name of
-     * lower-case letters, digits and `-` is accepted
+     * lower-case letters, digits and `-` is accepted. A name the document's own `icons` defines is accepted first
      */
     isIconName?(name: string): boolean;
+    /**
+     * True when the theme has a token of this dotted name (`color.accent.base`, without braces); the `paint` validator
+     * reports a `{token}` colour it refuses as `SUI-STATE-TOKEN`. Without it a token reference is checked by syntax only.
+     * `themeTokenLookup(library)` builds one from the default tokens and the library's component tokens
+     */
+    hasToken?(name: string): boolean;
+    /**
+     * How the app keeps its state. In `standalone` and `persisted` mode there is no app server, so a document that
+     * names `$.server` anywhere is refused (`SUI-DOC-SERVER`); `full` and absent allow it. A link into `$.server` is
+     * refused in every mode (`SUI-LINK-SERVER`)
+     */
+    mode?: AppMode;
 }
+
+/** How an app keeps its state: browser only, the statenet without server logic, or an app server */
+export type AppMode = 'standalone' | 'persisted' | 'full';
 
 /** What a plug-in validator receives: the document whose own checks passed far enough to resolve `app` */
 export interface DocumentValidationContext {
@@ -34,6 +50,10 @@ export interface DocumentValidationContext {
     library: ComponentLibrary;
     /** The resolved `app` tree and the composed names expanded at each path (`resolveNode`) */
     tree: ResolvedTree;
+    /** The resolved root of each screen, by screen name; its state path is `$.screens.{screen}` */
+    screens?: Readonly<Record<string, ResolvedTree>>;
+    /** The `hasToken` option of `validateDocument`, when the caller gave one (as it gives `isIconName`) */
+    hasToken?(name: string): boolean;
 }
 
 /** A plug-in check: returns its errors, each with a state path. It may throw; the run reports that as `SUI-DOC-VALIDATOR` */

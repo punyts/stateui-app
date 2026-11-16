@@ -4,6 +4,7 @@ import type { BuildError } from '../errors/index.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
 import { fitsAnyType, fitsProperty, fitsType, typesOf } from './fit.js';
+import { MAX_PATTERN_INPUT } from './types.js';
 import type { PropertyShape, Shape } from './types.js';
 
 /**
@@ -159,6 +160,10 @@ function checkValue(property: PropertyShape, value: JsonValue, name: string, pat
     }
     if (!fitsProperty(property, value)) {
         report(walk, 'SUI-STATE-INVALID', name, path);
+        if (property.validators.pattern !== undefined && typeof value === 'string' && value.length > MAX_PATTERN_INPUT) {
+            const error = walk.errors[walk.errors.length - 1] as BuildError;
+            error.message += `: the value is ${value.length} characters, over the ${MAX_PATTERN_INPUT} a pattern-checked value may have`;
+        }
         return;
     }
     const isIconName = walk.context.isIconName;
@@ -167,6 +172,8 @@ function checkValue(property: PropertyShape, value: JsonValue, name: string, pat
     const takenByOtherType = types.some((type) => type !== 'icon' && type !== 'map' && fitsType(type, value));
     if (types.includes('icon') && !takenByOtherType && fitsAnyType(property, value) && !isIconName(value)) {
         report(walk, 'SUI-STATE-INVALID', name, path);
+        const error = walk.errors[walk.errors.length - 1] as BuildError;
+        error.message += `: "${value}" is neither one of the app's own icons nor an icon of the set`;
     }
 }
 
@@ -184,18 +191,24 @@ function scanOn(value: JsonValue, path: string, walk: Walk): void {
     }
 }
 
-/** Looks for `$row` links and `on` entries in a value that has no shape here, such as a nested node */
-function scanGeneric(value: JsonValue, path: string, walk: Walk): void {
+/**
+ * Looks for `$row` links and `on` entries in a value that has no shape here. A node is read only at its own level:
+ * a node below it (a row template in its slot) is left to the tree walk, which checks it against its own shape and
+ * knows whether it is a row template. `insideNode` is true once a node has been entered
+ */
+function scanGeneric(value: JsonValue, path: string, walk: Walk, insideNode = false): void {
     if (Array.isArray(value)) {
-        value.forEach((entry, index) => scanGeneric(entry, `${path}.${index}`, walk));
+        value.forEach((entry, index) => scanGeneric(entry, `${path}.${index}`, walk, insideNode));
     } else if (isObject(value)) {
+        const isNode = typeof value[RESERVED_KEYS.component] === 'string';
+        if (isNode && insideNode) return;
         for (const [key, entry] of Object.entries(value)) {
             if (key === RESERVED_KEYS.children) continue;
             const child = `${path}.${key}`;
             if (key === RESERVED_KEYS.on) scanOn(entry, child, walk);
             else if (key.startsWith(PREFIXES.link)) {
                 if (isRowReference(entry)) reportRow(walk, entry, child);
-            } else scanGeneric(entry, child, walk);
+            } else scanGeneric(entry, child, walk, insideNode || isNode);
         }
     }
 }
@@ -258,6 +271,8 @@ export function validateNode(shape: Shape, node: Node, statePath: string, contex
         }
         if (key.startsWith(PREFIXES.link)) {
             const target = key.slice(PREFIXES.link.length);
+            // A linked placement is the tree's, checked by the `placement` validator
+            if (target === RESERVED_KEYS.placement) continue;
             present.add(target);
             linked.add(target);
             const linkedProperty = Object.hasOwn(shape.properties, target) ? shape.properties[target] : undefined;

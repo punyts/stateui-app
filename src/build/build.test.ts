@@ -72,7 +72,62 @@ describe('buildLibrary', () => {
 
         const result = await buildLibrary(FIXTURE, out);
 
-        expect(result.files).toEqual(['catalog.json', 'fieldRow.d.ts', 'fieldRow.js', 'index.d.ts', 'index.js', 'textLabel.d.ts', 'textLabel.js']);
+        expect(result.files).toEqual(['catalog.json', 'dotMarker.locale.de.json', 'fieldRow.d.ts', 'fieldRow.js', 'index.d.ts', 'index.js', 'textLabel.d.ts', 'textLabel.js']);
+    });
+
+    it('should write no module, register entry or CSS for a shape component and give it a catalog entry', async () => {
+        const out = await scratch();
+
+        const result = await buildLibrary(FIXTURE, out);
+
+        expect(result.built.map((entry) => entry.component.name)).not.toContain('dotMarker');
+        expect(result.files.filter((file) => file.startsWith('dotMarker'))).toEqual(['dotMarker.locale.de.json']);
+        expect(await readFile(join(out, 'index.js'), 'utf8')).not.toMatch(/dotMarker|dot-marker/);
+        const entry = result.catalog.components.find((component) => component.name === 'dotMarker');
+        expect(entry).toMatchObject({
+            tier: 'shape',
+            size: 'atom',
+            summary: 'A dot on a chart or map',
+            category: 'graphics',
+            own: ['_label', 'radius'],
+            content: ['_label'],
+            events: ['press'],
+            locales: ['de'],
+            tokens: [{ path: 'marker.fill', group: 'marker', type: 'color', default: '{color.accent.base}' }]
+        });
+        expect(entry).not.toHaveProperty('tag');
+    });
+
+    it('should report a shape component that has a stylesheet and build the rest', async () => {
+        const source = await library({
+            ...simple('label'),
+            'atoms/dot/dot.state.json': SHAPE,
+            'atoms/dot/dot.view.css': ':host { display: block; }'
+        });
+        const out = await scratch();
+
+        const result = await buildLibrary(source, out);
+
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-BUILD-TIER-SHAPE']);
+        expect(result.built.map((entry) => entry.component.name)).toEqual(['label']);
+        expect(result.catalog.components.map((component) => component.name)).toEqual(['label']);
+    });
+
+    it('should check a shape component as a root one: shape errors, search keys and locale overlays', async () => {
+        const source = await library({
+            ...simple('label'),
+            'atoms/dot/dot.state.json': '{ "summary": "A dot", "properties": { "size": { "type": "nope" } } }',
+            'atoms/ring/ring.state.json': SHAPE,
+            'atoms/ring/ring.locale.de.json': '{ "text": "x" }'
+        });
+        const out = await scratch();
+
+        const result = await buildLibrary(source, out);
+
+        expect(result.errors.map((error) => error.file)).toEqual(expect.arrayContaining(['atoms/dot/dot.state.json', 'atoms/ring/ring.locale.de.json']));
+        expect(result.catalog.components.map((component) => component.name)).toEqual(['label']);
+        const keys = await buildLibrary(await library({ 'atoms/dot/dot.state.json': SHAPE }), await scratch(), { requireSearchKeys: true });
+        expect(keys.errors.map((error) => error.code)).toEqual(['SUI-BUILD-CATEGORY', 'SUI-BUILD-PURPOSES']);
     });
 
     it('should produce identical bytes when the same input is built twice', async () => {
@@ -276,6 +331,58 @@ describe('buildLibrary', () => {
         const result = await buildLibrary(source, await scratch());
 
         expect(result.errors).toEqual([]);
+    });
+
+    it('should merge the shared shape partials of sharedShapeDir into shape and root components, as if written out in full', async () => {
+        const paint = {
+            properties: { fill: { type: 'string', validators: { color: true }, default: '{color.accent.base}' }, stroke: { type: 'string', default: 'none' } },
+            events: ['press', 'hover'],
+            tokens: { fill: '{color.accent.base}' }
+        };
+        const shared = await library({ 'paint.json': JSON.stringify(paint), 'notes.txt': 'not a partial' });
+        const own = { radius: { type: 'number', default: 4 }, stroke: { type: 'string', default: 'black' } };
+        const marker = (state: Record<string, unknown>): string => JSON.stringify({ summary: 'A dot', tokenGroup: 'marker', events: ['press'], ...state });
+        const field = (state: Record<string, unknown>): string => JSON.stringify({ summary: 'A field', tokenGroup: 'field', ...state });
+        const included = await library({
+            'atoms/marker/marker.state.json': marker({ includes: ['paint'], properties: own }),
+            'atoms/field/field.view.html': '<p>{{ $.radius }}</p>',
+            'atoms/field/field.state.json': field({ includes: ['paint'], properties: own })
+        });
+        const full = { properties: { ...own, fill: paint.properties.fill }, events: ['press', 'hover'], tokens: paint.tokens };
+        const written = await library({
+            'atoms/marker/marker.state.json': marker(full),
+            'atoms/field/field.view.html': '<p>{{ $.radius }}</p>',
+            'atoms/field/field.state.json': field(full)
+        });
+
+        const result = await buildLibrary(included, await scratch(), { sharedShapeDir: shared });
+        const expected = await buildLibrary(written, await scratch());
+
+        expect(result.errors).toEqual([]);
+        expect(result.catalog.components.map((entry) => entry.tier)).toEqual(['root', 'shape']);
+        expect(result.catalog).toEqual(expected.catalog);
+        const marked = result.catalog.components.find((entry) => entry.name === 'marker');
+        expect(marked?.tier === 'shape' && marked.shape.properties.stroke?.default).toBe('black');
+    });
+
+    it('should report an unknown shape partial as SUI-BUILD-SHAPE and build nothing for the component', async () => {
+        const shared = await library({ 'paint.json': '{ "properties": {} }' });
+        const source = await library({
+            'atoms/marker/marker.state.json': '{ "summary": "A dot", "includes": ["glow"] }',
+            'atoms/field/field.view.html': '<p>x</p>',
+            'atoms/field/field.state.json': '{ "summary": "A field", "includes": ["paint"] }'
+        });
+
+        const result = await buildLibrary(source, await scratch(), { sharedShapeDir: shared });
+        const without = await buildLibrary(source, await scratch());
+
+        expect(result.errors).toEqual([expect.objectContaining({ code: 'SUI-BUILD-SHAPE', file: 'atoms/marker/marker.state.json' })]);
+        expect(result.errors[0]?.message).toContain('unknown partial "glow"');
+        expect(result.catalog.components.map((entry) => entry.name)).toEqual(['field']);
+        expect(without.errors.map((error) => `${error.file} ${error.message}`).sort()).toEqual([
+            'atoms/field/field.state.json Invalid shape file atoms/field/field.state.json: includes: unknown partial "paint"',
+            'atoms/marker/marker.state.json Invalid shape file atoms/marker/marker.state.json: includes: unknown partial "glow"'
+        ]);
     });
 
     it('should give byte-identical output with no extension points and with empty lists', async () => {
@@ -549,5 +656,64 @@ describe('build lint SUI-BUILD-TOKEN', () => {
 
         // Assert
         expect(result.errors).toEqual([]);
+    });
+});
+
+describe('search keys', () => {
+    const PURPOSES = '["show a line of text", "label a field", "caption an image"]';
+    const keyed = (name: string, purposes = PURPOSES) => ({
+        [`atoms/${name}/${name}.view.html`]: '<p>{{ $.text }}</p>',
+        [`atoms/${name}/${name}.state.json`]: `{ "summary": "A test component", "category": "content", "purposes": ${purposes} }`
+    });
+    const composed = (body: string) => ({ 'composites/card-row/card-row.composed.json': body });
+
+    it('should accept components without search keys by default and leave them out of the catalog', async () => {
+        const source = await library({ ...simple('plain'), ...composed('{ "component": "plain" }') });
+
+        const result = await buildLibrary(source, await scratch());
+
+        expect(result.errors).toEqual([]);
+        for (const entry of result.catalog.components) {
+            expect(entry).not.toHaveProperty('category');
+            expect(entry).not.toHaveProperty('purposes');
+        }
+    });
+
+    it('should report missing keys under requireSearchKeys, with summary also required of composed files', async () => {
+        const source = await library({ ...simple('plain'), ...composed('{ "component": "plain" }') });
+
+        const result = await buildLibrary(source, await scratch(), { requireSearchKeys: true });
+
+        expect(result.errors.map((error) => `${error.file} ${error.code}`).sort()).toEqual([
+            'atoms/plain/plain.state.json SUI-BUILD-CATEGORY',
+            'atoms/plain/plain.state.json SUI-BUILD-PURPOSES',
+            'composites/card-row/card-row.composed.json SUI-BUILD-CATEGORY',
+            'composites/card-row/card-row.composed.json SUI-BUILD-PURPOSES',
+            'composites/card-row/card-row.composed.json SUI-BUILD-SUMMARY'
+        ]);
+        expect(result.catalog.components.map((entry) => entry.name)).not.toContain('cardRow');
+    });
+
+    it('should build a fully keyed library under requireSearchKeys and write the keys to the catalog', async () => {
+        const source = await library({
+            ...keyed('caption'),
+            ...composed('{ "component": "caption", "summary": "A captioned row", "category": "layout", "purposes": ["lay out a caption row", "pair a caption with text", "head a card"] }')
+        });
+
+        const result = await buildLibrary(source, await scratch(), { requireSearchKeys: true });
+
+        expect(result.errors).toEqual([]);
+        expect(result.catalog.components.find((entry) => entry.name === 'cardRow')).toMatchObject({ summary: 'A captioned row', category: 'layout' });
+        expect(result.catalog.components.find((entry) => entry.name === 'caption')).toMatchObject({ category: 'content', purposes: JSON.parse(PURPOSES) });
+    });
+
+    it('should report a purpose that repeats another component, ignoring case and spacing, in either mode', async () => {
+        const source = await library({ ...keyed('alpha'), ...keyed('beta', '["  Label   a FIELD ", "name a thing", "tag a row"]') });
+
+        const result = await buildLibrary(source, await scratch());
+
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toMatchObject({ code: 'SUI-BUILD-PURPOSE-DUPLICATE', file: 'atoms/beta/beta.state.json' });
+        expect(result.errors[0]?.message).toContain('alpha');
     });
 });

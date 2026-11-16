@@ -110,7 +110,7 @@ describe('buildLibrary with layout', () => {
 
         // Assert
         expect(result.errors).toEqual([]);
-        expect(box).toContain('container-type: inline-size');
+        expect(box).toContain('container-type: var(--layout-contain, inline-size)');
         expect(box).toContain('layout-collapse-below');
         expect(plain).not.toContain('layout-collapse-below');
     });

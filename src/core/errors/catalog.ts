@@ -10,8 +10,19 @@ export const ERROR_PREFIXES = [
     'SUI-LAYOUT',
     'SUI-THEME',
     'SUI-LOCALE',
+    'SUI-LOGIC',
+    'SUI-BLUEPRINT',
+    'SUI-MODEL',
+    'SUI-PATTERN',
+    'SUI-PRESET',
+    'SUI-MODULE',
+    'SUI-INSTANCE',
+    'SUI-USES',
+    'SUI-ROUTE',
+    'SUI-APP',
     'SUI-BUILD',
-    'SUI-RUN'
+    'SUI-RUN',
+    'SUI-SYNC'
 ] as const;
 
 export interface CatalogEntry {
@@ -28,12 +39,22 @@ export const ERROR_CATALOG = {
     'SUI-DOC-COMPOSED': { template: 'Composed component "{name}" at {path} uses a reserved library name' },
     'SUI-DOC-EXPOSES': { template: 'Exposed path "{key}" of a composed entry {name}' },
     'SUI-DOC-TYPE': { template: 'Document key "{key}" at {path} has the wrong type' },
+    'SUI-DOC-SERVER': {
+        template: 'The document uses {target} at {path}, which needs Full mode (an app server), and the app runs in {name} mode'
+    },
     'SUI-DOC-VALIDATOR': { template: 'Validator "{name}" failed while checking the document' },
+    'SUI-DOC-SCREEN': { template: 'Screen entry at {path} is not valid: {reason}' },
+    'SUI-DOC-ICON': { template: 'App icon at {path} is not valid: {reason}' },
+    'SUI-DOC-EPHEMERAL': { template: 'Ephemeral path at {path} is not valid: {reason}' },
     'SUI-DOC-ORDER': { template: 'Key "{key}" at {path} is integer-like and would be reordered; use a prefixed key' },
     'SUI-DOC-LIMIT-NODES': { template: 'The document has {actual} nodes; the limit is {limit}' },
     'SUI-DOC-LIMIT-DEPTH': { template: 'Nodes nest {actual} levels deep at {path}; the limit is {limit}' },
     'SUI-DOC-LIMIT-BYTES': { template: 'The document is {actual} bytes; the limit is {limit}' },
     'SUI-DOC-LIMIT-DATA': { template: 'The data branch is {actual} bytes; the limit is {limit}' },
+    'SUI-DOC-LIMIT-SCENES': {
+        template: 'One page at {path} shows {actual} scene3d nodes; Chromium keeps at most {limit} WebGL contexts per page, so the oldest scenes show their _fallback text',
+        severity: 'warning'
+    },
     'SUI-NODE-UNKNOWN': { template: 'Unknown component "{component}" at {path}' },
     'SUI-NODE-CYCLE': { template: 'Composed component "{component}" contains itself at {path}' },
     'SUI-NODE-MISSING': { template: 'No node at {path}' },
@@ -55,12 +76,27 @@ export const ERROR_CATALOG = {
         template: 'Property "{name}" at {path} asks for a filled icon, but "{other}" has no filled variant; the outline is drawn',
         severity: 'warning'
     },
+    'SUI-STATE-STEP': {
+        template: 'Number field "{component}" at {path} has min {name} and step {other}: values count from min in steps, so whole numbers are not allowed; use min: 0 or a step that divides min',
+        severity: 'warning'
+    },
+    'SUI-STATE-PAINT': {
+        template: 'Property "{name}" at {path} names the paint "{key}", which the paints of its drawing do not define'
+    },
+    'SUI-STATE-TOKEN': { template: 'Property "{name}" at {path} names the token {token}, which is not in the theme' },
+    'SUI-STATE-LABEL': {
+        template: 'Interactive shape "{component}" at {path} has no _label, so keyboard and screen reader users cannot name it',
+        severity: 'warning'
+    },
     'SUI-LINK-ROW': { template: 'Reference {target} at {path} uses $row outside a row template' },
     'SUI-LINK-MISSING': {
         template: 'Link target {target} at {path} does not exist or is not an exposed runtime property'
     },
     'SUI-LINK-TARGET': {
-        template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, or be a node reference (^name.path or .path)'
+        template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, be $.runtime.sync, or be a node reference (^name.path or .path)'
+    },
+    'SUI-LINK-SERVER': {
+        template: 'Link "{key}" at {path} has target {target}; $.server is server-only and never reaches the browser'
     },
     'SUI-LINK-CYCLE': { template: 'Link at {path} loops back through {target}' },
     'SUI-ON-EVENT': { template: 'Component "{component}" at {path} has no event "{event}"' },
@@ -68,6 +104,9 @@ export const ERROR_CATALOG = {
     'SUI-ON-VALUE': { template: 'The value of command "{command}" at {path} is not a key of "{name}"' },
     'SUI-ON-SHAPE':{ template: '"on" entry at {path} must be one command object or a list of them' },
     'SUI-ON-TARGET': { template: 'Target {target} of "{event}" at {path} does not resolve' },
+    'SUI-ON-LINKED': {
+        template: 'Command "{command}" of "{event}" at {path} writes {target}, which the link "{key}" of the same node already saves; remove the command, or the two writes undo each other'
+    },
     'SUI-THEME-NAME': { template: 'Token name "{name}" at {path} must be lower-case letters and digits' },
     'SUI-THEME-REF': { template: 'Token at {path} has the reference {target}, which is not allowed: {name}' },
     'SUI-THEME-VALUE': { template: 'Token value at {path} is not a valid "{name}" value' },
@@ -84,7 +123,7 @@ export const ERROR_CATALOG = {
     'SUI-LOCALE-PATH': { template: 'Overlay "{locale}" has a path that does not exist: {path}' },
     'SUI-LAYOUT-SHAPE': { template: 'The layout or placement at {path} is not an object' },
     'SUI-LAYOUT-TYPE': { template: 'The layout at {path} has an unknown or missing type' },
-    'SUI-LAYOUT-SETTING': { template: 'Unknown layout setting "{name}" at {path}' },
+    'SUI-LAYOUT-SETTING': { template: 'Unknown layout setting "{name}" at {path}: {reason}' },
     'SUI-LAYOUT-VALUE': { template: 'Layout setting "{name}" at {path} has a value that is not allowed' },
     'SUI-LAYOUT-UNSUPPORTED': { template: 'Component "{component}" at {path} does not support a layout' },
     'SUI-LAYOUT-FIELD': {
@@ -118,10 +157,16 @@ export const ERROR_CATALOG = {
         template: 'Pattern of property "{name}" in {file} is not a valid expression or is over {limit} characters'
     },
     'SUI-BUILD-SUMMARY': { template: 'Shape {file} needs a one-line "summary" of at most {limit} characters' },
+    'SUI-BUILD-CATEGORY': { template: 'Component file {file} needs a "category" from this list: {name}' },
+    'SUI-BUILD-PURPOSES': { template: '"purposes" in {file} {name}: three to eight one-line phrases of at most {limit} characters' },
+    'SUI-BUILD-PURPOSE-DUPLICATE': { template: 'Purpose "{key}" of {component} in {file} repeats a purpose of {other}' },
     'SUI-BUILD-FILE': { template: 'File {file} is not inside a component folder' },
     'SUI-BUILD-ROLE': { template: 'File {file} must be named "{name}.<role>" with a known role' },
     'SUI-BUILD-DUPLICATE': { template: 'Component "{component}" is defined by both {file} and {other}' },
     'SUI-BUILD-TIER': { template: 'Component "{component}" in {file} mixes root and composed files' },
+    'SUI-BUILD-TIER-SHAPE': {
+        template: 'Shape component "{component}" in {file} has a stylesheet or controller but no view; a shape component has only its state file and locale overlays'
+    },
     'SUI-BUILD-MISSING': { template: 'Root component "{component}" in {file} needs {name}' },
     'SUI-BUILD-TEMPLATE': { template: 'Template {file} does not compile: {name}' },
     'SUI-BUILD-STYLE': { template: 'Styles in {file} do not compile: {name}' },
@@ -140,13 +185,67 @@ export const ERROR_CATALOG = {
         template: 'Component token group "{name}" in {file} does not match the same group in {other}'
     },
     'SUI-BUILD-TOKENDESC': { template: 'Semantic token "{name}" needs a one-line description in {file}' },
+    'SUI-LOGIC-SHAPE': { template: 'Logic at {path} is not valid: {name}' },
+    'SUI-BLUEPRINT-SHAPE': { template: 'Blueprint at {path} is not valid: {name}' },
+    'SUI-MODEL-SHAPE': { template: 'Model at {path} is not valid: {name}' },
+    'SUI-PATTERN-SHAPE': { template: 'Pattern {file} is not valid at {path}: {reason}' },
+    'SUI-PATTERN-PARAM': { template: 'Pattern param "{name}" {reason}' },
+    'SUI-PATTERN-FILE': { template: 'Pattern file {file} {reason}' },
+    'SUI-PRESET-SHAPE': { template: 'Theme preset {file} is not valid at {path}: {reason}' },
+    'SUI-PRESET-FILE': { template: 'Theme preset file {file} {reason}' },
+    'SUI-MODEL-FIELD': { template: 'Field "{name}" of record "{key}" does not fit its model: {reason}' },
+    'SUI-INSTANCE-STALE': { template: 'The instance holds {target} at {path}, which the app no longer has; {reason}', severity: 'warning' },
+    'SUI-MODULE-NODE': { template: 'The logic module names a node or screen at {path} ({target}); a module works on the data it needs only' },
+    'SUI-MODULE-NEEDS': { template: 'The logic module reaches {target} at {path}, which is not in its needs; declared: {other}' },
+    'SUI-MODULE-PARAM': { template: 'Param "{name}" of the logic module at {path}: {reason}' },
+    'SUI-MODULE-ONCE': {
+        template: '{command} at {path} runs once per open instance of the app, so two open instances {reason}; a module should write derived values only',
+        severity: 'warning'
+    },
+    'SUI-USES-MISSING': { template: 'The app uses the {target} "{name}" at {path}, and the owner has no such part; nearest names: {other}' },
+    'SUI-USES-MODEL': { template: 'The data binding "{name}" at {path} {reason}' },
+    'SUI-USES-NEEDS': { template: 'The logic module "{target}" needs the data binding "{name}", and the app binds none at {path}' },
+    'SUI-ROUTE-SCREEN': { template: 'navigate at {path} names no screen: {reason}' },
+    'SUI-SYNC-SHARED': {
+        template: 'The data binding "{name}" at {path} shares the dataset "{target}", which needs Full mode (an app server) to stay in step across apps, and the app runs in {other} mode'
+    },
+    'SUI-ROUTE-PARAMS': { template: 'The params of navigate at {path} do not fit: {reason}' },
+    'SUI-APP-ROOT': { template: 'The app node at {path} is not valid: {reason}' },
+    'SUI-LOGIC-COMMAND': { template: 'Unknown logic command "{command}" at {path}' },
+    'SUI-LOGIC-PATH': {
+        template: 'Path {target} at {path} must be under $.app, $.data, $.server, $.screens, $.route, $.raised or $.external, use only the captures of its trigger, or be a node reference that resolves to one node'
+    },
+    'SUI-LOGIC-STATE': { template: 'State "{name}" at {path} is not a state of machine "{other}"' },
+    'SUI-LOGIC-EXPRESSION': { template: 'Expression at {path} does not compile: {name}' },
+    'SUI-LOGIC-GAP': { template: 'Table at {path} has no row for {name}' },
+    'SUI-LOGIC-UNREACHABLE': { template: 'Row {path} never wins: the rows above it cover every value it matches', severity: 'warning' },
+    'SUI-LOGIC-SIZE': {
+        template: 'Table at {path} has {actual} cells, more than {limit}, so its rows are matched in order and gaps are not checked',
+        severity: 'warning'
+    },
+    'SUI-LOGIC-FUNCTION': { template: 'Logic at {path} runs the function "{name}", which the host has not registered, so it fails when it runs', severity: 'warning' },
+    'SUI-LOGIC-CYCLE': { template: 'Logic at {path} feeds itself ({name}), so it would never settle' },
+    'SUI-LOGIC-TEXT-PATH': {
+        template: 'Value {target} at {path} is a text template, so it gives the path as text; use a record source (the key record with the path) to read the value there',
+        severity: 'warning'
+    },
     'SUI-RUN-UNRESPONSIVE': { template: 'The preview did not answer the heartbeat' },
     'SUI-RUN-ON-SHAPE': { template: 'The "{event}" entry at {path} is not a command or a list of commands' },
-    'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}' },
+    'SUI-RUN-ON-COMMAND': { template: 'Command "{command}" for event "{event}" failed at {path}: {reason}' },
     'SUI-RUN-ON-TARGET': { template: 'Target "{target}" of event "{event}" does not resolve at {path}' },
     'SUI-RUN-ICON': { template: 'Icon "{name}" at {path} is in neither the core set nor the icons of the app' },
     'SUI-RUN-BINDING': { template: 'Binding or controller of "{component}" failed at {path}' },
-    'SUI-RUN-WRITE': { template: 'The runtime did not apply the write to {path}' }
+    'SUI-RUN-WRITE': { template: 'The runtime did not apply the write to {path}' },
+    'SUI-RUN-DRAW': { template: 'Shape at {path} cannot be drawn as written: {reason}' },
+    'SUI-RUN-CAP': {
+        template: 'The {component} at {path} has {actual} records, more than the {limit} the {name} renderer draws; only the first {limit} are drawn'
+    },
+    'SUI-RUN-FILE': { template: 'The {component} at {path} cannot use its file: {reason}' },
+    'SUI-RUN-3D': { template: 'The {component} at {path} cannot draw in 3D: {reason}' },
+    'SUI-RUN-CLIPPED': {
+        template: 'Rows of "{component}" at {path} are {limit}px tall but a row needs {actual}px, so its content is cut off; set rowHeight, or the recordlist.row token in the node theme',
+        severity: 'warning'
+    }
 } as const satisfies Record<string, CatalogEntry>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

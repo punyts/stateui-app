@@ -299,4 +299,30 @@ describe('document validation of locales', () => {
         expect(rejected.errors.map((error) => error.code).filter((code) => code.startsWith('SUI-LOCALE'))).toEqual(['SUI-LOCALE-PATH', 'SUI-LOCALE-CONTENT']);
         expect(rejected.valid).toBe(false);
     });
+
+    it('should check the locales of each screen against that screen at its own path', () => {
+        // Arrange
+        const screens = (locales: JsonObject) => ({
+            app: { component: 'panel', _title: 'Shop' },
+            locales: { de: { _title: 'Laden' } },
+            screens: {
+                home: { root: { component: 'panel', _title: 'Home', children: { a: { component: 'text', _text: 'Hi' } } }, locales },
+                cart: { root: { component: 'panel', _title: 'Cart' } }
+            },
+            start: 'home'
+        }) as unknown as AppDocument;
+        const good = screens({ de: { _title: 'Start', children: { a: { _text: 'Hallo' } } } });
+        const bad = screens({ de: { _title: 'Start', ghost: { _text: 'x' }, children: { a: { component: 'x' } } } });
+
+        // Act
+        const accepted = validateDocument(good, LIBRARY);
+        const rejected = validateDocument(bad, LIBRARY);
+
+        // Assert
+        expect(accepted.errors.filter((error) => error.code.startsWith('SUI-LOCALE'))).toEqual([]);
+        expect(rejected.errors.filter((error) => error.code.startsWith('SUI-LOCALE')).map((error) => `${error.code} ${error.statePath ?? ''}`)).toEqual([
+            'SUI-LOCALE-PATH $.screens.home.ghost',
+            'SUI-LOCALE-CONTENT $.screens.home.children.a.component'
+        ]);
+    });
 });

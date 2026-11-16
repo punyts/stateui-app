@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BuildError } from '../core/errors/index.js';
 import { buildFailure } from './failures.js';
@@ -45,4 +45,28 @@ export async function inlineIncludes(
         lines[index] = partial;
     }
     return lines.join('\n');
+}
+
+const SHAPE_PARTIAL_FILE = /^([a-z0-9][a-z0-9-]*)\.json$/;
+
+/**
+ * Reads the shared shape partials of `sharedDir`: each `<name>.json` file directly in the folder, by name, as text with
+ * LF newlines (`parseShape` parses and checks it when a state file includes it). Without `sharedDir`, or when the
+ * folder does not exist, there are none, so every name in an `includes` list is unknown
+ */
+export async function readShapePartials(sharedDir: string | undefined): Promise<Map<string, string>> {
+    const partials = new Map<string, string>();
+    if (sharedDir === undefined) return partials;
+    let names: string[];
+    try {
+        names = (await readdir(sharedDir, { withFileTypes: true })).filter((entry) => entry.isFile()).map((entry) => entry.name).sort();
+    } catch {
+        return partials;
+    }
+    for (const name of names) {
+        const match = SHAPE_PARTIAL_FILE.exec(name);
+        if (!match) continue;
+        partials.set(match[1] as string, (await readFile(join(sharedDir, name), 'utf8')).replace(/\r\n?/g, '\n'));
+    }
+    return partials;
 }

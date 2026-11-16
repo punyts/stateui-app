@@ -151,6 +151,16 @@ describe('validateOn', () => {
         expect(errors[0]).toMatchObject({ code: 'SUI-ON-EVENT', statePath: '$.app.children.b.on.hover' });
     });
 
+    it('should accept an app event on the root node only', () => {
+        const rejected = { 'sync.rejected': { command: 'emit', target: 'rejected' } };
+        const root: Node = { component: 'toolbar', on: rejected, children: { b: { component: 'button', on: rejected } } };
+
+        const errors = check(root);
+
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatchObject({ code: 'SUI-ON-EVENT', statePath: '$.app.children.b.on.sync.rejected' });
+    });
+
     it('should report a bad command on the target component', () => {
         const app: Node = {
             component: 'toolbar',
@@ -198,6 +208,41 @@ describe('validateOn', () => {
         expect(path).toEqual([]);
     });
 
+    it('should check a screen command aimed at the app node against the app tree', () => {
+        // Arrange
+        const region = parseShape(
+            {
+                summary: 'Region',
+                commands: ['show'],
+                commandValues: { show: 'messages' },
+                properties: { messages: { type: 'map', items: 'string', default: { saved: 'Saved' } } }
+            },
+            'region.state.json'
+        ).shape as Shape;
+        const library: ComponentLibrary = { ...LIBRARY, region: { tier: 'root', tag: 'ui-region', shape: region } };
+        const appTree = resolveNode({ component: 'toolbar', children: { r: { component: 'region' } as Node } }, library);
+        const screen = (command: string, target: string, value: string): Node =>
+            ({ component: 'button', on: { press: { command, target, value } } }) as Node;
+        const run = (node: Node, app = appTree): string[] =>
+            validateOn(resolveNode(node, library), library, { path: '$.screens.home.root', app }).map((error) => error.code);
+
+        // Act
+        const known = run(screen('show', '$.app.children.r', 'saved'));
+        const unknownValue = run(screen('show', '$.app.children.r', 'nope'));
+        const unknownCommand = run(screen('submit', '$.app.children.r', 'saved'));
+        const missing = run(screen('show', '$.app.children.gone', 'saved'));
+        const withoutApp = validateOn(resolveNode(screen('show', '$.app.children.r', 'nope'), library), library, {
+            path: '$.screens.home.root'
+        });
+
+        // Assert
+        expect(known).toEqual([]);
+        expect(unknownValue).toEqual(['SUI-ON-VALUE']);
+        expect(unknownCommand).toEqual(['SUI-ON-COMMAND']);
+        expect(missing).toEqual(['SUI-ON-TARGET']);
+        expect(withoutApp).toEqual([]);
+    });
+
     it('should report a missing target node and a missing provider', () => {
         const missing = check(button({ press: { command: 'submit', target: '.children.nope' } }));
         const provider = check(button({ press: { command: 'submit', target: '$parent' } }));
@@ -210,6 +255,27 @@ describe('validateOn', () => {
         const errors = check(button({ press: { command: 'set', target: '.nothing', value: 1 } }));
 
         expect(errors.map((error) => error.code)).toEqual(['SUI-ON-TARGET']);
+    });
+
+    it('should accept set and emit with from, and report a from that names no value or sits beside value', () => {
+        // Arrange / Act
+        const good = check(
+            button({
+                press: [
+                    { command: 'set', target: '$.data.name', from: '.pressed' },
+                    { command: 'emit', target: 'picked', from: '$.data.pick' }
+                ]
+            })
+        );
+        const unknown = check(button({ press: { command: 'set', target: '$.data.name', from: '.nothing' } }));
+        const node = check(button({ press: { command: 'set', target: '$.data.name', from: '$parent' } }));
+        const both = check(button({ press: { command: 'set', target: '$.data.name', from: '$.data.a', value: 1 } }));
+
+        // Assert
+        expect(good).toEqual([]);
+        expect(unknown.map((error) => error.code)).toEqual(['SUI-ON-TARGET']);
+        expect(node.map((error) => error.code)).toEqual(['SUI-ON-TARGET']);
+        expect(both[0]?.statePath).toBe('$.app.children.b.on.press');
     });
 
     it('should report a malformed on entry with its state path', () => {

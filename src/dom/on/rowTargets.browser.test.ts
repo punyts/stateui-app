@@ -7,7 +7,7 @@ import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { parseShape } from '../../core/shape/index.js';
 import type { Shape } from '../../core/shape/index.js';
 import { createDispatcher } from './index.js';
-import type { CommandElement } from './index.js';
+import type { CommandElement, DispatcherOptions } from './index.js';
 
 function shapeOf(properties: Record<string, unknown>, events: string[], commands: string[]): Shape {
     const result = parseShape({ summary: 'Fixture', properties, events, commands }, 'fixture.state.json');
@@ -67,7 +67,7 @@ interface Fixture {
  * `renderAt` the button renders there instead, through an alias of the owner's `slots` in `$.app`; with `nested` the
  * row template is a panel whose child `open` is the button
  */
-function mountRows(on: unknown, renderAt: string = SLOT, nested = false): Fixture {
+function mountRows(on: unknown, renderAt: string = SLOT, nested = false, navigate?: DispatcherOptions['navigate']): Fixture {
     const row = nested ? { component: 'panel', children: { open: { component: 'button', on } } } : { component: 'button', on };
     setNodeResolver((name) => tags[name]);
     const store = createStore<unknown>({
@@ -81,7 +81,7 @@ function mountRows(on: unknown, renderAt: string = SLOT, nested = false): Fixtur
     mount(host, store);
     for (const path of ['$.app', renderAt]) host.appendChild(document.createElement('sui-node')).setAttribute('state', path);
     const onError = vi.fn();
-    createDispatcher({ host, store, library, hooks: { onError } });
+    createDispatcher({ host, store, library, hooks: { onError }, ...(navigate === undefined ? {} : { navigate }) });
     const button = find(host, nested ? `${renderAt}.children.open` : renderAt);
     const owner = find(host, OWNER);
     if (!button || !owner) throw new Error('fixture did not render');
@@ -153,6 +153,41 @@ describe('$row and relative targets in a row template in Chromium', () => {
         expect(store.get('$.data.selected')).toBe('k2');
     });
 
+    it('should navigate with params read from the record the slot shows, at any depth', () => {
+        // Arrange
+        const navigate = vi.fn<NonNullable<DispatcherOptions['navigate']>>(() => undefined);
+        const { button, onError } = mountRows(
+            { press: { command: 'navigate', target: 'order', value: { id: '$row.id', who: { name: '$row.customer' }, tab: 'lines' } } },
+            SLOT,
+            false,
+            navigate
+        );
+
+        // Act
+        raise(button, 'press');
+
+        // Assert
+        expect(onError).not.toHaveBeenCalled();
+        expect(navigate).toHaveBeenCalledWith('order', { id: 'k1', who: { name: 'Ada' }, tab: 'lines' });
+    });
+
+    it('should report the reason a navigate is refused, and a navigate in an app without screens', () => {
+        // Arrange
+        const refused = mountRows({ press: { command: 'navigate', target: 'cart' } }, SLOT, false, () => 'no screen is named "cart"');
+        raise(refused.button, 'press');
+        unmount(refused.button.closest('div') as Element);
+        document.body.replaceChildren();
+
+        // Act
+        const missing = mountRows({ press: { command: 'navigate', target: 'cart' } });
+        raise(missing.button, 'press');
+
+        // Assert
+        expect(refused.onError.mock.calls[0]?.[0]).toMatchObject({ code: 'SUI-RUN-ON-COMMAND' });
+        expect(String(refused.onError.mock.calls[0]?.[0]?.message)).toContain('no screen is named "cart"');
+        expect(String(missing.onError.mock.calls[0]?.[0]?.message)).toContain('the app has no screens');
+    });
+
     it('should write through $row to the record itself', () => {
         // Arrange
         const { store, button } = mountRows({ press: { command: 'set', target: '$row.customer', value: 'Linus' } });
@@ -162,6 +197,27 @@ describe('$row and relative targets in a row template in Chromium', () => {
 
         // Assert
         expect(store.get('$.data.orders.k1.customer')).toBe('Linus');
+    });
+
+    it('should toggle a field of the $.data record through the aliases a list makes, on every press', () => {
+        // Arrange: the row points at the view's records, which alias the list's items, which link to the data map
+        const { store, button, onError } = mountRows({ press: { command: 'toggle', target: '$row.done' } });
+        const records = '$.runtime.nodes.app.children.orders.records';
+        store.link(`${OWNER}.items`, '$.data.orders');
+        store.link(records, `${OWNER}.items`, { allowMissing: true });
+        store.link(`${SLOT}.row`, `${records}.k1`);
+
+        // Act
+        const ticks: unknown[] = [];
+        for (let press = 0; press < 3; press += 1) {
+            raise(button, 'press');
+            ticks.push(store.get('$.data.orders.k1.done'));
+        }
+
+        // Assert
+        expect(onError).not.toHaveBeenCalled();
+        expect(ticks).toEqual([true, false, true]);
+        expect(store.get('$.data.orders.k2.done')).toBeUndefined();
     });
 
     it('should hand a command aimed at $row to the node that owns the template, with the record path', () => {

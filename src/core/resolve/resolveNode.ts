@@ -16,6 +16,14 @@ function has(record: object, name: string): boolean {
     return Object.hasOwn(record, name);
 }
 
+/**
+ * The shape of a library entry whose nodes hold their own state: a root component or a shape component. A composed
+ * component has none until it is expanded
+ */
+export function entryShape(entry: LibraryEntry | undefined): Shape | undefined {
+    return entry?.tier === 'root' || entry?.tier === 'shape' ? entry.shape : undefined;
+}
+
 /** The document's composed entries come first; the library is the fallback */
 function lookup(name: string, library: ComponentLibrary, composed: DocumentComposed): LibraryEntry | undefined {
     if (has(composed, name)) return { tier: 'composed', tree: composed[name] as Node };
@@ -64,6 +72,9 @@ class Resolver {
         private readonly composed: DocumentComposed
     ) {}
 
+    /** The shape of a root or shape component; a composed one has none until it is expanded */
+    private readonly shapeOf = (component: string): Shape | undefined => entryShape(lookup(component, this.library, this.composed));
+
     /** `names` are the composed components expanded so far at this path */
     resolve(node: JsonValue, path: string, names: readonly string[] = []): JsonValue {
         if (!isNodeValue(node)) {
@@ -78,7 +89,8 @@ class Resolver {
             return cloneJson(node);
         }
 
-        if (entry.tier === 'root') return this.resolveRoot(node, entry.shape, path);
+        // A shape component resolves as a root one does: its node is merged over its shape's defaults
+        if (entry.tier === 'root' || entry.tier === 'shape') return this.resolveRoot(node, entry.shape, path);
 
         const cycle = findCycle(name, this.library, this.composed);
         if (cycle) {
@@ -92,14 +104,14 @@ class Resolver {
         delete tree[EXPOSES];
         const overrides: JsonObject = { ...node };
         delete overrides[RESERVED_KEYS.component];
-        const merged = mergeValues(tree, overrides);
+        const merged = mergeValues(tree, overrides, false, this.shapeOf);
         const chain = [...names, name];
         this.instances[path] = chain;
         return this.resolve(merged, path, chain);
     }
 
     private resolveRoot(node: Node, shape: Shape, path: string): JsonValue {
-        const merged = mergeValues(buildDefaults(shape), node) as JsonObject;
+        const merged = mergeValues(buildDefaults(shape), node, false, this.shapeOf, shape) as JsonObject;
         const result: JsonObject = {};
         for (const [key, value] of Object.entries(merged)) {
             if (key === RESERVED_KEYS.children && isObject(value)) {

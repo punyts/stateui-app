@@ -2,6 +2,7 @@ import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { parseTarget, resolveTarget } from '../on/index.js';
 import type { Frame, TreeNode } from '../on/index.js';
+import { entryShape } from '../resolve/index.js';
 import { isNodeValue, isObject } from '../resolve/merge.js';
 import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
@@ -13,12 +14,16 @@ import type { ExtractOptions, ExtractResult, Link, RowLinkOptions } from './type
 const ROOT_PATH = '$.app';
 const SEGMENT = '[A-Za-z0-9_-]+';
 const DATA_TARGET = new RegExp(`^\\$\\.data(\\.${SEGMENT})*$`);
+/** The sync status the host writes (`$.runtime.sync`): an app links a badge to it */
+const SYNC_TARGET = /^\$\.runtime\.sync(\.(mode|status|waiting))?$/;
 const ROW_TARGET = new RegExp(`^\\$row(\\.${SEGMENT})*$`);
 const NODE_REFERENCE = new RegExp(`^(\\^${SEGMENT}|)(\\.${SEGMENT})+$`);
+/** `$.server` and the paths below it: server-only, so never a link target */
+const SERVER_TARGET = /^\$\.server(\.|$)/;
 
-/** True for a target a link may have: `$.data`, `$row`, or a node reference (`^name.path`, `.path`) */
+/** True for a target a link may have: `$.data`, `$row`, `$.runtime.sync`, or a node reference (`^name.path`, `.path`) */
 function isLinkTarget(target: string): boolean {
-    return DATA_TARGET.test(target) || ROW_TARGET.test(target) || NODE_REFERENCE.test(target);
+    return DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target) || NODE_REFERENCE.test(target);
 }
 
 /** The shape of a root component, if the library has one */
@@ -26,7 +31,7 @@ function shapeOf(options: ExtractOptions, component: string): Shape | undefined 
     const library = options.library;
     if (library === undefined || !Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 class Extractor {
@@ -65,7 +70,7 @@ class Extractor {
     }
 
     /** Pushes the node's frame and notes which of its slots are row templates */
-    private enter(node: TreeNode, path: string): void {
+    enter(node: TreeNode, path: string): void {
         if (this.rowPaths.has(path)) this.rowOwner = this.frames.length - 1;
         const instances = this.options.instances;
         this.frames.push({
@@ -101,12 +106,16 @@ class Extractor {
             this.errors.push(buildError('SUI-NODE-NAME', { name: PREFIXES.link, path, statePath: path }));
             return;
         }
+        if (typeof target === 'string' && SERVER_TARGET.test(target)) {
+            this.errors.push(buildError('SUI-LINK-SERVER', { key, target, path, statePath: path }));
+            return;
+        }
         if (typeof target !== 'string' || !isLinkTarget(target)) {
             const shown = typeof target === 'string' ? target : `(${target === null ? 'null' : typeof target})`;
             this.errors.push(buildError('SUI-LINK-TARGET', { key, target: shown, path, statePath: path }));
             return;
         }
-        if (DATA_TARGET.test(target) || ROW_TARGET.test(target)) {
+        if (DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target)) {
             this.links.push({ statePath: path, key, target });
             return;
         }
@@ -139,6 +148,7 @@ class Extractor {
  */
 export function extractLinks(resolvedTree: Node, options: ExtractOptions = {}): ExtractResult {
     const extractor = new Extractor(options);
+    for (const ancestor of options.ancestors ?? []) extractor.enter(ancestor.node as TreeNode, ancestor.path);
     const tree = extractor.walk(resolvedTree, options.path ?? ROOT_PATH) as Node;
     return {
         tree,

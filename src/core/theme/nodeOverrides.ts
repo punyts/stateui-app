@@ -1,6 +1,6 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
-import { resolveNode } from '../resolve/index.js';
+import { entryShape, resolveNode } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { isObject } from '../resolve/merge.js';
 import { nodeChildren } from '../shape/index.js';
@@ -141,7 +141,7 @@ function checkTheme(
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
     const entry = library[component];
-    return entry?.tier === 'root' ? entry.shape : undefined;
+    return entryShape(entry);
 }
 
 function walk(root: Node, rootPath: string, library: ComponentLibrary, visitNode: (node: Node, path: string) => void): void {
@@ -167,6 +167,7 @@ export function validateNodeThemes(context: DocumentValidationContext, component
     const types = typeTable(components);
     const check = (node: Node, path: string): void => checkTheme(node, path, types, errors);
     walk(context.tree.node, APP_PATH, context.library, check);
+    for (const [name, tree] of Object.entries(context.screens ?? {})) walk(tree.node, `$.screens.${name}`, context.library, check);
     const composed = context.document.composed;
     if (composed === undefined || !isObject(composed as JsonValue)) return errors;
     for (const [name, tree] of Object.entries(composed)) {

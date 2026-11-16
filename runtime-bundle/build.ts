@@ -11,6 +11,8 @@ import type { Plugin } from 'esbuild';
 export interface RuntimeBundleManifest {
     hash: string;
     script: string;
+    /** The names of the catalog components the bundle was built with, so a server can tell when it is out of date */
+    components: string[];
 }
 
 export interface RuntimeBundleOptions {
@@ -61,6 +63,13 @@ function componentOverlaysPlugin(): Plugin {
     };
 }
 
+/** The names of the components in the library's `catalog.json`, the one the bundle imports */
+function catalogComponents(): string[] {
+    const require = createRequire(import.meta.url);
+    const catalog = require('@punyts/stateui-components/catalog.json') as { components: { name: string }[] };
+    return catalog.components.map((component) => component.name).sort();
+}
+
 /**
  * Bundles `entry` (StateUI, the component system and the component library with their dependencies) into one
  * classic script. The file is named after a hash of its content, so a changed source gives a new name and the API
@@ -87,7 +96,7 @@ export async function buildRuntimeBundle(options: RuntimeBundleOptions): Promise
     }
 
     const hash = createHash('sha256').update(output.contents).digest('hex').slice(0, HASH_LENGTH);
-    const manifest: RuntimeBundleManifest = { hash, script: `${hash}.js` };
+    const manifest: RuntimeBundleManifest = { hash, script: `${hash}.js`, components: catalogComponents() };
 
     await mkdir(options.outDir, { recursive: true });
     for (const name of await readdir(options.outDir)) {

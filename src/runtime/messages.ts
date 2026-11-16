@@ -1,13 +1,17 @@
-import type { AppDocument, JsonObject, JsonValue } from '../core/types.js';
+import type { AppInstance } from '../core/snapshot/index.js';
+import type { AppDocument, AppEventName, JsonObject, JsonValue } from '../core/types.js';
+
+export { APP_EVENTS } from '../core/types.js';
+export type { AppEventName } from '../core/types.js';
 
 /** The protocol version every message carries in `v`. A message with another version is dropped */
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'ping', 'fileProgress', 'fileResult'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'snapshot', 'emit', 'error', 'pong', 'file', 'fileCancel'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'key', 'inspected', 'watched'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -28,13 +32,13 @@ export interface IconData {
 /** Icon name to path data */
 export type IconsMap = Record<string, IconData>;
 
-/** The state a `load` carries and a `snapshot` returns (`snapshotState`) */
+/** The state a `load` carries over the document: the data and the node state (`snapshotState`) */
 export interface StateSnapshotData {
     data: JsonObject;
     app: JsonObject;
 }
 
-/** One path write: a value to set, or `remove: true` to delete the path */
+/** One path write: a value to set, or `remove: true` to delete the path. The runtime applies it as a sync write, so it posts no `change` */
 export interface PathWrite {
     path: string;
     value?: JsonValue;
@@ -50,7 +54,10 @@ export interface ProtocolError {
     component?: string;
 }
 
-/** The reasons a file transfer fails: what `fileResult` carries as `code`, and what `transferFile` rejects with */
+/**
+ * The reasons a file transfer, read or release fails: what `fileResult`, `fileData` and `fileReleased` carry as
+ * `code`, and what `transferFile`, `readFile` and `releaseFile` reject with
+ */
 export const FILE_ERROR_CODES = [
     'too_large',
     'unsupported_type',
@@ -80,11 +87,51 @@ interface Envelope<T extends MessageType> {
     type: T;
 }
 
-/** Mounts the application: the document, the state to load over it and the icons it uses beyond the core set */
+/** How an app keeps its state; the same names as `AppMode` of the validator */
+export type RuntimeMode = 'standalone' | 'persisted' | 'full';
+
+/** The operations of a change, as `@punyts/state-sync` names them */
+export const CHANGE_OPS = ['set', 'replace', 'merge', 'delete'] as const;
+
+export type ChangeOp = (typeof CHANGE_OPS)[number];
+
+/** A change the user (or a controller) made in the runtime's store, without the base revision the host's sync client adds */
+export interface RuntimeChange {
+    id: string;
+    path: string;
+    op: ChangeOp;
+    /** Absent for `delete` */
+    value?: JsonValue;
+}
+
+/**
+ * The scripts beside the runtime page that the runtime may load on demand, each named by its content hash: `3d` is
+ * the renderer of `@punyts/stateui-3d`, loaded by the first `scene3d` that mounts (`load3d`)
+ */
+export interface RuntimeChunks {
+    '3d'?: string;
+}
+
+/**
+ * Mounts the application: the document, the state to load over it, the icons it uses beyond the core set and the
+ * mode (`standalone` when absent). `instance` is a persona's instance, laid over the definition as `mountApp` lays
+ * `MountOptions.instance` (the app node, the screens, the data and the route), and `chunks` names the chunk scripts the
+ * host serves beside the runtime page
+ */
 export interface LoadMessage extends Envelope<'load'> {
     document: AppDocument;
+    mode?: RuntimeMode;
     state?: StateSnapshotData;
+    instance?: AppInstance;
     icons?: IconsMap;
+    /** The chunk scripts the host serves (`RuntimeChunks`); without `3d` a scene shows its `_fallback` */
+    chunks?: RuntimeChunks;
+    /**
+     * Key chords the host handles itself while the app has the keyboard, such as `mod+shift+e` (`mod` is Ctrl, or Cmd
+     * on a Mac). Each names one or more modifiers (`mod`, `shift`, `alt`, in that order) and one key, a letter or a digit.
+     * The app never sees a chord the host names: the runtime posts `key` instead
+     */
+    keys?: string[];
 }
 
 /** Path writes for `$.data` and `$.app`, with the icons the new revision uses for the first time */
@@ -93,7 +140,10 @@ export interface WriteMessage extends Envelope<'write'> {
     icons?: IconsMap;
 }
 
-/** A component command from `ui_command`: `target` is the `$.app` state path of a node, `command` a command its component declares */
+/**
+ * A command from `ui_command`: `target` is the state path of a node (`$.app...` or `$.screens.{name}...`) and `command` a
+ * command its component declares, or `navigate` with a screen name as `target` and the params as `value`
+ */
 export interface CommandMessage extends Envelope<'command'> {
     target: string;
     command: string;
@@ -119,16 +169,99 @@ export interface PongMessage extends Envelope<'pong'> {
     id: number;
 }
 
+/**
+ * Asks about the nodes on screen, for an editor over the frame: the node at a point of the frame (`at`, in CSS pixels
+ * of the frame's viewport) with its ancestors, or the nodes of the given absolute `paths`. Answered with `inspected`
+ */
+export interface InspectMessage extends Envelope<'inspect'> {
+    id: number;
+    at?: { x: number; y: number };
+    paths?: string[];
+}
+
+/** A box in CSS pixels of the frame's viewport */
+export interface InspectRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+/** How a node flows its children now: a row or grid collapsed below its breakpoint flows as a column */
+export type InspectFlow = 'row' | 'column' | 'grid' | 'free';
+
+/**
+ * The area a node lays its children out in, for an editor to show the layout itself: `rect` is the layout host's
+ * content box, `settings` the node's layout settings as written (`gap`, `cols`, `collapseBelow`...), `flow` how
+ * the children flow now, `gap` the space between them in pixels, and for a grid or region the sizes of its tracks
+ */
+export interface InspectedArea {
+    rect: InspectRect;
+    settings: Record<string, string>;
+    flow: InspectFlow;
+    gap: { row: number; column: number };
+    columns?: number[];
+    rows?: number[];
+}
+
+/** One node on screen: its box, its component, the layout type it gives its children, and their boxes */
+export interface InspectedNode {
+    path: string;
+    component: string;
+    layout?: string;
+    rect: InspectRect;
+    /** Present when the node lays out children (it has a layout host), whether or not it sets `layout` */
+    area?: InspectedArea;
+    children: { path: string; rect: InspectRect }[];
+}
+
+/**
+ * The answer to `inspect`, with its `id`: `at` is the path of the node at the point (absent when there is none), and
+ * `nodes` that node and its ancestors, innermost first, or the nodes of the paths asked for that are on screen
+ */
+export interface InspectedMessage extends Envelope<'inspected'> {
+    id: number;
+    at?: string;
+    nodes: InspectedNode[];
+}
+
+/**
+ * Asks the frame to tell where some nodes are, now and whenever they move or change size (the window resizes, a
+ * write or a load changes the layout): `watched` comes with their boxes. A new `watch` replaces the paths watched;
+ * an empty list stops. An editor uses it to lay something of its own over a node of the frame
+ */
+export interface WatchMessage extends Envelope<'watch'> {
+    paths: string[];
+}
+
+/** Where the watched nodes are now, each with its box; a node not on screen is left out */
+export interface WatchedMessage extends Envelope<'watched'> {
+    nodes: { path: string; rect: InspectRect }[];
+}
+
+/** Raises an app event: `sync.rejected` with the rejected path and the reason as its payload */
+export interface EventMessage extends Envelope<'event'> {
+    name: AppEventName;
+    payload?: JsonValue;
+}
+
 /** Posted after `load` mounted the application */
 export type ReadyMessage = Envelope<'ready'>;
 
-/** The state worth saving (`snapshotState`, minus links, `$.runtime`, content and password values) */
-export interface SnapshotMessage extends Envelope<'snapshot'>, StateSnapshotData {}
+/** One change of the store, posted as it is captured (never for a host write, `$.runtime` or a password value) */
+export interface ChangeMessage extends Envelope<'change'> {
+    change: RuntimeChange;
+}
 
 /** The `emit` command of an `on` entry: an event name and its payload */
 export interface EmitMessage extends Envelope<'emit'> {
     name: string;
     payload?: JsonValue;
+}
+
+/** The person pressed a key chord the `load` named in `keys`; the app did not see it */
+export interface KeyMessage extends Envelope<'key'> {
+    key: string;
 }
 
 export interface ErrorMessage extends Envelope<'error'> {
@@ -167,21 +300,68 @@ export type FileResultMessage = Envelope<'fileResult'> &
         | { requestId: number; ok: false; code: FileErrorCode; message: string }
     );
 
+/**
+ * A component asks for the bytes of a stored file (`readFile`). `requestId` is a positive integer the runtime makes;
+ * `id` is the file's id from its reference. The host answers with `fileData`
+ */
+export interface FileReadMessage extends Envelope<'fileRead'> {
+    requestId: number;
+    id: string;
+}
+
+/**
+ * The answer to `fileRead`: the reference of the stored file and its bytes (`data`, an `ArrayBuffer` of `file.size`
+ * bytes that travels in the transfer list), or the reason it could not be read
+ */
+export type FileDataMessage = Envelope<'fileData'> &
+    (
+        | { requestId: number; ok: true; file: FileReference; data: ArrayBuffer }
+        | { requestId: number; ok: false; code: FileErrorCode; message: string }
+    );
+
+/**
+ * A component gives a stored file back (`releaseFile`), so a field that saves often does not fill the app's quota.
+ * `requestId` is a positive integer the runtime makes; `id` is the file's id from its reference. The host answers with
+ * `fileReleased`
+ */
+export interface FileReleaseMessage extends Envelope<'fileRelease'> {
+    requestId: number;
+    id: string;
+}
+
+/**
+ * The answer to `fileRelease`: `ok: true` when the file is gone, was never there, or is kept by the host because the
+ * app or its live state still references it (the host's sweep removes it once nothing does); otherwise the reason. Not
+ * `fileResult`, whose `ok: true` form carries a file reference
+ */
+export type FileReleasedMessage = Envelope<'fileReleased'> &
+    ({ requestId: number; ok: true } | { requestId: number; ok: false; code: FileErrorCode; message: string });
+
 export type InboundMessage =
     | LoadMessage
     | WriteMessage
     | CommandMessage
     | LocaleMessage
     | ThemeMessage
+    | EventMessage
     | PingMessage
+    | InspectMessage
+    | WatchMessage
     | FileProgressMessage
-    | FileResultMessage;
+    | FileResultMessage
+    | FileDataMessage
+    | FileReleasedMessage;
 export type OutboundMessage =
     | ReadyMessage
-    | SnapshotMessage
+    | ChangeMessage
     | EmitMessage
     | ErrorMessage
     | PongMessage
     | FileMessage
-    | FileCancelMessage;
+    | FileCancelMessage
+    | FileReadMessage
+    | FileReleaseMessage
+    | KeyMessage
+    | InspectedMessage
+    | WatchedMessage;
 export type RuntimeMessage = InboundMessage | OutboundMessage;
