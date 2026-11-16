@@ -225,6 +225,18 @@ describe('readBlueprint external', () => {
             'SUI-BLUEPRINT-SHAPE $.uses.external.other.path'
         ]);
     });
+
+    it("should read another owner's shared dataset by alias", () => {
+        expect(readBlueprint(storeWith('uses.external', { prices: { owner: APP, dataset: 'price-list' } })).errors).toEqual([]);
+    });
+
+    it('should report a shared dataset with an owner that is not an id, a name that is not a dataset name, or an app too', () => {
+        expect(errorsOf(storeWith('uses.external', { a: { owner: 'acme', dataset: 'Prices' }, b: { owner: APP, dataset: 'prices', app: APP } }))).toEqual([
+            'SUI-BLUEPRINT-SHAPE $.uses.external.a.owner',
+            'SUI-BLUEPRINT-SHAPE $.uses.external.a.dataset',
+            'SUI-BLUEPRINT-SHAPE $.uses.external.b.app'
+        ]);
+    });
 });
 
 describe('readBlueprint icons', () => {

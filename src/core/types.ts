@@ -63,8 +63,8 @@ export interface AppDocument {
     icons?: Record<string, AppIcon>;
     /** State paths whose changes reach everyone using the app but are never stored (a pointer, presence); `*` matches one segment */
     ephemeral?: string[];
-    /** Alias to another app's state path it mirrors at `$.external.{alias}` (`uses.external`), read only */
-    external?: Record<string, { app: string; path: string }>;
+    /** Alias to another app's state path, or another owner's shared dataset, it mirrors at `$.external.{alias}` (`uses.external`), read only */
+    external?: Record<string, { app: string; path: string } | { owner: string; dataset: string }>;
 }
 
 /** The top-level keys of a document */

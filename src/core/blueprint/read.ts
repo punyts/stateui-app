@@ -82,13 +82,23 @@ class Reader {
         if (value['external'] !== undefined) this.external(value['external'], `${path}.external`);
     }
 
-    /** Each alias: a key name, to `{ app, path }`, the app an id and the path a state path under one of its roots */
+    /**
+     * Each alias: a key name, to `{ app, path }` (the app an id and the path a state path under one of its roots) or to
+     * `{ owner, dataset }` (another owner's shared dataset: the owner a workspace id and the dataset a part name)
+     */
     external(value: JsonValue, path: string): void {
         if (!this.object(value, path, 'uses.external')) return;
         for (const [alias, use] of Object.entries(value)) {
             const at = `${path}.${alias}`;
             if (!isKeyName(alias)) this.shape(at, `alias "${alias}" must be a key name`);
-            if (!this.object(use, at, 'an external path') || !this.knownKeys(use, ['app', 'path'], at)) continue;
+            if (!this.object(use, at, 'an external path or dataset')) continue;
+            if ('owner' in use || 'dataset' in use) {
+                if (!this.knownKeys(use, ['owner', 'dataset'], at)) continue;
+                if (typeof use['owner'] !== 'string' || !/^[0-9a-fA-F-]{36}$/.test(use['owner'])) this.shape(`${at}.owner`, 'must be the id of the workspace that shared the dataset');
+                if (!isPartName(use['dataset'])) this.shape(`${at}.dataset`, 'must be the name of a dataset');
+                continue;
+            }
+            if (!this.knownKeys(use, ['app', 'path'], at)) continue;
             if (typeof use['app'] !== 'string' || !/^[0-9a-fA-F-]{36}$/.test(use['app'])) this.shape(`${at}.app`, 'must be the id of an app');
             if (typeof use['path'] !== 'string' || !EXTERNAL_PATH.test(use['path'])) this.shape(`${at}.path`, 'must be a state path under $.data, $.screens, $.app or $.route');
         }
