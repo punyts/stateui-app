@@ -24,7 +24,7 @@ import { createFileTransfers } from './fileTransfer.js';
 import { describeNode, nodesAt, nodesOf, rectOf } from './inspect.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { createChunkLoader } from './load3d.js';
-import { INBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { INBOUND_TYPES, MAX_FLOATING, POPOVER_TOGGLE_EVENT, PROTOCOL_VERSION } from './messages.js';
 import type {
     CommandMessage,
     EventMessage,
@@ -549,8 +549,17 @@ export function startRuntime(
         post({ type: 'inspected', id: message.id, nodes: [...found.values()].map((element) => describeNode(element, componentOf)) });
     }
 
-    // The nodes an editor over the frame watches (`watch`): their boxes go out as `watched` when they change
+    // The nodes an editor over the frame watches (`watch`): their boxes go out as `watched` when they change, with the
+    // boxes of the popovers open now (tips, menus, lists), which may lie outside every watched node
     let watched: string[] = [];
+    const floating = new Set<HTMLElement>();
+    win.document.addEventListener(POPOVER_TOGGLE_EVENT, (event) => {
+        const element = event.composedPath()[0];
+        if (!(element instanceof HTMLElement)) return;
+        if ((event as CustomEvent<{ open?: unknown }>).detail?.open === true) floating.add(element);
+        else floating.delete(element);
+        reportWatched();
+    });
     let lastWatched = '';
     let watchFrame = 0;
     const watchResize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => reportWatched()) : undefined;
@@ -566,11 +575,14 @@ export function startRuntime(
                 watchResize.observe(win.document.documentElement);
                 for (const element of found.values()) watchResize.observe(element);
             }
+            for (const element of floating) if (!element.isConnected) floating.delete(element);
+            if (watchResize) for (const element of floating) watchResize.observe(element);
             const nodes = [...found.entries()].map(([path, element]) => ({ path, rect: rectOf(element) }));
-            const text = JSON.stringify(nodes);
+            const popovers = [...floating].slice(0, MAX_FLOATING).map((element) => rectOf(element));
+            const text = JSON.stringify([nodes, popovers]);
             if (text === lastWatched) return;
             lastWatched = text;
-            post({ type: 'watched', nodes });
+            post({ type: 'watched', nodes, ...(popovers.length > 0 && { floating: popovers }) });
         }, 16));
     }
     function watch(message: WatchMessage): void {

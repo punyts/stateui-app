@@ -204,5 +204,8 @@ describe('runtime message validator', () => {
         expect(validateMessage(base('watched', { nodes: [{ path: '$.app', rect }] })).ok).toBe(true);
         expect(validateMessage(base('watched', { nodes: [{ path: '$.app', rect: { x: 0 } }] })).ok).toBe(false);
         expect(validateMessage(base('watched', { nodes: [{ path: '$.app', rect, extra: 1 }] })).ok).toBe(false);
+        expect(validateMessage(base('watched', { nodes: [], floating: [rect] })).ok).toBe(true);
+        expect(validateMessage(base('watched', { nodes: [], floating: [{ x: 0 }] })).ok).toBe(false);
+        expect(validateMessage(base('watched', { nodes: [], floating: Array.from({ length: 17 }, () => rect) })).ok).toBe(false);
     });
 });

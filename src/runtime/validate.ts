@@ -17,7 +17,7 @@ import {
     MAX_WRITES,
     MESSAGE_BYTE_LIMITS
 } from './limits.js';
-import { CHANGE_OPS, FILE_ERROR_CODES, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
+import { CHANGE_OPS, FILE_ERROR_CODES, MAX_FLOATING, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
 import { isAppEvent } from '../core/types.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
 
@@ -304,10 +304,11 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['paths'] === undefined || (Array.isArray(m['paths']) && m['paths'].length <= MAX_INSPECT_NODES && m['paths'].every((path) => isText(path, MAX_PATH_LENGTH)))),
     watch: (m) => hasOnlyKeys(m, ['paths']) && Array.isArray(m['paths']) && m['paths'].length <= MAX_INSPECT_NODES && m['paths'].every((path) => isText(path, MAX_PATH_LENGTH)),
     watched: (m) =>
-        hasOnlyKeys(m, ['nodes']) &&
+        hasOnlyKeys(m, ['nodes', 'floating']) &&
         Array.isArray(m['nodes']) &&
         m['nodes'].length <= MAX_INSPECT_NODES &&
-        m['nodes'].every((node) => isRecord(node) && hasOnlyKeys(node, ['path', 'rect']) && isText(node['path'], MAX_PATH_LENGTH) && isRect(node['rect'])),
+        m['nodes'].every((node) => isRecord(node) && hasOnlyKeys(node, ['path', 'rect']) && isText(node['path'], MAX_PATH_LENGTH) && isRect(node['rect'])) &&
+        (m['floating'] === undefined || (Array.isArray(m['floating']) && m['floating'].length <= MAX_FLOATING && m['floating'].every(isRect))),
     inspected: (m) =>
         hasOnlyKeys(m, ['id', 'at', 'nodes']) &&
         isInteger(m['id']) &&

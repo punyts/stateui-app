@@ -261,6 +261,41 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('watched').length).toBe(2);
     });
 
+    it('should add the box of an open popover to what it tells of the watched nodes, and drop it once closed', async () => {
+        // Arrange
+        send(message('load', { document: { app: { component: 'panel', children: { first: { component: 'label', text: 'one' } } } } as AppDocument }));
+        await tick();
+        const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+        send(message('watch', { paths: ['$.app.children.first'] }));
+        await settle();
+        const shadowHost = document.createElement('div');
+        host.append(shadowHost);
+        const tip = document.createElement('div');
+        tip.setAttribute('popover', 'manual');
+        tip.textContent = 'A tip';
+        shadowHost.attachShadow({ mode: 'open' }).append(tip);
+        const toggle = (open: boolean): void => {
+            tip.dispatchEvent(new CustomEvent('ui-popover-toggle', { bubbles: true, composed: true, detail: { open } }));
+        };
+
+        // Act
+        tip.showPopover();
+        toggle(true);
+        await settle();
+        tip.hidePopover();
+        toggle(false);
+        await settle();
+
+        // Assert
+        const reports = ofType('watched') as unknown as { nodes: unknown[]; floating?: { width: number }[] }[];
+        expect(reports).toHaveLength(3);
+        expect(reports[0]?.floating).toBeUndefined();
+        expect(reports[1]?.floating).toHaveLength(1);
+        expect(reports[1]?.floating?.[0]?.width).toBeGreaterThan(0);
+        expect(reports[1]?.nodes).toHaveLength(1);
+        expect(reports[2]?.floating).toBeUndefined();
+    });
+
     it('should follow the system mode again on a theme message of system', async () => {
         // Arrange
         send(message('load', { document: { app: { component: 'panel' } } as AppDocument }));

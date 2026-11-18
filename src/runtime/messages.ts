@@ -239,9 +239,23 @@ export interface WatchMessage extends Envelope<'watch'> {
     paths: string[];
 }
 
-/** Where the watched nodes are now, each with its box; a node not on screen is left out */
+/**
+ * The event a component's popover raises on itself as it opens and closes (`detail.open`), composed so it leaves every
+ * shadow root; stateui-components' `POPOVER_TOGGLE_EVENT`
+ */
+export const POPOVER_TOGGLE_EVENT = 'ui-popover-toggle';
+
+/** The most popover boxes a `watched` carries */
+export const MAX_FLOATING = 16;
+
+/**
+ * Where the watched nodes are now, each with its box; a node not on screen is left out. `floating` holds the boxes of
+ * the popovers open now (tips, menus, option lists), absent when none is: a page that clips the frame to the watched
+ * nodes adds them so a popover outside the nodes shows
+ */
 export interface WatchedMessage extends Envelope<'watched'> {
     nodes: { path: string; rect: InspectRect }[];
+    floating?: InspectRect[];
 }
 
 /** Raises an app event: `sync.rejected` with the rejected path and the reason as its payload */
