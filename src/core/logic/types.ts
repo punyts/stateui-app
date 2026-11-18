@@ -100,18 +100,31 @@ export interface LogicTransition {
     to?: string;
 }
 
+/**
+ * Where a unit runs in a Full-mode app: `server` (the default) on the app server's authority, `browser` in the
+ * person's page on their own changes. Outside Full mode every unit runs in the browser and `runs` is ignored
+ */
+export type LogicSide = 'server' | 'browser';
+
+/** The sides a unit may name in `runs` */
+export const LOGIC_SIDES: readonly LogicSide[] = ['server', 'browser'];
+
 export interface LogicMachine {
     /** The state path that holds the machine's current state */
     state: string;
     /** The state written when the path has no value */
     initial: string;
     transitions: LogicTransition[];
+    /** Where it runs in a Full-mode app; absent is `server` */
+    runs?: LogicSide;
 }
 
 /** A machine with one state: when the trigger matches, run the commands */
 export interface LogicRule {
     when: LogicTrigger;
     do: LogicCommand[];
+    /** Where it runs in a Full-mode app; absent is `server` */
+    runs?: LogicSide;
 }
 
 /**
@@ -141,6 +154,8 @@ export interface LogicTable {
     inputs: Record<string, LogicTableInput | string>;
     outputs: Record<string, string>;
     rows: LogicTableRow[] | { from: string };
+    /** Where it runs in a Full-mode app; absent is `server` */
+    runs?: LogicSide;
 }
 
 /** An input of a compute unit: a state path or node reference (`{name}` steps capture), or one `{{ … }}` expression */
@@ -156,6 +171,8 @@ export interface LogicCompute {
     /** The name the host registered the function under */
     run: string;
     outputs: Record<string, string>;
+    /** Where it runs in a Full-mode app; absent is `server` */
+    runs?: LogicSide;
 }
 
 /** A compute function: the input values by name (absent for an input with no value) to output values by name */
@@ -186,6 +203,8 @@ export interface LogicEffect {
     value?: string;
     /** How many answers to keep in memory, by token; a request with a kept token refills the window with no call */
     cache?: number;
+    /** Where it runs in a Full-mode app; absent is `server` */
+    runs?: LogicSide;
 }
 
 /** What an effect function answers: records from `first` in the server's order, the total, or a value */

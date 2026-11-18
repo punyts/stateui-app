@@ -528,10 +528,15 @@ server's `logicFunctions`) for the rest. A cell sets a value in state; listeners
 - **All or nothing.** A transition's commands run on a working copy and commit together. A failing command commits
   nothing and raises `logic.failed` (`{ machine, from?, command?, reason }`) on the root node. A machine or rule fires
   at most once per chain, a chain stops at depth 8, and command results start new chains after the current one.
-- **Where it runs.** `mountApp` runs it in the browser for Standalone and Persisted apps, for the store's own
-  (untagged) writes only, so writes that arrive through sync are not run again; logic writes carry the origin
-  `logic` and are synced. A refused change is undone. Full apps run it on the app server's authority
-  (`@punyts/stateui-mcp`). `logicRunOrder(logic)` lists the units in the order the engine runs them, with the paths
+- **Where it runs.** `mountApp` runs it in the browser for Standalone and Persisted apps, every unit, for the
+  store's own (untagged) writes only, so writes that arrive through sync are not run again; logic writes carry the
+  origin `logic` and are synced. A refused change is undone. Full apps run it on the app server's authority
+  (`@punyts/stateui-mcp`), except the units with `runs: "browser"`, which `mountApp` runs in the page on the person's
+  own changes; their writes reach the server as the person's do, so its units and guards run on them. Every unit takes
+  `runs` (`"server"`, the default, or `"browser"`); `logicFor(logic, side)` gives the units of one side. A browser unit
+  may not be a guard (it protects the data, and a browser can be bypassed), an effect (its secrets are on the server),
+  use `call` (the server answers it) or name a `$.server` path (it never reaches a browser): `SUI-LOGIC-RUNS`, with
+  the place and the reason. `logicRunOrder(logic)` lists the units in the order the engine runs them, with the paths
   each reads and writes, for build tools. The engine itself (`createLogicEngine`, `createLogicIndex`, `readLogic`) has no
   environment and runs on any `LogicHost`; the host's `schedule(ms, run)` (returning a cancel function) runs the timers
   and its `call(name, payload)` answers `call` (with none, a call is rejected). Its optional `guard(change)` is asked

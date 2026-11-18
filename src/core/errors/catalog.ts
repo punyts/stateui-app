@@ -225,6 +225,7 @@ export const ERROR_CATALOG = {
     },
     'SUI-LOGIC-FUNCTION': { template: 'Logic at {path} runs the function "{name}", which the host has not registered, so it fails when it runs', severity: 'warning' },
     'SUI-LOGIC-CYCLE': { template: 'Logic at {path} feeds itself ({name}), so it would never settle' },
+    'SUI-LOGIC-RUNS': { template: 'Logic at {path} must run on the server, not in the browser: {reason}' },
     'SUI-LOGIC-TEXT-PATH': {
         template: 'Value {target} at {path} is a text template, so it gives the path as text; use a record source (the key record with the path) to read the value there',
         severity: 'warning'

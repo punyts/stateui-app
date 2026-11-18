@@ -133,13 +133,53 @@ describe('browser logic', () => {
         expect(mounted.store!.get('$.data.stats.count')).toBe(1);
     });
 
-    it('should run no logic in Full mode', async () => {
+    it('should run no logic in Full mode when no unit runs in the browser', async () => {
         const mounted = mount(documentWith(COUNT), 'full');
 
         mounted.store!.set('$.data.items.b', { n: 2 });
         await flush();
 
         expect(mounted.store!.get('$.data.stats.count')).toBe(1);
+    });
+
+    it('should run a browser rule on a person change in Full mode, and not a server rule', async () => {
+        // Arrange
+        const logic = {
+            rules: {
+                local: { runs: 'browser', when: { path: '$.data.items' }, do: [{ command: 'set', target: '$.data.stats.count', value: '{{ size($.data.items) }}' }] },
+                remote: { runs: 'server', when: { path: '$.data.items' }, do: [{ command: 'set', target: '$.data.qty', value: 9 }] },
+                plain: { when: { path: '$.data.items' }, do: [{ command: 'set', target: '^count.text', value: 'server' }] }
+            }
+        };
+        const mounted = mount(documentWith(logic), 'full');
+
+        // Act
+        mounted.store!.set('$.data.items.b', { n: 2 });
+        await flush();
+
+        // Assert
+        expect(mounted.store!.get('$.data.stats.count')).toBe(2);
+        expect(mounted.store!.get('$.data.qty')).toBe(1);
+        expect(mounted.store!.get('$.app.children.count.text')).toBe('');
+    });
+
+    it('should run every unit outside Full mode, whatever its runs says', async () => {
+        // Arrange
+        const logic = {
+            rules: {
+                local: { runs: 'browser', when: { path: '$.data.items' }, do: [{ command: 'set', target: '$.data.stats.count', value: '{{ size($.data.items) }}' }] },
+                remote: { runs: 'server', when: { path: '$.data.items' }, do: [{ command: 'set', target: '$.data.qty', value: 9 }] }
+            }
+        };
+        const mounted = mount(documentWith(logic));
+
+        // Act
+        mounted.store!.set('$.data.items.b', { n: 2 });
+        await flush();
+
+        // Assert
+        expect(mounted.store!.get('$.data.stats.count')).toBe(2);
+        expect(mounted.store!.get('$.data.qty')).toBe(9);
     });
 
     it('should undo a change a guard refuses and raise logic.failed on the root', async () => {

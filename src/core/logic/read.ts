@@ -4,8 +4,8 @@ import { isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { captureNames, compilePattern, expressionPaths, fillCaptures, isStatePath, mayTouch, writeSteps } from './pattern.js';
 import { MAX_TABLE_CELLS, compileTable } from './table.js';
-import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS, MAX_DELAY, MAX_EFFECT_CACHE } from './types.js';
-import type { LogicCommand, LogicCompute, LogicDocument, LogicEffect, LogicFunctions, LogicMachine, LogicRule, LogicTable, LogicTableInput, LogicTableRow, LogicTransition, LogicTrigger } from './types.js';
+import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS, LOGIC_SIDES, MAX_DELAY, MAX_EFFECT_CACHE } from './types.js';
+import type { LogicSide, LogicCommand, LogicCompute, LogicDocument, LogicEffect, LogicFunctions, LogicMachine, LogicRule, LogicTable, LogicTableInput, LogicTableRow, LogicTransition, LogicTrigger } from './types.js';
 import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions, withCaptures } from './values.js';
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
@@ -15,16 +15,30 @@ const LOGIC_ROOTS = ['app', 'data', 'server', 'screens', 'route', 'raised', 'ext
 /** What an app reads of other apps (`uses.external`): logic reads it and runs on it, but never writes it */
 const READ_ONLY_ROOT = '$.external';
 
-const MACHINE_KEYS = ['state', 'initial', 'transitions'];
+const MACHINE_KEYS = ['state', 'initial', 'transitions', 'runs'];
 const TRANSITION_KEYS = ['from', 'when', 'do', 'to'];
-const RULE_KEYS = ['when', 'do'];
-const TABLE_KEYS = ['inputs', 'outputs', 'rows'];
+const RULE_KEYS = ['when', 'do', 'runs'];
+const TABLE_KEYS = ['inputs', 'outputs', 'rows', 'runs'];
 const INPUT_KEYS = ['path', 'value', 'values', 'breaks'];
-const COMPUTE_KEYS = ['inputs', 'run', 'outputs'];
-const EFFECT_KEYS = ['request', 'run', 'status', 'records', 'window', 'value', 'cache'];
+const COMPUTE_KEYS = ['inputs', 'run', 'outputs', 'runs'];
+const EFFECT_KEYS = ['request', 'run', 'status', 'records', 'window', 'value', 'cache', 'runs'];
 const UNIT_KEYS = ['machines', 'rules', 'tables', 'computes', 'effects'] as const;
 const TRIGGER_KEYS = ['path', 'result', 'is', 'was', 'if', 'after', 'debounce'];
 const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** A `$.server` path in a text: a path, a trigger or a `{{ }}` expression */
+const SERVER_PATH = /(^|[^A-Za-z0-9_$.])\$\.server(?![A-Za-z0-9_])/;
+
+/** The place of the first text in `value` that names a `$.server` path; `runs` itself is skipped */
+function serverPathAt(value: JsonValue, path: string): string | undefined {
+    if (typeof value === 'string') return SERVER_PATH.test(value) ? path : undefined;
+    const entries: [string, JsonValue][] = Array.isArray(value) ? value.map((item, index) => [String(index), item]) : isObject(value) ? Object.entries(value) : [];
+    for (const [key, item] of entries) {
+        if (key === 'runs' && !Array.isArray(value)) continue;
+        const found = serverPathAt(item, `${path}.${key}`);
+        if (found !== undefined) return found;
+    }
+    return undefined;
+}
 
 /**
  * Where a trigger is: a machine transition (with the result names of its machine and whether it has `from`), or a rule
@@ -154,6 +168,38 @@ class Reader {
         }
         if (!filled.includes('{{') && !isStatePath(filled)) bad();
         this.templates(text, path);
+    }
+
+    /**
+     * The unit's `runs`: absent, `server` or `browser`. A browser unit may not be a guard, an effect, use `call` or name a
+     * `$.server` path (`SUI-LOGIC-RUNS`, with the reason). Returns the side when it is given and valid
+     */
+    runs(value: JsonValue, path: string, group: (typeof UNIT_KEYS)[number]): LogicSide | undefined {
+        if (!isObject(value) || !Object.hasOwn(value, 'runs')) return undefined;
+        const side = value['runs'];
+        if (typeof side !== 'string' || !(LOGIC_SIDES as readonly string[]).includes(side)) {
+            this.shape(`${path}.runs`, '"runs" must be "server" or "browser"');
+            return undefined;
+        }
+        if (side === 'server') return 'server';
+        const refuse = (at: string, reason: string): void => {
+            this.errors.push(buildError('SUI-LOGIC-RUNS', { path: at, reason, statePath: at }));
+        };
+        if (group === 'effects') refuse(path, "an effect's connection secrets are on the server");
+        const list = value['do'];
+        if (group === 'rules' && Array.isArray(list) && list.length === 1 && isObject(list[0]) && list[0]['command'] === 'reject') {
+            refuse(path, 'a guard protects the data, and a browser can be bypassed');
+        }
+        const transitions = group === 'machines' && Array.isArray(value['transitions']) ? value['transitions'] : [];
+        transitions.forEach((transition, index) => {
+            const commands = isObject(transition) && Array.isArray(transition['do']) ? transition['do'] : [];
+            commands.forEach((command, at) => {
+                if (isObject(command) && command['command'] === 'call') refuse(`${path}.transitions.${index}.do.${at}`, '"call" is answered by the server');
+            });
+        });
+        const server = serverPathAt(value, path);
+        if (server !== undefined) refuse(server, 'it names a $.server path, and $.server never reaches a browser');
+        return 'browser';
     }
 
     delay(value: JsonValue | undefined, path: string): number | undefined {
@@ -652,8 +698,9 @@ function sharedResultNames(root: JsonObject): string[] {
  * and `SUI-LOGIC-EXPRESSION` (an expression that does not compile), each with its state path. A table's rows are
  * compiled: `SUI-LOGIC-GAP` (a combination no row covers), `SUI-LOGIC-UNREACHABLE` and `SUI-LOGIC-SIZE` (warnings),
  * and `SUI-LOGIC-CYCLE` for tables and computes that feed each other; `SUI-LOGIC-FUNCTION` (a warning) for a compute
- * unit or effect whose function `options.functions` does not have. The result keeps only the units without errors, so an engine
- * never runs a broken one
+ * unit or effect whose function `options.functions` does not have; `SUI-LOGIC-RUNS` for a unit with `runs: "browser"` that
+ * is a guard, an effect, uses `call` or names a `$.server` path. The result keeps only the units without errors, so an
+ * engine never runs a broken one
  */
 export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadLogicResult {
     const reader = new Reader(options);
@@ -676,22 +723,13 @@ export function readLogic(value: unknown, options: ReadLogicOptions = {}): ReadL
         }
         for (const [name, entry] of Object.entries(map)) {
             const path = `${root}.${key}.${name}`;
-            if (key === 'machines') {
-                const machine = reader.machine(entry, path);
-                if (machine) (logic.machines ??= {})[name] = machine;
-            } else if (key === 'rules') {
-                const rule = reader.rule(entry, path);
-                if (rule) (logic.rules ??= {})[name] = rule;
-            } else if (key === 'tables') {
-                const table = reader.table(entry, path);
-                if (table) (logic.tables ??= {})[name] = table;
-            } else if (key === 'computes') {
-                const compute = reader.compute(entry, path);
-                if (compute) (logic.computes ??= {})[name] = compute;
-            } else {
-                const effect = reader.effect(entry, path);
-                if (effect) (logic.effects ??= {})[name] = effect;
-            }
+            const before = reader.errors.length;
+            const runs = reader.runs(entry, path, key);
+            const unit = key === 'machines' ? reader.machine(entry, path) : key === 'rules' ? reader.rule(entry, path) : key === 'tables' ? reader.table(entry, path) : key === 'computes' ? reader.compute(entry, path) : reader.effect(entry, path);
+            if (unit === undefined || reader.errors.length !== before) continue;
+            // the machine and rule readers build a new object: `runs` is carried over
+            const kept = runs === undefined ? unit : { ...unit, runs };
+            ((logic[key] ??= {}) as Record<string, typeof kept>)[name] = kept;
         }
     }
     const declared: DeclaredUnit[] = (['tables', 'computes'] as const).flatMap((kind) =>

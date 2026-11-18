@@ -1,7 +1,7 @@
 import { report } from '@punyts/core';
 import type { Store } from '@punyts/state';
-import { LOGIC_FAILED_EVENT, LOGIC_ORIGIN, NOTIFY_PREFIX, createLogicEngine, createLogicIndex, readLogic } from '../../core/logic/index.js';
-import type { LogicChange, LogicFunctions, LogicHost, LogicWrite } from '../../core/logic/index.js';
+import { LOGIC_FAILED_EVENT, LOGIC_ORIGIN, NOTIFY_PREFIX, createLogicEngine, createLogicIndex, logicFor, readLogic } from '../../core/logic/index.js';
+import type { LogicChange, LogicFunctions, LogicHost, LogicSide, LogicWrite } from '../../core/logic/index.js';
 import type { ResolvedTree } from '../../core/on/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
@@ -26,6 +26,8 @@ export interface BrowserLogicOptions {
     emit?(name: string, payload: JsonValue): void;
     /** The compute and expression functions the host registered */
     functions?: LogicFunctions;
+    /** Runs only the units of this side (`logicFor`): `browser` in a Full-mode app. Absent runs every unit, `runs` ignored */
+    side?: LogicSide;
 }
 
 /** A plain copy of what the store holds, which may be a proxy */
@@ -36,15 +38,17 @@ function plain(value: unknown): JsonValue | undefined {
 }
 
 /**
- * Runs the document's logic in the browser, for Standalone and Persisted apps. Only the store's own writes (untagged:
+ * Runs the document's logic in the browser: every unit for Standalone and Persisted apps, the browser units for Full
+ * ones. Only the store's own writes (untagged:
  * the user, components and `on` commands) are looked up; host and sync writes carry an origin and are skipped, so
  * several open windows of one app run each transition once. The logic's writes carry the origin `logic`, which the
  * runtime's sync capture sends and this capture skips, since the engine runs chains itself.
  *
  * A guard that refuses a change undoes it (the value before the turn is written back) and raises `logic.failed`.
  * Writes are batched to a microtask like the sync capture. Timers (`after`, `debounce`) use `setTimeout` and live as
- * long as the mount; `call` is never answered in the browser. Returns the function that stops it and its timers;
- * undefined when the document has no logic
+ * long as the mount; `call` is never answered in the browser. With `side` it runs only that side's units (a Full-mode
+ * app's browser units). Returns the function that stops it and its timers; undefined when the document has no logic,
+ * or no unit of the side
  */
 export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | undefined {
     const { store, document } = options;
@@ -61,7 +65,9 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
             return typeof screen === 'string' ? screen : undefined;
         }
     });
-    const { logic } = readLogic(document.logic, { resolve: index.resolve, ...(options.functions ? { functions: options.functions } : {}) });
+    const { logic: valid } = readLogic(document.logic, { resolve: index.resolve, ...(options.functions ? { functions: options.functions } : {}) });
+    const logic = options.side === undefined ? valid : logicFor(valid, options.side);
+    if (Object.keys(logic).length === 0 && options.side !== undefined) return undefined;
 
     /**
      * While a guard looks at a change the store already holds, the value the change replaced: a guard judges what

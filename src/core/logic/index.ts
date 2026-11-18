@@ -14,12 +14,14 @@ export type { InstantiateModuleOptions, InstantiateModuleResult, ReadModuleResul
 export { queryRecords } from './query.js';
 export type { RecordQuery, RecordQueryResult } from './query.js';
 export { readLogic, tableReads } from './read.js';
+export { logicFor } from './side.js';
 export type { ReadLogicOptions, ReadLogicResult } from './read.js';
 export {
     LOGIC_COMMANDS,
     LOGIC_COMMAND_KEYS,
     LOGIC_FAILED_EVENT,
     LOGIC_ORIGIN,
+    LOGIC_SIDES,
     MAX_CHAIN_DEPTH,
     MAX_DELAY,
     MAX_EFFECT_CACHE,
@@ -36,6 +38,7 @@ export type {
     LogicMachine,
     LogicResult,
     LogicRule,
+    LogicSide,
     LogicTable,
     LogicTableInput,
     LogicCompute,

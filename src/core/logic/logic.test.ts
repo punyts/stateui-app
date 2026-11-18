@@ -814,7 +814,7 @@ describe('readLogic', () => {
         // Assert
         const error = result.errors.find((found) => found.statePath === '$.logic.rules.r.zz');
         expect(error?.code).toBe('SUI-LOGIC-SHAPE');
-        expect(error?.message).toBe('Logic at $.logic.rules.r.zz is not valid: unknown key "zz" (the keys here are "when", "do")');
+        expect(error?.message).toBe('Logic at $.logic.rules.r.zz is not valid: unknown key "zz" (the keys here are "when", "do", "runs")');
     });
 });
 

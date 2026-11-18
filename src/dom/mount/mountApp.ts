@@ -172,9 +172,10 @@ function stepError(name: string): BuildError {
  * `standalone` or `connecting`; the host writes later statuses. `raise` runs the root node's `on` entry for an app
  * event (`sync.rejected`).
  *
- * Outside Full mode the document's `logic` runs in the browser (`startBrowserLogic`): machines and rules look up the
- * store's own writes, and their failures and `notify` events reach the root node's `on` as `logic.failed` and
- * `notify.<name>`. In Full mode the app server runs it.
+ * Outside Full mode the document's `logic` runs in the browser (`startBrowserLogic`), every unit whatever its `runs`:
+ * machines and rules look up the store's own writes, and their failures and `notify` events reach the root node's `on`
+ * as `logic.failed` and `notify.<name>`. In Full mode the app server runs the server units and the browser runs only
+ * the units with `runs: "browser"` (`logicFor`), none when there are none.
  *
  * `dispose` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and the node resolver
  * and options, so a second `mountApp` on a fresh host starts clean
@@ -334,20 +335,19 @@ export function mountApp(
     };
     let stopLogic: (() => void) | undefined;
     try {
-        stopLogic =
-            mode === 'full'
-                ? undefined
-                : startBrowserLogic({
-                      store: store as never,
-                      document,
-                      library,
-                      tree: resolved,
-                      raise: (name, payload) => {
-                          if (!disposed) dispatcher.raise(name as AppEventName, payload);
-                      },
-                      emit: (name, payload) => hooks.onEmit?.(name, payload),
-                      ...(options.logicFunctions ? { functions: options.logicFunctions } : {})
-                  });
+        // A Full-mode app runs its server units on the authority and its browser units (`runs: "browser"`) here
+        stopLogic = startBrowserLogic({
+            store: store as never,
+            document,
+            library,
+            tree: resolved,
+            raise: (name, payload) => {
+                if (!disposed) dispatcher.raise(name as AppEventName, payload);
+            },
+            emit: (name, payload) => hooks.onEmit?.(name, payload),
+            ...(options.logicFunctions ? { functions: options.logicFunctions } : {}),
+            ...(mode === 'full' ? { side: 'browser' as const } : {})
+        });
     } catch (error) {
         report.error('mountApp could not start the logic', { reason: String(error) });
     }
