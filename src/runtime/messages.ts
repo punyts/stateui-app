@@ -116,7 +116,9 @@ export interface RuntimeChunks {
  * Mounts the application: the document, the state to load over it, the icons it uses beyond the core set and the
  * mode (`standalone` when absent). `instance` is a persona's instance, laid over the definition as `mountApp` lays
  * `MountOptions.instance` (the app node, the screens, the data and the route), and `chunks` names the chunk scripts the
- * host serves beside the runtime page
+ * host serves beside the runtime page. `active` (theme overlays by kind, as `theme` messages name them), `locale` and
+ * `open` (a screen to navigate to) are applied in the same task as the mount, so the first frame painted already shows
+ * them; the theme and the language are the host's view and are not reported as changes
  */
 export interface LoadMessage extends Envelope<'load'> {
     document: AppDocument;
@@ -132,6 +134,9 @@ export interface LoadMessage extends Envelope<'load'> {
      * The app never sees a chord the host names: the runtime posts `key` instead
      */
     keys?: string[];
+    active?: Record<string, string>;
+    locale?: string;
+    open?: { screen: string; params?: JsonValue };
 }
 
 /** Path writes for `$.data` and `$.app`, with the icons the new revision uses for the first time */

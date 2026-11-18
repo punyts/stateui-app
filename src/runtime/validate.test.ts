@@ -15,6 +15,7 @@ describe('runtime message validator', () => {
         base('load', { document: { app: { component: 'panel' } }, mode: 'full' }),
         base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '0123456789abcdef' } }),
         base('load', { document: { app: { component: 'panel' } }, chunks: {} }),
+        base('load', { document: { app: { component: 'panel' } }, active: { mode: 'dark', brand: 'acme' }, locale: 'de-CH', open: { screen: 'detail', params: { id: 'd1' } } }),
         base('load', {
             document: { app: { component: 'panel' } },
             instance: { app: {}, screens: { home: {} }, route: { screen: 'home', params: { id: 'p1' } }, theme: { active: { mode: 'dark' } }, data: { bag: {} } }
@@ -53,6 +54,10 @@ describe('runtime message validator', () => {
         ['no nonce', { v: 1, type: 'ping', id: 1 }],
         ['extra field', base('ping', { id: 1, more: true })],
         ['load without app', base('load', { document: {} })],
+        ['load with an active name that is not text', base('load', { document: { app: { component: 'panel' } }, active: { mode: 1 } })],
+        ['load with a locale that is not a language tag', base('load', { document: { app: { component: 'panel' } }, locale: 'not a tag' })],
+        ['load opening a screen without a name', base('load', { document: { app: { component: 'panel' } }, open: { params: {} } })],
+        ['load opening a screen with another field', base('load', { document: { app: { component: 'panel' } }, open: { screen: 'a', at: 1 } })],
         ['load with a chunk hash that is too short', base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '0123456789abcde' } })],
         ['load with an upper-case chunk hash', base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '0123456789ABCDEF' } })],
         ['load with a chunk path', base('load', { document: { app: { component: 'panel' } }, chunks: { '3d': '../0123456789abcd' } })],

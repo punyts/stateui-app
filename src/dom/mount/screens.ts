@@ -63,8 +63,12 @@ function setShown(element: HTMLElement, shown: boolean): void {
     element.style.display = shown ? 'contents' : 'none';
 }
 
-/** Moves focus to a screen that was switched to, so keyboard and screen-reader users start at its content */
+/**
+ * Moves focus to a screen that was switched to, so keyboard and screen-reader users start at its content. Only while the
+ * app's document has focus: a switch the page around a frame asked for leaves focus where the person is.
+ */
 function focusScreen(element: HTMLElement): void {
+    if (!element.ownerDocument.hasFocus()) return;
     const target = element.firstElementChild as HTMLElement | null;
     if (target === null) return;
     if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');

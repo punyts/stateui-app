@@ -222,20 +222,37 @@ describe('screens in mountApp', () => {
         ]);
     });
 
-    it('should move focus to a screen that is switched to, and not to the first one', () => {
+    it('should move focus to a screen that is switched to while the document has focus, and not to the first one', () => {
         // Arrange
         const { app, host } = start();
         const first = document.activeElement;
+        const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
 
         // Act
         app.navigate('product', { id: 'p2' });
 
         // Assert
+        hasFocus.mockRestore();
         expect(first).toBe(document.body);
         const product = findAll(host, 'sui-node').find((node) => node.getAttribute(SCREEN_ATTRIBUTE) === 'product') as Element;
         const root = product.firstElementChild as HTMLElement;
         expect(root.getAttribute('tabindex')).toBe('-1');
         expect(root.matches(':focus')).toBe(true);
+    });
+
+    it('should leave focus alone when the switch comes while the document does not have focus', () => {
+        // Arrange
+        const { app, host } = start();
+        const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+        // Act
+        app.navigate('product', { id: 'p2' });
+
+        // Assert
+        hasFocus.mockRestore();
+        const product = findAll(host, 'sui-node').find((node) => node.getAttribute(SCREEN_ATTRIBUTE) === 'product') as Element;
+        expect((product.firstElementChild as HTMLElement).matches(':focus')).toBe(false);
+        expect(document.activeElement).toBe(document.body);
     });
 
     it('should write and remove nodes below a screen root, and refuse paths outside the app and the screens', () => {

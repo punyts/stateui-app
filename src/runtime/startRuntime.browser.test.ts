@@ -847,6 +847,33 @@ describe('startRuntime in Chromium', () => {
             expect(ofType('error')).toHaveLength(0);
         });
 
+        it('should mount with the mode, the language and the screen a load names, before it is ready, and report no change of the mode or the language', async () => {
+            // Arrange
+            const document = {
+                app: { component: 'app' },
+                screens: {
+                    home: { root: panel({ title: { component: 'heading' } }) },
+                    detail: { root: panel({ name: { component: 'heading', _text: 'Detail' } }), locales: { de: { children: { name: { _text: 'Einzelheit' } } } } }
+                },
+                start: 'home'
+            } as unknown as AppDocument;
+            const surface = (): string => getComputedStyle(appRoot()).getPropertyValue('--ui-color-surface-base').trim();
+
+            // Act
+            send(message('load', { document, active: { mode: 'dark' }, locale: 'de', open: { screen: 'detail' } }));
+            const atReady = surface();
+            await tick();
+
+            // Assert
+            expect(atReady).toBe('#09090b');
+            expect(textOf(host)).toContain('Einzelheit');
+            const changed = ofType('change').map((entry) => (entry['change'] as { path: string }).path);
+            expect(changed.filter((path) => path.startsWith('$.theme') || path.startsWith('$.locale'))).toEqual([]);
+            expect(changed.some((path) => path.startsWith('$.route'))).toBe(true);
+            expect(ofType('ready')).toHaveLength(1);
+            expect(ofType('error')).toHaveLength(0);
+        });
+
         it('should change the text content with a locale overlay and leave $.data unchanged', async () => {
             // Arrange
             send(message('load', { document: modalDoc() }));

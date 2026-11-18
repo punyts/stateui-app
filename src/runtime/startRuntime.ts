@@ -433,7 +433,14 @@ export function startRuntime(
             return;
         }
         mounted = app;
+        // Before anything paints and before changes are reported: the host's theme and language are its view, not edits
+        for (const [kind, name] of Object.entries(message.active ?? {})) theme({ type: 'theme', kind, name } as ThemeMessage);
+        if (message.locale !== undefined) locale({ type: 'locale', locale: message.locale } as LocaleMessage);
         startCapture(app.store);
+        if (message.open !== undefined) {
+            const { screen, params } = message.open;
+            command({ type: 'command', target: screen, command: 'navigate', ...(params !== undefined && { value: params }) } as CommandMessage);
+        }
         scheduleRelease();
         if (app.errors.length > 0) postErrors(app.errors);
         post({ type: 'ready' });

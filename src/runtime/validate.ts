@@ -43,6 +43,9 @@ const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
  * `mod` (a bare key such as `v`, or `shift+s`) goes to the host only while the person is not typing
  */
 export const KEY_CHORD = /^(mod\+)?(shift\+)?(alt\+)?([a-z0-9=-]|escape)$/;
+/** The most theme kinds a `load` names in `active` */
+const MAX_ACTIVE = 8;
+
 /** The most key chords a `load` names */
 export const MAX_KEYS = 16;
 
@@ -233,10 +236,31 @@ function isInspectedNode(value: unknown): boolean {
     );
 }
 
+function isLocale(value: unknown): boolean {
+    return typeof value === 'string' && value.length <= MAX_NAME_LENGTH && LOCALE.test(value);
+}
+
+/** The `active` of a `load`: theme overlay names by kind, a few at most */
+function isActive(value: unknown): boolean {
+    if (!isRecord(value)) return false;
+    const entries = Object.entries(value);
+    return entries.length <= MAX_ACTIVE && entries.every(([kind, name]) => isText(kind, MAX_NAME_LENGTH) && isText(name, MAX_NAME_LENGTH));
+}
+
+/** The `open` of a `load`: a screen name and its params */
+function isOpen(value: unknown): boolean {
+    return (
+        isRecord(value) &&
+        Object.keys(value).every((key) => key === 'screen' || key === 'params') &&
+        isText(value['screen'], MAX_NAME_LENGTH) &&
+        (value['params'] === undefined || isJson(value['params']))
+    );
+}
+
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
-        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks', 'keys']) &&
+        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks', 'keys', 'active', 'locale', 'open']) &&
         (m['mode'] === undefined || MODES.includes(m['mode'] as string)) &&
         isJsonObject(m['document']) &&
         isRecord(m['document']['app']) &&
@@ -244,7 +268,10 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['instance'] === undefined || isInstance(m['instance'])) &&
         (m['icons'] === undefined || isIconsMap(m['icons'])) &&
         (m['chunks'] === undefined || isChunks(m['chunks'])) &&
-        (m['keys'] === undefined || (Array.isArray(m['keys']) && m['keys'].length <= MAX_KEYS && m['keys'].every(isKeyChord))),
+        (m['keys'] === undefined || (Array.isArray(m['keys']) && m['keys'].length <= MAX_KEYS && m['keys'].every(isKeyChord))) &&
+        (m['active'] === undefined || isActive(m['active'])) &&
+        (m['locale'] === undefined || isLocale(m['locale'])) &&
+        (m['open'] === undefined || isOpen(m['open'])),
     write: (m) =>
         hasOnlyKeys(m, ['writes', 'icons']) &&
         Array.isArray(m['writes']) &&
@@ -256,7 +283,7 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         isText(m['target'], MAX_PATH_LENGTH) &&
         isText(m['command'], MAX_NAME_LENGTH) &&
         (m['value'] === undefined || isJson(m['value'])),
-    locale: (m) => hasOnlyKeys(m, ['locale']) && typeof m['locale'] === 'string' && m['locale'].length <= MAX_NAME_LENGTH && LOCALE.test(m['locale']),
+    locale: (m) => hasOnlyKeys(m, ['locale']) && isLocale(m['locale']),
     theme: (m) => hasOnlyKeys(m, ['kind', 'name']) && isText(m['kind'], MAX_NAME_LENGTH) && isText(m['name'], MAX_NAME_LENGTH),
     event: (m) =>
         hasOnlyKeys(m, ['name', 'payload']) &&
