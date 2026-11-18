@@ -9,8 +9,10 @@ const FUNCTION_COLOR = new RegExp(
     'i'
 );
 const DIMENSION = new RegExp(`^${NUMBER}(?:px|rem|%)$`);
+/** Viewport units, with the dynamic, small and large ones (`100dvh` follows a phone browser's toolbar as it shows and hides) */
+const VIEWPORT_UNITS = '[dsl]?v[wh]|vmin|vmax';
 /** A viewport length, allowed only inside `calc()`, `clamp()`, `min()` and `max()`, so a size can follow the screen */
-const VIEWPORT = new RegExp(`^${NUMBER}(?:vw|vh|vmin|vmax)$`);
+const VIEWPORT = new RegExp(`^${NUMBER}(?:${VIEWPORT_UNITS})$`);
 const MATH_FUNCTION = /^(?:clamp|min|max)\(/;
 const PLAIN_NUMBER = new RegExp(`^${NUMBER}$`);
 const DURATION = new RegExp(String.raw`^[+]?(?:\d+\.?\d*|\.\d+)(?:ms|s)$`);
@@ -79,7 +81,7 @@ function isCalc(text: string): boolean {
             index += 1;
             return true;
         }
-        const match = new RegExp(`^${NUMBER}(?:px|rem|%|vw|vh|vmin|vmax)?`).exec(source.slice(index));
+        const match = new RegExp(`^${NUMBER}(?:px|rem|%|${VIEWPORT_UNITS})?`).exec(source.slice(index));
         if (match === null) return false;
         index += match[0].length;
         return true;
