@@ -3,6 +3,7 @@ import type { ResolvedTree } from '../on/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import type { Shape } from '../shape/index.js';
 import type { AppDocument, Node } from '../types.js';
+import type { FunctionLookup } from '../logic/types.js';
 
 /** The result of `validateDocument`: `valid` is true when no error has severity `"error"` (warnings are allowed) */
 export interface DocumentValidation {
@@ -39,6 +40,12 @@ export interface ValidateDocumentOptions {
      * refused in every mode (`SUI-LINK-SERVER`)
      */
     mode?: AppMode;
+    /**
+     * The functions the server runs on either side (`new FunctionTable(catalogs)`). With it a unit or an expression that
+     * names another function path is `SUI-LOGIC-FUNCTION` (a warning), and a compute that does not fit its function's
+     * schemas is `SUI-LOGIC-FUNCTION-FIT`
+     */
+    functions?: FunctionLookup;
 }
 
 /** How an app keeps its state: browser only, the statenet without server logic, or an app server */
@@ -54,6 +61,8 @@ export interface DocumentValidationContext {
     screens?: Readonly<Record<string, ResolvedTree>>;
     /** The `hasToken` option of `validateDocument`, when the caller gave one (as it gives `isIconName`) */
     hasToken?(name: string): boolean;
+    /** The `functions` option of `validateDocument`, when the caller gave one */
+    functions?: FunctionLookup;
 }
 
 /** A plug-in check: returns its errors, each with a state path. It may throw; the run reports that as `SUI-DOC-VALIDATOR` */

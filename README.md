@@ -435,8 +435,8 @@ throws to fail. The dispatcher does not search closed shadow roots.
 The `logic` root of a document holds **machines** and **rules** that act on state changes with built-in commands, lookup
 **tables** and **computes** that derive values, and **effects** that do async work, so a Save button saves, a count follows
 its records and a list pages through a server without an agent in the loop. Logic has three tiers: tables for quick
-lookups, `{{ }}` expressions for small scripts, and code the host registers (`mountApp`'s `logicFunctions`, the app
-server's `logicFunctions`) for the rest. A cell sets a value in state; listeners (rules, tables, computes, effects) react.
+lookups, `{{ }}` expressions for small scripts, and functions the operator installs, named by path (`$.functions.<group>.<name>`,
+see Functions below) for the rest. A cell sets a value in state; listeners (rules, tables, computes, effects) react.
 
 ```json
 "logic": {
@@ -483,22 +483,22 @@ server's `logicFunctions`) for the rest. A cell sets a value in state; listeners
     "outputs": { "fee": "$.data.order.shipping" },
     "rows": [ { "country": "NL", "total": ">=50", "fee": 0 }, { "fee": 5 } ] }
   ```
-- **Computes.** `computes.<name>` (`{ inputs, run, outputs }`) runs a synchronous function of the host's `compute`
-  functions on its inputs (by name) and writes the fields of its answer to the outputs, in the chain like a table. An
-  unregistered `run` is the warning `SUI-LOGIC-FUNCTION`; the host's `expressions` functions are callable from `{{ }}`.
-- **Effects.** `effects.<name>` (`{ request, run, status, records?: { into, key }, window?, value?, cache? }`) runs an
-  async function of the host's `effects` (`(request, { signal }) => Promise<{ first?, records?, total?, value? }>`)
+- **Computes.** `computes.<name>` (`{ inputs, run, outputs }`) runs the synchronous compute function at the path
+  `run` on its inputs and writes the fields of its answer to the outputs, in the chain like a table. A
+  `run` the server does not run is the warning `SUI-LOGIC-FUNCTION`; expression functions are callable by path from `{{ }}`.
+- **Effects.** `effects.<name>` (`{ request, run, status, records?: { into, key }, window?, value?, cache? }`) runs the
+  async effect function at the path `run` (`(request, { signal }) => Promise<{ first?, records?, total?, value? }>`)
   whenever the value at `request` changes. The request's token is a hash of its value (`requestToken`), so equal
   requests share it; a new token aborts the running call and drops its answer. `status` holds `{ token, state:
   loading | ready | error, total?, reason?, at }`. An answer commits at once: its records merge into the data map
   `records.into` (under `$.data` or `$.server`) by their `key`, the `window` (a list node or a data path) gets them keyed
   by position from `first` with its `total`, and `value` goes to `value`. A later change to a record rewrites the window
   rows that show it. `cache: n` keeps the last n answers by token, so going back to a page refills the window from the
-  records map with no call. Removing the request makes the status `idle`. With no function registered the host's
+  records map with no call. Removing the request makes the status `idle`. With no function at the path the host's
   `effect(request, signal)` answers (the MCP server asks its agent); with neither, the status is an error. Effects run
   after a chain settles, never inside one, and `engine.effects()` reports each one's token, running call and cache size.
   ```json
-  "fetchOrders": { "request": "$.data.orders.request", "run": "orders.fetch", "status": "$.data.orders.status",
+  "fetchOrders": { "request": "$.data.orders.request", "run": "$.functions.host.ordersFetch", "status": "$.data.orders.status",
     "records": { "into": "$.data.orders.records", "key": "id" }, "window": "^orderList", "cache": 20 }
   ```
 - **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
@@ -665,6 +665,28 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   of their own, and a dot would read as a path step in `$.logic.rules.cart:totals`). The units join the app's in one
   `LogicDocument` and take their place in the run order like any other.
 
+### Functions (hard IP)
+Code is named by a state path, as data is (`docs/design/stateui-hard-ip.md`). A function of the host or another catalog
+is at `$.functions.<group>.<name>` (the host's group is `host`), and a component's at
+`$.components.<component>.functions.<name>`. The value at the path is a pointer, `{ fn: <GUID> }`; it is provided by the
+runtime from the catalogs the operator installed, never stored in an app's state and never synced.
+- **Catalogs.** A `FunctionCatalog` is `{ name, entries, load(id) }`: each `FunctionEntry` has `id` (a GUID kept for
+  the function's life), `path`, `kind` (`compute`, `expression` or `effect`), `runs` (`server`, `browser`), `summary`,
+  `inputs` and `outputs` (JSON schemas), and `load` gives the code, at once or as a promise (a lazy chunk).
+  `hostCatalog({ name: HostFunction })` makes the host's catalog; `catalogOf(name, functions)` makes one from loaded
+  functions. Two catalogs that claim one path or one GUID are refused.
+- **`FunctionTable(catalogs, side?)`** holds the entries of one side (all of them without a side, as the validator sees
+  them): `entry(path)`, `has(path, kind)`, `prepare(paths)` (loads the code of the named functions; a promise when a
+  catalog loads lazily), `compute`, `expression` and `effect` (the loaded code by path), `pointer(path)` and `entries()`.
+  `functionPaths(value)` lists the function paths a document or unit names, `isFunctionPath(path)` tells one.
+- **Naming one.** A compute's or effect's `run` is a path (`"run": "$.functions.host.moneyFormat"`), and an expression
+  calls an expression function by path (`{{ $.functions.host.ridgelineNew(seed) }}`), through the expression library's
+  `callable`. The validator warns `SUI-LOGIC-FUNCTION` for a path the server does not run, and `SUI-LOGIC-FUNCTION-FIT`
+  refuses a unit whose inputs or outputs do not fit the function's schemas.
+- **Loading.** `mountApp` (`MountOptions.functions`, the catalogs) loads the functions the document names that run in
+  the browser before its logic starts, effects included. A function named only inside a node's template is not loaded
+  by the mount; one the logic also names is.
+
 ## Starting an application: `mountApp`
 
 `mountApp(host, document, library, hooks?)` is the single entry point (`src/dom/mount/`, exported from
@@ -787,7 +809,7 @@ Code is in `src/runtime/`. `protocol` holds the closed set of messages and the v
 
 **`validateMessage(value)`** returns `{ ok: true, message }` or `{ ok: false, reason }`. The reason is `invalid` (not an object of the protocol, wrong version, no nonce, a wrong or extra field, a write or change outside the paths above or through `__proto__`, a change to `$.runtime`, an `event` that is not an app event), `unknown` (a type outside the set) or `oversized` (over `MESSAGE_BYTE_LIMITS` for its type, or not serialisable). It does not compare the nonce. Limits (`limits.ts`): load 3 MiB, write and change 512 KiB, event, emit, error and command 64 KiB, the small types 1 KiB; 500 writes per message; 50 errors per error message. The `icons` map (`isIconsMap`) has at most 256 icons named in lower-case words, each `{ outline, filled? }` with at most 32 paths of at most 8 KiB, only SVG path data characters, and at most 256 KiB in all.
 
-**`startRuntime(window, parent, nonce, library, { host?, componentOverlays?, route? })`** listens for `message` events and acts only when `event.source === parent` (pass `window.parent`), the message validates and carries the nonce. Everything else is dropped and counted in `handle.stats().dropped` (`invalid`, `unknown`, `oversized`, `unhandled`, `foreign`). `host` defaults to `window.document.body`. `route` (false by default) is `MountOptions.route` for the apps it mounts: the runtime runs in a frame, where a history entry would also move the host page's back button, and the frame's fragment holds the nonce.
+**`startRuntime(window, parent, nonce, library, { host?, componentOverlays?, route?, functions? })`** listens for `message` events and acts only when `event.source === parent` (pass `window.parent`), the message validates and carries the nonce. Everything else is dropped and counted in `handle.stats().dropped` (`invalid`, `unknown`, `oversized`, `unhandled`, `foreign`). `host` defaults to `window.document.body`. `route` (false by default) is `MountOptions.route` for the apps it mounts: the runtime runs in a frame, where a history entry would also move the host page's back button, and the frame's fragment holds the nonce. `functions` are the catalogs it installs (`MountOptions.functions`).
 - `load` calls `mountApp` in the message's `mode` (default `standalone`; a running app is disposed first), which sets `$.runtime.sync` to `{ mode, status, waiting: 0 }` (status `standalone`, or `connecting` until the host writes it). The `state` is applied (its `data` replaces `$.data` whole, as it is a copy of it; its `app` articulation is laid over the document) and `icons` written to `$.runtime.icons` before the first render; articulation values for nodes that no longer exist and for runtime properties are skipped, and a declared property the document leaves unset (the `items` and `total` logic fills into a list) is set. In the same task, before anything paints, it applies `active` (theme overlays by kind, as a `theme` message would, but not reported as changes) and `locale`, and then navigates to `open` (`{ screen, params? }`), a route change it reports. Then it posts `ready`. A document that does not mount posts `error` with the errors and no `ready`.
 - `write` sets or removes the paths and merges `icons`. A value that is a whole node (an object with a `component`) below `$.app` is mounted as a load would mount it (`MountedApp.writeNode`): component defaults and composed components resolved, its `<-` links applied with `^name` references resolved against the whole app, and the links of the node it replaces removed; removing a node removes its links (`removeNode`). To swap a component or change a link, write the node whole: a `component` or `<-` key written on its own is a plain store write. Writes are sync writes (`SYNC_ORIGIN` of `@punyts/state-sync`): they post no `change`. A write the store refuses posts `SUI-RUN-WRITE`. The host's sync client writes the server's changes and the sync status this way.
 - `event` raises an app event (`sync.rejected`, from the sync client's `onRejected`) with `MountedApp.raise`: the root node's `on` entry for it runs with the payload as `context.payload`, so `{ command: 'emit', target: 'rejected' }` passes `{ path, reason }` on. `validateOn` accepts the app events on the root node only.
@@ -814,7 +836,7 @@ Code is in `src/runtime/`. `protocol` holds the closed set of messages and the v
 ### Runtime bundle
 
 `runtime-bundle/` builds the one script the preview page loads (E7.2); it is not part of `dist/` output of `tsc` and not exported as code.
-- `entry.ts` bundles StateUI, this package, `@punyts/stateui-components` (registered with `register(window)`, its `catalog.json` turned into the library with `libraryFromCatalog`) and every component locale overlay (`<name>.locale.<code>.json`, through the virtual module `virtual:component-overlays`, passed as `componentOverlays`). It reads the per-load nonce from the URL fragment (`page.html#<nonce>`, 16 to 128 of `A-Za-z0-9_-`) and calls `startRuntime(window, window.parent, nonce, library, { componentOverlays })`. Without a well-formed nonce nothing starts.
+- `entry.ts` bundles StateUI, this package, `@punyts/stateui-components` (registered with `register(window)`, its `catalog.json` turned into the library with `libraryFromCatalog`) and every component locale overlay (`<name>.locale.<code>.json`, through the virtual module `virtual:component-overlays`, passed as `componentOverlays`). It reads the per-load nonce from the URL fragment (`page.html#<nonce>`, 16 to 128 of `A-Za-z0-9_-`) and calls `startRuntime(window, window.parent, nonce, library, { componentOverlays, functions: [COMPONENT_FUNCTIONS] })`, the components' functions from `@punyts/stateui-components/functions`. Without a well-formed nonce nothing starts.
 - `npm run build:runtime-bundle` type-checks the folder, bundles with esbuild (one minified classic script, `iife`, ES2022) and writes `dist/runtime-bundle/<hash>.js` and `manifest.json` (`{ hash, script, components }`, the last the catalog component names it was built with), removing the files of earlier builds. `<hash>` is the first 16 hex digits of the SHA-256 of the script, so the name changes when the source does. The package export `@punyts/stateui-app/runtime-bundle/*` maps to that folder; stateui-mcp's preview host reads the manifest through it. It needs `@punyts/stateui-components` built, so it is not part of this package's `npm run build`: the workspace root's `npm run build` (and `mcp:build`, `ui:build`, `magnetic:build`) runs it after building every library.
 - `buildRuntimeBundle({ entry, outDir })` (`build.ts`) is the function behind the script.
 

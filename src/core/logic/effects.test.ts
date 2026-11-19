@@ -4,6 +4,7 @@ import type { JsonObject, JsonValue } from '../types.js';
 import { canonicalJson, requestToken } from './effects.js';
 import { createLogicEngine, logicRunOrder, readLogic } from './index.js';
 import type { LogicDocument, LogicEffectAnswer, LogicEffectFunction, LogicFailure, LogicHost, LogicWrite } from './index.js';
+import { hostFunctions } from '../functions/fixtures/hostFunctions.js';
 
 function walk(state: JsonValue, path: string): JsonValue | undefined {
     let current: JsonValue | undefined = state;
@@ -66,7 +67,7 @@ const ORDERS: LogicDocument = Object.freeze({
     effects: {
         fetchOrders: {
             request: '$.data.orders.request',
-            run: 'orders.fetch',
+            run: '$.functions.host.ordersFetch',
             status: '$.data.orders.status',
             records: { into: '$.data.orders.records', key: 'id' },
             window: '$.screens.main.grid',
@@ -89,7 +90,7 @@ describe('createLogicEngine: effects', () => {
     it('should start on a request and commit the records, the window and the status together', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: { key: 'ref' } } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: { key: 'ref' } } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(ORDERS, memory.host);
         engine.start();
 
@@ -124,7 +125,7 @@ describe('createLogicEngine: effects', () => {
     it('should abort the running call for a new request and drop its late answer', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(ORDERS, memory.host);
         engine.start();
         change(memory, engine, '$.data.orders.request', { first: 0 });
@@ -148,7 +149,7 @@ describe('createLogicEngine: effects', () => {
     it('should refill the window from the records for a cached token, with no call', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(ORDERS, memory.host);
         engine.start();
         change(memory, engine, '$.data.orders.request', { first: 0 });
@@ -174,7 +175,7 @@ describe('createLogicEngine: effects', () => {
     it('should keep at most `cache` answers', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(ORDERS, memory.host);
         engine.start();
 
@@ -196,7 +197,7 @@ describe('createLogicEngine: effects', () => {
     it('should rewrite the window rows that hold an edited record', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(ORDERS, memory.host);
         engine.start();
         change(memory, engine, '$.data.orders.request', { first: 0 });
@@ -217,7 +218,7 @@ describe('createLogicEngine: effects', () => {
     it('should write the error of a call that fails', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: {} } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: {} } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(ORDERS, memory.host);
         engine.start();
         change(memory, engine, '$.data.orders.request', { first: 0 });
@@ -235,7 +236,7 @@ describe('createLogicEngine: effects', () => {
     it('should write an error when the host refuses the answer', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: { request: { first: 0 } } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: { request: { first: 0 } } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const commit = memory.host.commit;
         memory.host.commit = (writes) => {
             if (writes.some((write) => write.path.startsWith('$.data.orders.records'))) throw new Error('no room');
@@ -253,7 +254,7 @@ describe('createLogicEngine: effects', () => {
         expect(memory.failures).toEqual([{ kind: 'effect', name: 'fetchOrders', reason: 'no room' }]);
     });
 
-    it('should ask the host when no function is registered, and fail without one', async () => {
+    it('should ask the host when no function is loaded, and fail without one', async () => {
         // Arrange
         const asked: unknown[] = [];
         const answering = stateHost(
@@ -274,9 +275,9 @@ describe('createLogicEngine: effects', () => {
 
         // Assert
         const token = requestToken({ first: 0 });
-        expect(asked).toEqual([{ name: 'fetchOrders', run: 'orders.fetch', token, request: { first: 0 } }]);
+        expect(asked).toEqual([{ name: 'fetchOrders', run: '$.functions.host.ordersFetch', token, request: { first: 0 } }]);
         expect(answering.get('$.data.orders.status.state')).toBe('ready');
-        expect(failing.failures).toEqual([{ kind: 'effect', name: 'fetchOrders', reason: 'the host registered no effect function "orders.fetch"' }]);
+        expect(failing.failures).toEqual([{ kind: 'effect', name: 'fetchOrders', reason: 'no effect function is loaded at $.functions.host.ordersFetch' }]);
         expect(failing.get('$.data.orders.status')).toEqual(expect.objectContaining({ token, state: 'error' }));
     });
 
@@ -286,7 +287,7 @@ describe('createLogicEngine: effects', () => {
         const token = requestToken({ first: 0 });
         const memory = stateHost(
             { data: { orders: { request: { first: 0 }, status: { token, state: 'ready', at: '2026-01-01T00:00:00.000Z' } } } },
-            { functions: { effects: { 'orders.fetch': fake.run } } }
+            { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) }
         );
         const engine = createLogicEngine(ORDERS, memory.host);
 
@@ -309,7 +310,7 @@ describe('createLogicEngine: effects', () => {
                 ask: { when: { path: '$.screens.main.grid.window' }, do: [{ command: 'set', target: '$.data.orders.request', value: { first: '{{ $trigger.first }}', count: 2 } }] }
             }
         };
-        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: {} }, screens: { main: { grid: {} } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(logic, memory.host);
         engine.start();
 
@@ -325,7 +326,7 @@ describe('createLogicEngine: effects', () => {
     it('should drop answers after stop', async () => {
         // Arrange
         const fake = fakeEffect();
-        const memory = stateHost({ data: { orders: { request: { first: 0 } } } }, { functions: { effects: { 'orders.fetch': fake.run } } });
+        const memory = stateHost({ data: { orders: { request: { first: 0 } } } }, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', fake.run] }) });
         const engine = createLogicEngine(ORDERS, memory.host);
         engine.start();
         await flush();
@@ -344,8 +345,8 @@ describe('createLogicEngine: effects', () => {
 describe('readLogic: effects', () => {
     it('should read an effect, list it in the run order and warn about an unknown function', () => {
         // Act
-        const known = readLogic(ORDERS as unknown as JsonValue, { functions: { effects: { 'orders.fetch': () => Promise.resolve({}) } } });
-        const unknown = readLogic(ORDERS as unknown as JsonValue, { functions: {} });
+        const known = readLogic(ORDERS as unknown as JsonValue, { functions: hostFunctions({ '$.functions.host.ordersFetch': ['effect', () => Promise.resolve({})] }) });
+        const unknown = readLogic(ORDERS as unknown as JsonValue, { functions: hostFunctions({}) });
 
         // Assert
         expect(known.errors).toEqual([]);
@@ -360,8 +361,8 @@ describe('readLogic: effects', () => {
         // Arrange
         const logic = {
             effects: {
-                a: { request: '$.data.{id}.request', run: 'f', status: '$.data.s', records: { into: '$.app.x', key: 'id' }, cache: 1.5 },
-                b: { request: '$.data.r', run: 'f', status: '$.data.s', cache: 3, extra: 1 }
+                a: { request: '$.data.{id}.request', run: '$.functions.host.f', status: '$.data.s', records: { into: '$.app.x', key: 'id' }, cache: 1.5 },
+                b: { request: '$.data.r', run: '$.functions.host.f', status: '$.data.s', cache: 3, extra: 1 }
             }
         } as unknown as JsonValue;
 

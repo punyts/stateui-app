@@ -11,7 +11,7 @@ describe('readLogic: runs', () => {
             machines: { phase: { runs: 'browser', state: '$.data.phase', initial: 'idle', transitions: [{ when: { path: '$.data.go' }, to: 'idle' }] } },
             rules: { count: { runs: 'browser', when: { path: '$.data.items' }, do: SET_COUNT } },
             tables: { fee: { runs: 'browser', inputs: { total: '$.data.total' }, outputs: { fee: '$.data.fee' }, rows: [{ fee: 5 }] } },
-            computes: { tax: { runs: 'server', inputs: { total: '$.data.total' }, run: 'tax', outputs: { tax: '$.data.tax' } } }
+            computes: { tax: { runs: 'server', inputs: { total: '$.data.total' }, run: '$.functions.host.tax', outputs: { tax: '$.data.tax' } } }
         };
 
         // Act
@@ -55,7 +55,7 @@ describe('readLogic: runs', () => {
 
     it('should refuse an effect in the browser, since its secrets are on the server', () => {
         // Act
-        const result = readLogic({ effects: { fetch: { runs: 'browser', request: '$.data.request', run: 'orders.fetch', status: '$.data.status' } } });
+        const result = readLogic({ effects: { fetch: { runs: 'browser', request: '$.data.request', run: '$.functions.host.ordersFetch', status: '$.data.status' } } });
 
         // Assert
         expect(result.errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LOGIC-RUNS', '$.logic.effects.fetch']]);
@@ -113,7 +113,7 @@ describe('logicFor', () => {
             server: { runs: 'server', when: { path: '$.data.b' }, do: [] },
             local: { runs: 'browser', when: { path: '$.data.c' }, do: [] }
         },
-        effects: { fetch: { request: '$.data.request', run: 'fetch', status: '$.data.status' } }
+        effects: { fetch: { request: '$.data.request', run: '$.functions.host.fetch', status: '$.data.status' } }
     };
 
     it('should give the server the units without runs and those with runs server', () => {

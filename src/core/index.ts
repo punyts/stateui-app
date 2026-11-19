@@ -6,6 +6,8 @@ export type { ExternalUse } from './blueprint/types.js';
 export type { EphemeralProblem } from './ephemeral/ephemeral.js';
 export { MAX_APP_ICONS, MAX_APP_ICON_NAME_LENGTH, MAX_APP_ICON_PATHS, appIconNames, appIconProblems } from './icons/appIcons.js';
 export type { AppIcon, AppIconPath, AppIconProblem } from './icons/appIcons.js';
+export { FUNCTION_KINDS, FUNCTION_PATH, FunctionTable, HOST_GROUP, catalogOf, functionPaths, hostCatalog, isFunctionPath } from './functions/index.js';
+export type { FunctionCatalog, FunctionCode, FunctionEntry, FunctionKind, FunctionPointer, HostFunction, LoadedFunction } from './functions/index.js';
 export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';
 export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, isAppEvent } from './types.js';
 export type { AppDocument, AppEventName, AppTheme, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
@@ -284,7 +286,7 @@ export type {
     LogicComputeInput,
     LogicComputeFunction,
     LogicExpressionFunction,
-    LogicFunctions,
+    FunctionLookup,
     LogicEffect,
     LogicEffectAnswer,
     LogicEffectFunction,

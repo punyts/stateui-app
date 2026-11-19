@@ -3,6 +3,7 @@ import { createLogicIndex, readLogic } from '../logic/index.js';
 import { validateOn } from '../on/index.js';
 import { validateAppRoot, validateRoutes } from './route.js';
 import { validatePaints, validateShapeLabels } from './paint.js';
+import { validateFunctions } from './functions.js';
 import { validateSceneCount } from './scenes.js';
 import { validateSteps } from './steps.js';
 import type { DocumentValidator } from './types.js';
@@ -40,7 +41,8 @@ registerDocumentValidator('scenes', validateSceneCount);
 registerDocumentValidator('logic', (context) => {
     if (context.document.logic === undefined) return [];
     const index = createLogicIndex(context.tree, context.library, undefined, { trees: context.screens ?? {} });
-    return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain }).errors;
+    return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain, ...(context.functions !== undefined && { functions: context.functions }) }).errors;
 });
+registerDocumentValidator('functions', validateFunctions);
 registerDocumentValidator('route', validateRoutes);
 registerDocumentValidator('app', validateAppRoot);

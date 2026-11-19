@@ -528,7 +528,7 @@ describe('validateDocument', () => {
 
         const errors = validateDocument(doc({ component: 'panel' }), LIBRARY).errors;
 
-        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'step', 'paint', 'label', 'scenes', 'logic', 'route', 'app', 'first', 'second']);
+        expect(documentValidators().map(([name]) => name)).toEqual(['on', 'layout', 'placement', 'step', 'paint', 'label', 'scenes', 'logic', 'functions', 'route', 'app', 'first', 'second']);
         expect(calls).toEqual(['first', 'second']);
         expect(errors.map((error) => error.statePath)).toEqual(['$.app.a', '$.app.b']);
     });
@@ -1024,6 +1024,24 @@ describe('validateDocument app icons', () => {
 
         // Assert
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-DOC-ICON', '$.icons.chat.outline.0']]);
+    });
+});
+
+describe('validateDocument functions', () => {
+    const functions = { has: (path: string) => path === '$.functions.host.shout', entry: (path: string) => (path === '$.functions.host.shout' ? ({} as never) : undefined) };
+
+    it('should warn of each function outside the logic that the server does not run, at its path', () => {
+        // Arrange
+        const document = doc({ component: 'panel', label: '{{ $.functions.host.shout($.data.a) }} {{ $.functions.text.upper($.data.b) }}' });
+
+        // Act
+        const errors = validateDocument(document, LIBRARY, { functions }).errors.filter((error) => error.code === 'SUI-LOGIC-FUNCTION');
+        const unchecked = validateDocument(document, LIBRARY).errors.filter((error) => error.code === 'SUI-LOGIC-FUNCTION');
+
+        // Assert
+        expect(errors.map((error) => [error.statePath, error.severity])).toEqual([['$.app.label', 'warning']]);
+        expect(errors[0]?.message).toContain('$.functions.text.upper');
+        expect(unchecked).toEqual([]);
     });
 });
 

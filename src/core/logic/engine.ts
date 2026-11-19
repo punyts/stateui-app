@@ -7,7 +7,7 @@ import { captureNames, compilePattern, expressionPaths, fillCaptures, matchPatte
 import type { PathPattern, PatternMatch } from './pattern.js';
 import { columnIndex, compileTable, inputObject, lookupRow, tableColumns } from './table.js';
 import type { CompiledTable } from './table.js';
-import { LOGIC_FUNCTIONS, LogicError, condition, resolvePath, resolveValue } from './values.js';
+import { LogicError, condition, resolvePath, resolveValue } from './values.js';
 import type { Scope } from './values.js';
 import { WorkingCopy, covers, placed, within } from './working.js';
 import { MAX_CHAIN_DEPTH } from './types.js';
@@ -646,7 +646,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
 
         const copy = new WorkingCopy((path) => host.get(path));
         for (const captures of runFor) {
-            const scope: Scope = { read: (path) => copy.get(path), captures, functions };
+            const scope: Scope = { read: (path) => copy.get(path), captures, functions, call };
             try {
                 const values: Record<string, JsonValue> = {};
                 for (const input of plan.inputs) {
@@ -707,27 +707,27 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         });
         const found = tableLookup(plan.compiled, values);
         if (typeof found !== 'number') return null;
-        const scope: Scope = { read: (path) => host.get(path), captures: {}, inputs: values, functions };
+        const scope: Scope = { read: (path) => host.get(path), captures: {}, inputs: values, functions, call };
         const outputs: Record<string, JsonValue> = {};
         for (const [output, value] of Object.entries((plan.compiled.rows[found] as CompiledTable['rows'][number]).outputs)) outputs[output] = resolveValue(value, scope, host);
         return outputs;
     };
-    /** Runs a compute unit's function; throws for a name the host did not register or a result that is not an object */
+    /** Runs a compute unit's function; throws for a function this side does not run or a result that is not an object */
     const runCompute = (compute: LogicCompute, values: Readonly<Record<string, JsonValue>>): Readonly<Record<string, JsonValue>> => {
-        const run = host.functions?.compute?.[compute.run];
-        if (!run) throw new LogicError(`the host registered no compute function "${compute.run}"`);
+        const run = host.functions?.compute(compute.run);
+        if (!run) throw new LogicError(`no compute function is loaded at ${compute.run}`);
         const result = run(cloneJson(values as JsonValue) as Record<string, JsonValue>) as JsonValue;
-        if (!isObject(result)) throw new LogicError(`compute function "${compute.run}" returned ${result === null ? 'null' : typeof result}, not an object of outputs`);
+        if (!isObject(result)) throw new LogicError(`the compute function at ${compute.run} returned ${result === null ? 'null' : typeof result}, not an object of outputs`);
         return result;
     };
 
-    /** The functions expressions get next to the built-in ones: `lookup` and the host's expression functions (not those named like a built-in) */
-    const functions: Record<string, (...args: unknown[]) => unknown> = {};
-    for (const [name, run] of Object.entries(host.functions?.expressions ?? {})) {
-        if (Object.hasOwn(LOGIC_FUNCTIONS, name) || name === 'lookup') failed({ kind: 'compute', name, reason: `"${name}" is a built-in function, so the host's function of that name is not used` });
-        else functions[name] = (...args) => run(...(args.map((arg) => cloneJson((arg ?? null) as JsonValue)) as JsonValue[]));
-    }
-    functions['lookup'] = lookup;
+    /** The functions expressions get by name next to the built-in ones: `lookup` */
+    const functions: Record<string, (...args: unknown[]) => unknown> = { lookup };
+    /** An expression function by its path, given copies of its arguments */
+    const call = (path: string): ((...args: unknown[]) => unknown) | undefined => {
+        const run = host.functions?.expression(path);
+        return run === undefined ? undefined : (...args) => run(...(args.map((arg) => cloneJson((arg ?? null) as JsonValue)) as JsonValue[]));
+    };
 
     /**
      * The first transition of the unit's current state that one of the changes triggers. A trigger fires only when the
@@ -765,7 +765,8 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                         trigger: trigger ?? null,
                         previous: previous ?? null,
                         captures: match.captures,
-                        functions
+                        functions,
+                        call
                     };
                     try {
                         if (!passes(transition.when, scope, trigger)) {
@@ -818,7 +819,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 if (deepEqual(value, before)) continue;
                 if (value === undefined && removedWithParent(match.path, change, (path) => proposed.get(path))) continue;
                 const trigger = value ?? null;
-                const scope: Scope = { read: (path) => proposed.get(path), trigger, previous: before ?? null, captures: match.captures, functions };
+                const scope: Scope = { read: (path) => proposed.get(path), trigger, previous: before ?? null, captures: match.captures, functions, call };
                 let reason: string | undefined;
                 try {
                     if (passes(rule.trigger, scope, trigger)) reason = String(resolveValue(rule.reason, scope, host));
@@ -844,7 +845,8 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             ...(hit.trigger === undefined ? {} : { trigger: hit.trigger }),
             ...(hit.previous === undefined ? {} : { previous: hit.previous }),
             ...(hit.result === undefined ? {} : { result: hit.result }),
-            functions
+            functions,
+            call
         };
         const context: CommandContext = { copy, scope, host, guard, results: [], after: [], calls: [], durable: [] };
         const from = fromOf(hit.state);
@@ -898,7 +900,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             if (hit.transition.from !== undefined && hit.transition.from !== state) return;
             const path = (unit.patterns[hit.index] as PathPattern).source.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (whole, name: string) => hit.captures[name] ?? whole);
             const trigger = path.includes('*') ? hit.trigger : (host.get(path) ?? null);
-            const scope: Scope = { read: (at) => host.get(at), trigger: trigger ?? null, previous: hit.previous ?? null, captures: hit.captures, functions };
+            const scope: Scope = { read: (at) => host.get(at), trigger: trigger ?? null, previous: hit.previous ?? null, captures: hit.captures, functions, call };
             try {
                 if (!passes(hit.transition.when, scope, trigger)) return;
                 run(unit, { ...hit, ...(state === undefined ? {} : { state }), trigger: trigger ?? null }, 'timer', [path]);
@@ -950,7 +952,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         const state = stateOf(unit);
         for (const [index, transition] of unit.transitions.entries()) {
             if (transition.when.result !== name || (transition.from !== undefined && transition.from !== state)) continue;
-            const scope: Scope = { read: (path) => host.get(path), result, captures: {}, functions };
+            const scope: Scope = { read: (path) => host.get(path), result, captures: {}, functions, call };
             try {
                 if (!passes(transition.when, scope, result.status)) continue;
                 return { transition, index, ...(state === undefined ? {} : { state }), captures: {}, result };
@@ -995,7 +997,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 const cancel = host.schedule?.(ms, () => {
                     if (stopped || stateOf(unit) !== state) return;
                     armed.delete(unit.id);
-                    const scope: Scope = { read: (path) => host.get(path), captures: {}, functions };
+                    const scope: Scope = { read: (path) => host.get(path), captures: {}, functions, call };
                     try {
                         if (!passes(transition.when, scope, undefined)) {
                             arm();

@@ -1,6 +1,9 @@
 import { defineComponent } from '@punyts/stateui';
 import { afterEach, describe, expect, it } from 'vitest';
+import { catalogOf } from '../../core/functions/index.js';
+import type { FunctionCatalog, FunctionCode, FunctionKind, LoadedFunction } from '../../core/functions/index.js';
 import { LOGIC_ORIGIN } from '../../core/logic/index.js';
+import type { LogicComputeFunction, LogicEffectFunction } from '../../core/logic/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { parseShape } from '../../core/shape/index.js';
 import type { Shape } from '../../core/shape/index.js';
@@ -14,9 +17,15 @@ function shapeOf(properties: Record<string, unknown>, events: string[] = []): Sh
     return result.shape;
 }
 
+/** A host function with its code, under a fresh GUID, run on both sides */
+function loaded(path: string, kind: FunctionKind, code: FunctionCode): LoadedFunction {
+    return { id: crypto.randomUUID(), path, kind, runs: ['server', 'browser'], summary: path, inputs: {}, outputs: {}, code };
+}
+
 const library: ComponentLibrary = {
     page: { tier: 'root', tag: 'x-logic-page', shape: shapeOf({ note: { type: 'string', default: '' } }) },
-    label: { tier: 'root', tag: 'x-logic-label', shape: shapeOf({ text: { type: 'string', default: '' } }) }
+    label: { tier: 'root', tag: 'x-logic-label', shape: shapeOf({ text: { type: 'string', default: '' } }) },
+    stars: { tier: 'root', tag: 'x-logic-stars', shape: shapeOf({ count: { type: 'number', default: 0 } }) }
 };
 
 defineComponent({
@@ -24,6 +33,14 @@ defineComponent({
     template: '<sui-node repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
 });
 defineComponent({ tag: 'x-logic-label', template: '<p>{{ $.text }}</p>' });
+defineComponent({ tag: 'x-logic-stars', template: '<p>{{ $.functions.host.stars($.count) }}</p>' });
+
+/** The text of a node and of every shadow root below it */
+function deepText(node: Node): string {
+    const shadow = node instanceof Element && node.shadowRoot ? deepText(node.shadowRoot) : '';
+    const own = node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '') : '';
+    return own + shadow + [...node.childNodes].map(deepText).join('');
+}
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -81,18 +98,18 @@ describe('browser logic', () => {
         expect(origins).toEqual([LOGIC_ORIGIN]);
     });
 
-    it('should run compute units and expression functions the host passes as logicFunctions', async () => {
+    it('should run the compute and expression functions of the catalogs it is given, by path', async () => {
         // Arrange
         host = document_().body.appendChild(document_().createElement('div'));
         const logic = {
-            computes: { double: { inputs: { qty: '$.data.qty' }, run: 'double', outputs: { out: '$.data.stats.count' } } },
-            rules: { label: { when: { path: '$.data.stats.count' }, do: [{ command: 'set', target: '^count.text', value: '{{ stars($.data.stats.count) }}' }] } }
+            computes: { double: { inputs: { qty: '$.data.qty' }, run: '$.functions.host.double', outputs: { out: '$.data.stats.count' } } },
+            rules: { label: { when: { path: '$.data.stats.count' }, do: [{ command: 'set', target: '^count.text', value: '{{ $.functions.host.stars($.data.stats.count) }}' }] } }
         };
         app = mountApp(host, documentWith(logic), library, {}, {
-            logicFunctions: {
-                compute: { double: ({ qty }) => ({ out: typeof qty === 'number' ? qty * 2 : 0 }) },
-                expressions: { stars: (count) => '*'.repeat(Number(count)) }
-            }
+            functions: [catalogOf('host', [
+                loaded('$.functions.host.double', 'compute', (({ qty }) => ({ out: typeof qty === 'number' ? qty * 2 : 0 })) as LogicComputeFunction),
+                loaded('$.functions.host.stars', 'expression', ((count: unknown) => '*'.repeat(Number(count))) as FunctionCode)
+            ])]
         });
 
         // Act
@@ -104,14 +121,14 @@ describe('browser logic', () => {
         expect(app.store!.get('$.app.children.count.text')).toBe('****');
     });
 
-    it('should run effects the host passes as logicFunctions', async () => {
+    it('should run the effect functions of the catalogs it is given', async () => {
         // Arrange
         host = document_().body.appendChild(document_().createElement('div'));
         const logic = {
-            effects: { load: { request: '$.data.qty', run: 'load', status: '$.data.stats.status', value: '$.data.stats.count' } }
+            effects: { load: { request: '$.data.qty', run: '$.functions.host.load', status: '$.data.stats.status', value: '$.data.stats.count' } }
         };
         app = mountApp(host, documentWith(logic), library, {}, {
-            logicFunctions: { effects: { load: (request) => Promise.resolve({ value: Number(request) * 10 }) } }
+            functions: [catalogOf('host', [loaded('$.functions.host.load', 'effect', ((request) => Promise.resolve({ value: Number(request) * 10 })) as LogicEffectFunction)])]
         });
         await flush();
 
@@ -122,6 +139,53 @@ describe('browser logic', () => {
         // Assert
         expect(app.store!.get('$.data.stats.count')).toBe(30);
         expect(app.store!.get('$.data.stats.status.state')).toBe('ready');
+    });
+
+    it('should let a component template call an expression function by its path, once a lazy catalog loaded it', async () => {
+        // Arrange
+        host = document_().body.appendChild(document_().createElement('div'));
+        const stars = loaded('$.functions.host.stars', 'expression', ((count: unknown) => '*'.repeat(Number(count))) as FunctionCode);
+        const lazy: FunctionCatalog = { name: 'host', entries: [stars].map(({ code: _code, ...entry }) => entry), load: () => Promise.resolve(stars.code) };
+        const document = {
+            data: {},
+            app: { component: 'page', children: { rating: { component: 'stars', count: 3 } } },
+            // the document names the function, so it loads; the template is not in the document
+            logic: { rules: { never: { when: { path: '$.data.none' }, do: [{ command: 'set', target: '$.data.shown', value: '{{ $.functions.host.stars(1) }}' }] } } }
+        } as unknown as AppDocument;
+
+        // Act
+        app = mountApp(host, document, library, {}, { functions: [lazy] });
+        const before = deepText(host);
+        await flush();
+
+        // Assert
+        expect(before).toBe('');
+        expect(deepText(host)).toContain('***');
+    });
+
+    it('should start logic once a lazy catalog has loaded the functions the app names, and load no others', async () => {
+        // Arrange
+        host = document_().body.appendChild(document_().createElement('div'));
+        const logic = { computes: { double: { inputs: { qty: '$.data.qty' }, run: '$.functions.lazy.double', outputs: { out: '$.data.stats.count' } } } };
+        const asked: string[] = [];
+        const double = loaded('$.functions.lazy.double', 'compute', (({ qty }) => ({ out: Number(qty) * 2 })) as LogicComputeFunction);
+        const unused = loaded('$.functions.lazy.unused', 'compute', (() => ({})) as LogicComputeFunction);
+        const lazy: FunctionCatalog = {
+            name: 'lazy',
+            entries: [double, unused].map(({ code: _code, ...entry }) => entry),
+            load: (id) => {
+                asked.push(id);
+                return Promise.resolve(double.code);
+            }
+        };
+
+        // Act
+        app = mountApp(host, documentWith(logic), library, {}, { functions: [lazy] });
+        await flush();
+
+        // Assert
+        expect(asked).toEqual([double.id]);
+        expect(app.store!.get('$.data.stats.count')).toBe(2);
     });
 
     it('should skip writes that carry an origin, such as sync writes', async () => {

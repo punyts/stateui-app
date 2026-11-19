@@ -8,6 +8,7 @@ import type { BuildError } from '../core/errors/index.js';
 import { entryShape } from '../core/resolve/index.js';
 import type { ComponentLibrary } from '../core/resolve/index.js';
 import { isNodeValue } from '../core/resolve/merge.js';
+import type { FunctionCatalog } from '../core/functions/index.js';
 import type { ComponentOverlays } from '../core/locale/index.js';
 import { buildOverlayCatalog } from '../core/theme/index.js';
 import type { ThemeOverlays } from '../core/theme/index.js';
@@ -79,6 +80,11 @@ export interface RuntimeOptions {
      * runtime runs in a frame of its host, where a history entry would also move the host page's back button
      */
     route?: boolean;
+    /**
+     * The function catalogs the page installs (`MountOptions.functions`): the component library's own, whose functions
+     * its components call. None when absent
+     */
+    functions?: readonly FunctionCatalog[];
 }
 
 /** How many messages the runtime dropped, by reason */
@@ -423,7 +429,12 @@ export function startRuntime(
                         postErrors([error]);
                     }
                 },
-                { mode: message.mode ?? 'standalone', route: options.route ?? false, ...(message.instance !== undefined && { instance: message.instance }) }
+                {
+                    mode: message.mode ?? 'standalone',
+                    route: options.route ?? false,
+                    ...(options.functions !== undefined && { functions: options.functions }),
+                    ...(message.instance !== undefined && { instance: message.instance })
+                }
             );
         } finally {
             unregister();

@@ -154,9 +154,9 @@ export function createEffectRunner(effects: Readonly<Record<string, LogicEffect>
     };
 
     const call = (state: EffectState, token: string, request: JsonValue): void => {
-        const run = host.functions?.effects?.[state.effect.run];
+        const run = host.functions?.effect(state.effect.run);
         if (!run && !host.effect) {
-            const reason = `the host registered no effect function "${state.effect.run}"`;
+            const reason = `no effect function is loaded at ${state.effect.run}`;
             deps.failed({ kind: 'effect', name: state.name, reason });
             deps.apply(state.name, [status(state, { token, state: 'error', reason })], `${state.name} failed`);
             return;

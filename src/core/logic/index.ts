@@ -45,7 +45,7 @@ export type {
     LogicComputeInput,
     LogicComputeFunction,
     LogicExpressionFunction,
-    LogicFunctions,
+    FunctionLookup,
     LogicEffect,
     LogicEffectAnswer,
     LogicEffectFunction,

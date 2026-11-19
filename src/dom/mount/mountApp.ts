@@ -3,6 +3,7 @@ import { createStore } from '@punyts/state';
 import { mount, setNodeOptions, setNodeResolver, unmount } from '@punyts/stateui';
 import type { NodeOptions } from '@punyts/stateui';
 import { buildError, isValid } from '../../core/errors/index.js';
+import { FunctionTable, functionPaths } from '../../core/functions/index.js';
 import type { BuildError } from '../../core/errors/index.js';
 import type { Link } from '../../core/links/index.js';
 import { extractBaseOverlay } from '../../core/locale/index.js';
@@ -290,7 +291,18 @@ export function mountApp(
     setNodeResolver((name) => rootEntry(library, name)?.tag);
     setNodeOptions(context.options);
     const rootTag = ensureAppRoot(collected.tokens);
-    mount(host, store);
+    let functions: FunctionTable | undefined;
+    try {
+        functions = new FunctionTable(options.functions ?? [], 'browser');
+    } catch (error) {
+        report.error('mountApp could not install the functions', { reason: String(error) });
+    }
+    /** What a view's expression calls at a function path: the expression function loaded there */
+    const callable = (_value: unknown, path: string): ((...args: never[]) => unknown) | undefined => functions?.expression(path);
+    // The code of the functions the document names loads before the app shows and its logic starts: at once when it
+    // is here, else when its chunks arrive
+    const loading = functions?.prepare(functionPaths(document as unknown as JsonValue));
+    if (loading === undefined) mount(host, store, '$', { callable });
     const navigate =
         screens === undefined
             ? undefined
@@ -334,23 +346,33 @@ export function mountApp(
         for (const link of gone) appLinks.splice(appLinks.indexOf(link), 1);
     };
     let stopLogic: (() => void) | undefined;
-    try {
-        // A Full-mode app runs its server units on the authority and its browser units (`runs: "browser"`) here
-        stopLogic = startBrowserLogic({
-            store: store as never,
-            document,
-            library,
-            tree: resolved,
-            raise: (name, payload) => {
-                if (!disposed) dispatcher.raise(name as AppEventName, payload);
-            },
-            emit: (name, payload) => hooks.onEmit?.(name, payload),
-            ...(options.logicFunctions ? { functions: options.logicFunctions } : {}),
-            ...(mode === 'full' ? { side: 'browser' as const } : {})
+    const startLogic = (): void => {
+        if (disposed) return;
+        try {
+            // A Full-mode app runs its server units on the authority and its browser units (`runs: "browser"`) here
+            stopLogic = startBrowserLogic({
+                store: store as never,
+                document,
+                library,
+                tree: resolved,
+                raise: (name, payload) => {
+                    if (!disposed) dispatcher.raise(name as AppEventName, payload);
+                },
+                emit: (name, payload) => hooks.onEmit?.(name, payload),
+                ...(functions ? { functions } : {}),
+                ...(mode === 'full' ? { side: 'browser' as const } : {})
+            });
+        } catch (error) {
+            report.error('mountApp could not start the logic', { reason: String(error) });
+        }
+    };
+    if (loading === undefined) startLogic();
+    else
+        void loading.then(() => {
+            if (disposed) return;
+            mount(host, store, '$', { callable });
+            startLogic();
         });
-    } catch (error) {
-        report.error('mountApp could not start the logic', { reason: String(error) });
-    }
     return {
         store,
         baseOverlay,

@@ -2,6 +2,7 @@ import { libraryFromCatalog } from '@punyts/stateui-app/core';
 import type { CatalogSource } from '@punyts/stateui-app/core';
 import { startRuntime } from '@punyts/stateui-app/runtime';
 import catalog from '@punyts/stateui-components/catalog.json' with { type: 'json' };
+import { COMPONENT_FUNCTIONS } from '@punyts/stateui-components/functions';
 import { register } from '@punyts/stateui-components/register';
 import overlays from 'virtual:component-overlays';
 
@@ -19,6 +20,8 @@ const nonce = window.location.hash.slice(1);
 if (NONCE_PATTERN.test(nonce)) {
     register(window);
     startRuntime(window, window.parent, nonce, libraryFromCatalog(catalog as unknown as CatalogSource), {
-        componentOverlays: overlays
+        componentOverlays: overlays,
+        // A component's functions go with the component
+        functions: [COMPONENT_FUNCTIONS]
     });
 }

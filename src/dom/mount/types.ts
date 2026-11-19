@@ -5,7 +5,7 @@ import type { ComponentToken } from '../../core/theme/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { RouteState } from '../../core/route/index.js';
 import type { AppInstance } from '../../core/snapshot/index.js';
-import type { LogicFunctions } from '../../core/logic/index.js';
+import type { FunctionCatalog } from '../../core/functions/index.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
 import type { AppMode } from '../../core/validate/index.js';
 import type { DispatchHooks } from '../on/index.js';
@@ -92,8 +92,12 @@ export interface MountOptions {
      * document is never written
      */
     instance?: AppInstance;
-    /** The compute and expression functions the browser logic runs by name (`computes` units, expression calls); without them a compute unit fails when it runs */
-    logicFunctions?: LogicFunctions;
+    /**
+     * The function catalogs the operator installed (libraries' and the host's). The functions the document names that
+     * run in the browser are loaded before the logic starts; without them a unit or call naming a function fails when it
+     * runs
+     */
+    functions?: readonly FunctionCatalog[];
 }
 
 /** What `mountApp` returns */

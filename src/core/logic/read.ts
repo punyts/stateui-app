@@ -5,8 +5,12 @@ import type { JsonObject, JsonValue } from '../types.js';
 import { captureNames, compilePattern, expressionPaths, fillCaptures, isStatePath, mayTouch, writeSteps } from './pattern.js';
 import { MAX_TABLE_CELLS, compileTable } from './table.js';
 import { LOGIC_COMMAND_KEYS, LOGIC_COMMANDS, LOGIC_SIDES, MAX_DELAY, MAX_EFFECT_CACHE } from './types.js';
-import type { LogicSide, LogicCommand, LogicCompute, LogicDocument, LogicEffect, LogicFunctions, LogicMachine, LogicRule, LogicTable, LogicTableInput, LogicTableRow, LogicTransition, LogicTrigger } from './types.js';
+import { isFunctionPath } from '../functions/table.js';
+import type { FunctionLookup, LogicSide, LogicCommand, LogicCompute, LogicDocument, LogicEffect, LogicMachine, LogicRule, LogicTable, LogicTableInput, LogicTableRow, LogicTransition, LogicTrigger } from './types.js';
 import { LogicError, SCOPE_NAMES, compileExpression, templateExpressions, withCaptures } from './values.js';
+
+/** What a unit's `run` must be */
+const RUN_SHAPE = '"run" must be a function path: "$.functions.<group>.<name>", or "$.components.<component>.functions.<name>" for a component function';
 
 /** The roots logic may watch and write; `$.server` is refused outside Full mode by the document check */
 // `raised`: the events the nodes raised (dom/on/raised.ts), which logic triggers on and reads
@@ -79,8 +83,8 @@ export interface ReadLogicOptions {
     explain?(reference: string): string | undefined;
     /** The path the units are reported under: `$.logic` (the default) for a document, `$` for a logic module */
     root?: string;
-    /** The functions the host registered; with it a compute unit that runs another name is `SUI-LOGIC-FUNCTION` (a warning) */
-    functions?: LogicFunctions;
+    /** The functions this side runs; with it a unit that runs another path is `SUI-LOGIC-FUNCTION` (a warning) */
+    functions?: FunctionLookup;
 }
 
 export interface ReadLogicResult {
@@ -118,10 +122,37 @@ class Reader {
             this.errors.push(buildError('SUI-LOGIC-EXPRESSION', { path, name: `{${unknown[1] as string}} in a path is not a capture of this trigger (${known})`, statePath: path }));
             return;
         }
+        let compiled: ReturnType<typeof compileExpression>;
         try {
-            compileExpression(filled);
+            compiled = compileExpression(filled);
         } catch (error) {
             this.errors.push(buildError('SUI-LOGIC-EXPRESSION', { path, name: (error as LogicError).message, statePath: path }));
+            return;
+        }
+        const functions = this.options.functions;
+        if (functions === undefined) return;
+        for (const callee of compiled.variables.filter(isFunctionPath)) {
+            if (!functions.has(callee, 'expression')) this.warnings.push(buildError('SUI-LOGIC-FUNCTION', { path, name: callee, statePath: path }));
+        }
+    }
+
+    /** A compute's inputs and outputs fit the object schemas of the function it runs: names it has, and every input it requires */
+    fits(value: JsonObject, run: string, path: string): void {
+        const entry = this.options.functions?.entry?.(run);
+        if (entry === undefined) return;
+        const misfit = (at: string, reason: string): void => {
+            this.errors.push(buildError('SUI-LOGIC-FUNCTION-FIT', { path: at, name: run, reason, statePath: at }));
+        };
+        const inputs = isObject(value['inputs']) ? Object.keys(value['inputs']) : [];
+        const outputs = isObject(value['outputs']) ? Object.keys(value['outputs']) : [];
+        const accepts = schemaProperties(entry.inputs);
+        if (accepts !== undefined) {
+            for (const name of inputs) if (!accepts.names.includes(name)) misfit(`${path}.inputs.${name}`, `it takes no input "${name}" (its inputs are ${accepts.names.join(', ') || 'none'})`);
+            for (const name of accepts.required) if (!inputs.includes(name)) misfit(`${path}.inputs`, `it requires the input "${name}"`);
+        }
+        const gives = schemaProperties(entry.outputs);
+        if (gives !== undefined) {
+            for (const name of outputs) if (!gives.names.includes(name)) misfit(`${path}.outputs.${name}`, `it gives no output "${name}" (its outputs are ${gives.names.join(', ') || 'none'})`);
         }
     }
 
@@ -518,10 +549,10 @@ class Reader {
         this.unknownKeys(value, COMPUTE_KEYS, path);
         this.declaredInputsOutputs(value['inputs'], value['outputs'], path, true);
         const run = value['run'];
-        if (typeof run !== 'string' || run.trim() === '') this.shape(`${path}.run`, '"run" must be the name of a compute function the host registers');
-        else if (this.options.functions && !Object.hasOwn(this.options.functions.compute ?? {}, run)) {
+        if (typeof run !== 'string' || !isFunctionPath(run)) this.shape(`${path}.run`, RUN_SHAPE);
+        else if (this.options.functions && !this.options.functions.has(run, 'compute')) {
             this.warnings.push(buildError('SUI-LOGIC-FUNCTION', { path: `${path}.run`, name: run, statePath: `${path}.run` }));
-        }
+        } else this.fits(value, run, path);
         return this.errors.length === before ? (value as unknown as LogicCompute) : undefined;
     }
 
@@ -544,8 +575,8 @@ class Reader {
         this.effectPath(value['request'], `${path}.request`);
         this.effectPath(value['status'], `${path}.status`);
         const run = value['run'];
-        if (typeof run !== 'string' || run.trim() === '') this.shape(`${path}.run`, '"run" must be the name of an effect function the host registers');
-        else if (this.options.functions && !Object.hasOwn(this.options.functions.effects ?? {}, run)) {
+        if (typeof run !== 'string' || !isFunctionPath(run)) this.shape(`${path}.run`, RUN_SHAPE);
+        else if (this.options.functions && !this.options.functions.has(run, 'effect')) {
             this.warnings.push(buildError('SUI-LOGIC-FUNCTION', { path: `${path}.run`, name: run, statePath: `${path}.run` }));
         }
         const records = value['records'];
@@ -690,6 +721,15 @@ function sharedResultNames(root: JsonObject): string[] {
     return names;
 }
 
+/** The property names of an object schema and those it requires; undefined when it names no properties (it takes any) */
+function schemaProperties(schema: unknown): { names: string[]; required: string[] } | undefined {
+    if (!isObject(schema as JsonValue)) return undefined;
+    const properties = (schema as JsonObject)['properties'];
+    if (!isObject(properties)) return undefined;
+    const required = (schema as JsonObject)['required'];
+    return { names: Object.keys(properties), required: Array.isArray(required) ? required.filter((name): name is string => typeof name === 'string') : [] };
+}
+
 /**
  * Reads the `logic` root of a document: the keyed maps `machines`, `rules`, `tables`, `computes` and `effects`. Reports `SUI-LOGIC-SHAPE` (an unknown
  * key, a wrong type, a missing field), `SUI-LOGIC-COMMAND` (an unknown command), `SUI-LOGIC-PATH` (a path that is not
@@ -698,7 +738,8 @@ function sharedResultNames(root: JsonObject): string[] {
  * and `SUI-LOGIC-EXPRESSION` (an expression that does not compile), each with its state path. A table's rows are
  * compiled: `SUI-LOGIC-GAP` (a combination no row covers), `SUI-LOGIC-UNREACHABLE` and `SUI-LOGIC-SIZE` (warnings),
  * and `SUI-LOGIC-CYCLE` for tables and computes that feed each other; `SUI-LOGIC-FUNCTION` (a warning) for a compute
- * unit or effect whose function `options.functions` does not have; `SUI-LOGIC-RUNS` for a unit with `runs: "browser"` that
+ * unit, effect or expression call whose function `options.functions` does not have; `SUI-LOGIC-FUNCTION-FIT` for a
+ * compute whose inputs or outputs do not fit its function's schemas; `SUI-LOGIC-RUNS` for a unit with `runs: "browser"` that
  * is a guard, an effect, uses `call` or names a `$.server` path. The result keeps only the units without errors, so an
  * engine never runs a broken one
  */

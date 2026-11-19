@@ -1,4 +1,5 @@
 import type { RouteScreens } from '../route/index.js';
+import type { FunctionEntry } from '../functions/types.js';
 import type { JsonValue } from '../types.js';
 
 /** The origin a browser store write of the logic carries, so the logic capture skips it and sync sends it */
@@ -162,13 +163,13 @@ export interface LogicTable {
 export type LogicComputeInput = Pick<LogicTableInput, 'path' | 'value'>;
 
 /**
- * A compute unit: a function the host registers (`LogicFunctions.compute`), run like a table. A change to an input runs
+ * A compute unit: a compute function (`FunctionLookup.compute`), run like a table. A change to an input runs
  * it (per record when its input paths capture); it gets the input values by name and returns the output values by name,
  * and the outputs that differ from state are written
  */
 export interface LogicCompute {
     inputs: Record<string, LogicComputeInput | string>;
-    /** The name the host registered the function under */
+    /** The function's path: `$.functions.<group>.<name>` or `$.components.<component>.functions.<name>` */
     run: string;
     outputs: Record<string, string>;
     /** Where it runs in a Full-mode app; absent is `server` */
@@ -178,7 +179,7 @@ export interface LogicCompute {
 /** A compute function: the input values by name (absent for an input with no value) to output values by name */
 export type LogicComputeFunction = (inputs: Readonly<Record<string, JsonValue>>) => Readonly<Record<string, JsonValue>>;
 
-/** A function expressions may call by its name, next to the built-in ones (`LOGIC_FUNCTIONS`) */
+/** A function expressions call by its path, next to the built-in ones (`LOGIC_FUNCTIONS`) by name */
 export type LogicExpressionFunction = (...args: JsonValue[]) => JsonValue;
 
 /** The most answers an effect keeps in its token cache */
@@ -250,16 +251,20 @@ export interface LogicEffectInfo {
 }
 
 /**
- * The code a host supplies for the logic, by name: documents never hold code, they name these. One module shared by the
- * browser host (`mountApp`'s `logicFunctions`) and the app server
+ * The functions logic runs, by path: documents never hold code, they name a function's path. A `FunctionTable` built
+ * from the installed catalogs is one; it answers only for code it has loaded
  */
-export interface LogicFunctions {
-    /** Synchronous, side-effect-free functions that `computes` units run */
-    compute?: Readonly<Record<string, LogicComputeFunction>>;
-    /** Functions expressions call; a name of a built-in function is refused */
-    expressions?: Readonly<Record<string, LogicExpressionFunction>>;
-    /** Async functions that `effects` run */
-    effects?: Readonly<Record<string, LogicEffectFunction>>;
+export interface FunctionLookup {
+    /** True when this side runs a function of this kind at the path, loaded or not */
+    has(path: string, kind: 'compute' | 'expression' | 'effect'): boolean;
+    /** A synchronous, side-effect-free function that a `computes` unit runs */
+    compute(path: string): LogicComputeFunction | undefined;
+    /** A function expressions call */
+    expression(path: string): LogicExpressionFunction | undefined;
+    /** An async function that an effect runs */
+    effect(path: string): LogicEffectFunction | undefined;
+    /** The manifest entry at the path, whose schemas a unit that runs it must fit */
+    entry?(path: string): FunctionEntry | undefined;
 }
 
 /** The `logic` root of a document */
@@ -357,11 +362,11 @@ export interface LogicHost {
     schedule?(ms: number, run: () => void): () => void;
     /** The document's screens, which `navigate` moves `$.route` between; without it every `navigate` fails */
     screens?(): RouteScreens | undefined;
-    /** The compute and expression functions the host registered; without them a compute unit fails when it runs */
-    functions?: LogicFunctions;
+    /** The functions this side runs; without them a compute unit or a function call fails when it runs */
+    functions?: FunctionLookup;
     /**
-     * Answers an effect whose `run` has no registered function (the MCP server queues it for the agent); without it
-     * such an effect fails. `signal` aborts when a newer request replaces it
+     * Answers an effect whose `run` is a function this side does not run (the MCP server queues it for the agent);
+     * without it such an effect fails. `signal` aborts when a newer request replaces it
      */
     effect?(request: LogicEffectRequest, signal: AbortSignal): Promise<LogicEffectAnswer>;
     /** Runs a named server procedure (Full mode); without it every `call` is rejected */

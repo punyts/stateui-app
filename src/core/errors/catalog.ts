@@ -223,7 +223,8 @@ export const ERROR_CATALOG = {
         template: 'Table at {path} has {actual} cells, more than {limit}, so its rows are matched in order and gaps are not checked',
         severity: 'warning'
     },
-    'SUI-LOGIC-FUNCTION': { template: 'Logic at {path} runs the function "{name}", which the host has not registered, so it fails when it runs', severity: 'warning' },
+    'SUI-LOGIC-FUNCTION': { template: 'The value at {path} names the function {name}, which this server does not run, so it fails when it runs', severity: 'warning' },
+    'SUI-LOGIC-FUNCTION-FIT': { template: 'Logic at {path} does not fit the function {name}: {reason}' },
     'SUI-LOGIC-CYCLE': { template: 'Logic at {path} feeds itself ({name}), so it would never settle' },
     'SUI-LOGIC-RUNS': { template: 'Logic at {path} must run on the server, not in the browser: {reason}' },
     'SUI-LOGIC-TEXT-PATH': {

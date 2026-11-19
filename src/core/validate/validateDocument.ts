@@ -103,7 +103,8 @@ function runChecks(
         library,
         tree: { node: resolved.node, instances: resolved.instances },
         screens,
-        ...(options.hasToken !== undefined && { hasToken: options.hasToken })
+        ...(options.hasToken !== undefined && { hasToken: options.hasToken }),
+        ...(options.functions !== undefined && { functions: options.functions })
     };
     for (const [name, validator] of documentValidators()) {
         try {

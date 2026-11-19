@@ -3,6 +3,7 @@ import type { CompiledExpression } from '@punyts/expression';
 import { cloneJson, isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { fillCaptures, isStatePath } from './pattern.js';
+import { isFunctionPath } from '../functions/table.js';
 import type { LogicHost, LogicResult } from './types.js';
 
 /** A failure while a command runs; the transition commits nothing */
@@ -26,8 +27,10 @@ export interface Scope {
     captures: Readonly<Record<string, string>>;
     /** The inputs of a lookup table, read when it runs; its output values read them as `$name` */
     inputs?: Readonly<Record<string, JsonValue>>;
-    /** Functions the engine adds to the expression library (`lookup`, and the host's expression functions) */
+    /** Functions the engine adds to the expression library by name (`lookup`) */
     functions?: Readonly<Record<string, (...args: unknown[]) => unknown>>;
+    /** The expression function at a function path (`$.functions.<group>.<name>`), when one is loaded */
+    call?(path: string): ((...args: unknown[]) => unknown) | undefined;
 }
 
 function entries(value: unknown): unknown[] {
@@ -152,7 +155,7 @@ export function evaluate(text: string, scope: Scope): unknown {
     if (scope.record !== undefined) context['$record'] = scope.record;
 
     const read = new Set<string>();
-    const paths = expression.variables.filter((name) => name.startsWith('$.')).sort((a, b) => a.length - b.length);
+    const paths = expression.variables.filter((name) => name.startsWith('$.') && !isFunctionPath(name)).sort((a, b) => a.length - b.length);
     for (const path of paths) {
         const steps = path.slice(2).split('.');
         let length = steps.length;
@@ -170,7 +173,8 @@ export function evaluate(text: string, scope: Scope): unknown {
     }
 
     try {
-        return expression.execute(context);
+        // A call of a function path runs the expression function loaded there
+        return expression.execute(context, { quiet: true, callable: (_value, path) => scope.call?.(path) });
     } catch (error) {
         throw new LogicError(error instanceof Error ? error.message : String(error));
     }

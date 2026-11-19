@@ -1,7 +1,7 @@
 import { report } from '@punyts/core';
 import type { Store } from '@punyts/state';
 import { LOGIC_FAILED_EVENT, LOGIC_ORIGIN, NOTIFY_PREFIX, createLogicEngine, createLogicIndex, logicFor, readLogic } from '../../core/logic/index.js';
-import type { LogicChange, LogicFunctions, LogicHost, LogicSide, LogicWrite } from '../../core/logic/index.js';
+import type { FunctionLookup, LogicChange, LogicHost, LogicSide, LogicWrite } from '../../core/logic/index.js';
 import type { ResolvedTree } from '../../core/on/index.js';
 import { cloneJson, resolveNode } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
@@ -24,8 +24,8 @@ export interface BrowserLogicOptions {
     raise(name: string, payload: JsonValue): void;
     /** Sends an app event to the server, as the `emit` command does */
     emit?(name: string, payload: JsonValue): void;
-    /** The compute and expression functions the host registered */
-    functions?: LogicFunctions;
+    /** The functions the browser runs, their code loaded for those the document names */
+    functions?: FunctionLookup;
     /** Runs only the units of this side (`logicFor`): `browser` in a Full-mode app. Absent runs every unit, `runs` ignored */
     side?: LogicSide;
 }
