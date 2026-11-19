@@ -193,7 +193,7 @@ export const MAX_EFFECT_CACHE = 200;
  */
 export interface LogicEffect {
     request: string;
-    /** The name the host registered the effect function under */
+    /** The function's path: `$.functions.<group>.<name>` or `$.components.<component>.functions.<name>` */
     run: string;
     status: string;
     /** The data map the answer's records merge into, and the field that holds each record's primary key */
@@ -219,7 +219,7 @@ export interface LogicEffectAnswer {
 /** An effect function: gets a copy of the request and a signal that aborts when a newer request replaces it */
 export type LogicEffectFunction = (request: JsonValue, options: { signal: AbortSignal }) => Promise<LogicEffectAnswer>;
 
-/** An effect request the host answers when no function is registered under its `run` name (the MCP agent) */
+/** An effect request the host answers when no function is installed at its `run` path (the MCP agent) */
 export interface LogicEffectRequest {
     /** The effect's name in the document */
     name: string;
