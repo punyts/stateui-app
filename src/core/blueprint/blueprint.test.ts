@@ -150,8 +150,22 @@ describe('readBlueprint', () => {
         expect(errorsOf(storeWith('screens.home.locales', { de: 'Start' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens.home.locales.de']);
     });
 
-    it('should refuse missing or empty screens and screen names that are not part names', () => {
-        expect(errorsOf(storeWith('screens', {}))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens', 'SUI-BLUEPRINT-SHAPE $.start']);
+    it('should accept an app with no screens and no start, and refuse a start then', () => {
+        // Arrange
+        const none = storeWith('screens', {});
+        delete none['start'];
+
+        // Act
+        const read = readBlueprint(none);
+
+        // Assert
+        expect(read.errors).toEqual([]);
+        expect(read.blueprint?.start).toBeUndefined();
+        expect(errorsOf(storeWith('screens', {}))).toEqual(['SUI-BLUEPRINT-SHAPE $.start']);
+    });
+
+    it('should refuse missing screens and screen names that are not part names', () => {
+        expect(errorsOf(storeWith('screens', undefined))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens']);
         expect(errorsOf(storeWith('screens.Cart', { root: { component: 'panel' } }))).toEqual(['SUI-BLUEPRINT-SHAPE $.screens.Cart']);
     });
 

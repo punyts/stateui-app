@@ -64,8 +64,11 @@ class Reader {
         if (json['uses'] !== undefined) this.uses(json['uses'], '$.uses');
         this.node(json['app'], '$.app');
         const screens = this.screens(json['screens'], '$.screens');
+        // An app with screens names the first; one with none names nothing
         const start = json['start'];
-        if (typeof start !== 'string') this.shape('$.start', 'must name the first screen');
+        const none = screens !== undefined && Object.keys(screens).length === 0;
+        if (start === undefined) { if (!none) this.shape('$.start', 'must name the first screen'); }
+        else if (typeof start !== 'string') this.shape('$.start', 'must name the first screen');
         else if (screens !== undefined && !Object.hasOwn(screens, start)) this.shape('$.start', `"${start}" names no screen`);
         if (json['logic'] !== undefined) this.logic(json['logic'], '$.logic');
         if (json['locales'] !== undefined) this.locales(json['locales'], '$.locales');
@@ -155,7 +158,6 @@ class Reader {
 
     screens(value: JsonValue | undefined, path: string): JsonObject | undefined {
         if (!this.object(value, path, 'screens')) return undefined;
-        if (Object.keys(value).length === 0) this.shape(path, 'an app needs at least one screen');
         for (const [name, screen] of Object.entries(value)) {
             const at = `${path}.${name}`;
             if (!isPartName(name)) this.shape(at, `screen name "${name}" must be a part name`);

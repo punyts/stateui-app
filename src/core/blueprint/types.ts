@@ -103,10 +103,11 @@ export interface BlueprintScreen {
 export interface AppBlueprint {
     title?: string;
     uses?: BlueprintUses;
-    /** The screen shown first; a key of `screens` */
-    start: string;
+    /** The screen shown first, a key of `screens`; absent exactly when the app has no screens */
+    start?: string;
     /** The app node (`{ "component": "app" }`): the layout of the visible screens, the document title and the toasts */
     app: Node;
+    /** The app's screens; none while the app is being made or after its last screen was deleted */
     screens: Record<string, BlueprintScreen>;
     /** The app's own units, which may touch its screens */
     logic?: LogicDocument;

@@ -580,7 +580,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   problem is a `SUI-BLUEPRINT-SHAPE` naming its path: an unknown key, `uses` of the wrong shape (theme names that are not
   part names or listed twice, a binding that is neither `{ dataset }` nor `{ model, scope: "persona" }`, a binding name that
   is not a key name, a module name that is not a part name), an app node or screen root that is not a node, a screen without
-  `root`, no screens, a screen name that is not a part name, a `start` that names no screen, and params that are not typed
+  `root`, no `screens` map, a screen name that is not a part name, a `start` that names no screen or is missing while there are screens (an app with `screens: {}` has no `start`), and params that are not typed
   declarations. `declarationProblems(value, path)` checks one typed declaration for the blueprint, models and modules: its
   keys, a type of `FIELD_TYPES`, a boolean `required`, validators that are known, well formed (their own `parse`) and
   apply to the type (`pattern` on a `number` does not; `any` takes every validator), and a default that fits the type

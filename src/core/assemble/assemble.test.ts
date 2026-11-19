@@ -69,6 +69,22 @@ describe('assembleApp', () => {
         expect(document.locales).toEqual(STORE_APP.locales);
     });
 
+    it('should leave screens and start out of the document of an app with no screens, which is then valid', () => {
+        // Arrange
+        const app = copy(STORE_APP);
+        app.screens = {};
+        delete app.start;
+
+        // Act
+        const { document, errors } = assembleApp(app, STORE_PARTS);
+
+        // Assert
+        expect(errors).toEqual([]);
+        expect(Object.hasOwn(document, 'screens')).toBe(false);
+        expect(Object.hasOwn(document, 'start')).toBe(false);
+        expect(validateApp(app, STORE_PARTS, STORE_LIBRARY).errors).toEqual([]);
+    });
+
     it('should carry used owner components as bare trees with their exposes, and leave unused ones out', () => {
         const { document } = assembleApp(STORE_APP, STORE_PARTS);
 

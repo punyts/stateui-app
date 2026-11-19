@@ -217,8 +217,11 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
         screens[name] = cloneJson(screen as unknown as JsonValue) as unknown as DocumentScreen;
         assembler.components(screen.root as unknown as JsonValue, `$.screens.${name}.root`);
     }
-    document.screens = screens;
-    document.start = blueprint.start;
+    // An app with no screens has neither: the document's own rules want a start for any screens there are
+    if (Object.keys(screens).length > 0 && blueprint.start !== undefined) {
+        document.screens = screens;
+        document.start = blueprint.start;
+    }
     if (Object.keys(assembler.composed).length > 0) document.composed = assembler.composed;
     if (Object.keys(logic).length > 0) document.logic = logic as unknown as JsonObject;
     if (blueprint.ephemeral !== undefined && blueprint.ephemeral.length > 0) document.ephemeral = [...blueprint.ephemeral];
