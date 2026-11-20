@@ -5,7 +5,7 @@ import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { DispatchHooks } from '../on/types.js';
 import type { MountedApp, MountOptions } from '../mount/types.js';
 import { APP_OPEN_EVENT } from './types.js';
-import type { AppHost, AppOpenRequest, EmbeddedApp, OpenedApp } from './types.js';
+import type { AppHost, AppOpenRequest, AttachedApp, EmbeddedApp, OpenedApp } from './types.js';
 
 type Mount = (host: Element, document: AppDocument, library: ComponentLibrary, hooks: DispatchHooks, options: MountOptions) => MountedApp;
 
@@ -24,6 +24,11 @@ function isOpenRequest(value: unknown): value is AppOpenRequest {
         typeof request.onEmit === 'function' &&
         typeof request.onNavigate === 'function'
     );
+}
+
+/** An app its host mounts itself, rather than a document to mount */
+function isAttached(opened: OpenedApp | AttachedApp): opened is AttachedApp {
+    return typeof (opened as Partial<AttachedApp>).attach === 'function';
 }
 
 /** A plain copy of a JSON value read from a store, which hands out live views */
@@ -86,7 +91,8 @@ function embed(request: AppOpenRequest, opened: OpenedApp, mount: Mount): Embedd
 
 /**
  * Answers the `ui-app-open` requests raised below `host` through the page's app host, mounting each app the host opens
- * with `mount` (`mountApp`, passed in so this module does not import it). Returns the listener's disposer
+ * with `mount` (`mountApp`, passed in so this module does not import it), or having the host attach one it mounts
+ * itself (`AttachedApp`). Returns the listener's disposer
  */
 export function answerAppRequests(host: Element, apps: AppHost, mount: Mount): () => void {
     const answer = (event: Event): void => {
@@ -95,7 +101,7 @@ export function answerAppRequests(host: Element, apps: AppHost, mount: Mount): (
         event.stopPropagation();
         const { app, live } = request;
         const ask = { app, live, ...(request.screen === undefined ? {} : { screen: request.screen }) };
-        const result = apps.open(ask).then((opened) => embed(request, opened, mount));
+        const result = apps.open(ask).then((opened) => (isAttached(opened) ? opened.attach(request) : embed(request, opened, mount)));
         result.catch((error: unknown) => report.warning('An embedded app was not opened', { app, reason: String(error) }));
         request.respond(result);
     };

@@ -38,10 +38,12 @@ export type Load3d = () => Promise<Scene3dChunk>;
 export interface ChunkLoaderOptions {
     /** How long a load waits for the script; `CHUNK_LOAD_TIMEOUT_MS` when absent */
     timeoutMs?: number;
+    /** Where the chunk scripts are, ending in `/`: `./` (beside the frame's page) when absent */
+    base?: string;
 }
 
 export interface ChunkLoader {
-    /** The `load3d` hook for the chunk named `hash`: one `<script src="./<hash>.js">` for each hash, however often it is called */
+    /** The `load3d` hook for the chunk named `hash`: one `<script src="<base><hash>.js">` for each hash, however often it is called */
     load3d(hash: string): Load3d;
     /** True for an error event of a chunk script that is still loading: its load rejects with `script_error`, so the window's error report skips it */
     owns(event: Event): boolean;
@@ -71,6 +73,7 @@ interface Pending {
  */
 export function createChunkLoader(doc: Document, options: ChunkLoaderOptions = {}): ChunkLoader {
     const timeoutMs = options.timeoutMs ?? CHUNK_LOAD_TIMEOUT_MS;
+    const base = options.base ?? './';
     const loads = new Map<string, Promise<Scene3dChunk>>();
     const pending = new Set<Pending>();
 
@@ -99,7 +102,7 @@ export function createChunkLoader(doc: Document, options: ChunkLoaderOptions = {
                 if (settle()) reject(new Load3dError('timeout', `The 3D chunk did not load within ${timeoutMs} ms`));
             }, timeoutMs);
             pending.add(entry);
-            script.src = `./${hash}.js`;
+            script.src = `${base}${hash}.js`;
             (doc.head ?? doc.documentElement).append(script);
         });
     }

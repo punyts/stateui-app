@@ -11,6 +11,8 @@ import type { Plugin } from 'esbuild';
 export interface RuntimeBundleManifest {
     hash: string;
     script: string;
+    /** The page bundle's script (page-entry.ts), content-hashed too; absent when the build had no page entry */
+    page?: string;
     /** The names of the catalog components the bundle was built with, so a server can tell when it is out of date */
     components: string[];
 }
@@ -18,6 +20,8 @@ export interface RuntimeBundleManifest {
 export interface RuntimeBundleOptions {
     /** The bundle entry file */
     entry: string;
+    /** The page bundle's entry file, built beside it into the same folder */
+    pageEntry?: string;
     /** The folder the script and `manifest.json` are written to; files of earlier builds are removed from it */
     outDir: string;
 }
@@ -72,13 +76,34 @@ function catalogComponents(): string[] {
 
 /**
  * Bundles `entry` (StateUI, the component system and the component library with their dependencies) into one
- * classic script. The file is named after a hash of its content, so a changed source gives a new name and the API
- * can serve it as immutable. A classic script, not a module: a frame sandboxed without `allow-same-origin` has an
- * opaque origin, and a module script would need a CORS response
+ * classic script, and `pageEntry` when given into another beside it. Each file is named after a hash of its content,
+ * so a changed source gives a new name and the API can serve it as immutable. A classic script, not a module: a frame
+ * sandboxed without `allow-same-origin` has an opaque origin, and a module script would need a CORS response
  */
 export async function buildRuntimeBundle(options: RuntimeBundleOptions): Promise<RuntimeBundleManifest> {
+    const runtime = await bundle(options.entry);
+    const page = options.pageEntry === undefined ? undefined : await bundle(options.pageEntry);
+    const manifest: RuntimeBundleManifest = {
+        hash: runtime.hash,
+        script: `${runtime.hash}.js`,
+        ...(page !== undefined && { page: `${page.hash}.js` }),
+        components: catalogComponents()
+    };
+
+    await mkdir(options.outDir, { recursive: true });
+    for (const name of await readdir(options.outDir)) {
+        if (name === MANIFEST_FILE || name.endsWith('.js')) await rm(join(options.outDir, name), { force: true });
+    }
+    await writeFile(join(options.outDir, manifest.script), runtime.contents);
+    if (page !== undefined && manifest.page !== undefined) await writeFile(join(options.outDir, manifest.page), page.contents);
+    await writeFile(join(options.outDir, MANIFEST_FILE), `${JSON.stringify(manifest)}\n`);
+    return manifest;
+}
+
+/** One entry bundled into one minified classic script, with the hash of its content */
+async function bundle(entry: string): Promise<{ hash: string; contents: Uint8Array }> {
     const result = await build({
-        entryPoints: [options.entry],
+        entryPoints: [entry],
         bundle: true,
         plugins: [componentOverlaysPlugin()],
         write: false,
@@ -92,19 +117,9 @@ export async function buildRuntimeBundle(options: RuntimeBundleOptions): Promise
     });
     const [output] = result.outputFiles;
     if (result.outputFiles.length !== 1 || !output) {
-        throw new Error(`The runtime bundle must be one file, esbuild produced ${result.outputFiles.length}`);
+        throw new Error(`A bundle must be one file, esbuild produced ${result.outputFiles.length}`);
     }
-
-    const hash = createHash('sha256').update(output.contents).digest('hex').slice(0, HASH_LENGTH);
-    const manifest: RuntimeBundleManifest = { hash, script: `${hash}.js`, components: catalogComponents() };
-
-    await mkdir(options.outDir, { recursive: true });
-    for (const name of await readdir(options.outDir)) {
-        if (name === MANIFEST_FILE || name.endsWith('.js')) await rm(join(options.outDir, name), { force: true });
-    }
-    await writeFile(join(options.outDir, manifest.script), output.contents);
-    await writeFile(join(options.outDir, MANIFEST_FILE), `${JSON.stringify(manifest)}\n`);
-    return manifest;
+    return { hash: createHash('sha256').update(output.contents).digest('hex').slice(0, HASH_LENGTH), contents: output.contents };
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -112,7 +127,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const manifest = await buildRuntimeBundle({
         entry: join(here, 'entry.ts'),
+        pageEntry: join(here, 'page-entry.ts'),
         outDir: join(here, '..', 'dist', 'runtime-bundle')
     });
-    process.stdout.write(`Built runtime bundle ${manifest.script}\n`);
+    process.stdout.write(`Built runtime bundle ${manifest.script} and page bundle ${manifest.page ?? ''}\n`);
 }

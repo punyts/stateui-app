@@ -65,6 +65,26 @@ describe('buildRuntimeBundle', () => {
         expect(manifest.script).toBe(`${manifest.hash}.js`);
     });
 
+    it('should write the page bundle beside the runtime, name it in the manifest and replace it on the next build', async () => {
+        // Arrange
+        const entry = join(dir, 'entry.ts');
+        const pageEntry = join(dir, 'page-entry.ts');
+        await writeFile(entry, 'window.name = "runtime";');
+        await writeFile(pageEntry, 'window.name = "page one";');
+        const first = await buildRuntimeBundle({ entry, pageEntry, outDir: join(dir, 'out') });
+        await writeFile(pageEntry, 'window.name = "page two";');
+
+        // Act
+        const second = await buildRuntimeBundle({ entry, pageEntry, outDir: join(dir, 'out') });
+
+        // Assert
+        expect(second.page).toMatch(/^[0-9a-f]{16}\.js$/);
+        expect(second.page).not.toBe(first.page);
+        expect(second.script).toBe(first.script);
+        expect((await readdir(join(dir, 'out'))).sort()).toEqual([MANIFEST_FILE, second.script, second.page as string].sort());
+        expect(await readFile(join(dir, 'out', second.page as string), 'utf8')).toContain('page two');
+    });
+
     it('should list the catalog components the bundle was built with, sorted', async () => {
         // Act
         const manifest = await bundleOf('window.name = "one";', 'out');

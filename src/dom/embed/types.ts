@@ -63,9 +63,18 @@ export interface OpenedApp {
 }
 
 /**
+ * What an app host gives for an app it mounts itself: one whose runtime it runs, such as a live app whose sync client
+ * writes its store. The host mounts it in the request's element, on its screen, calls `onEmit` and `onNavigate` as the
+ * app emits and moves, and leaves the document title alone
+ */
+export interface AttachedApp {
+    attach(request: Pick<AppOpenRequest, 'element' | 'screen' | 'onEmit' | 'onNavigate'>): EmbeddedApp;
+}
+
+/**
  * The page's adapter for the apps it shows inside components (`MountOptions.apps`). It resolves a name for whoever is
  * signed in, and rejects one they may not open. The page passes it, as it passes the function catalogs
  */
 export interface AppHost {
-    open(ask: AppAsk): Promise<OpenedApp>;
+    open(ask: AppAsk): Promise<OpenedApp | AttachedApp>;
 }
