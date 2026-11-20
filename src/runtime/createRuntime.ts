@@ -624,7 +624,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
         const describe = (element: Element): InspectedNode => inHostPixels(describeNode(element, componentOf));
         if (message.at !== undefined) {
             const point = toClient(message.at.x, message.at.y);
-            const chain = nodesAt(doc, point.x, point.y).filter(isMine);
+            const chain = nodesAt(doc, point.x, point.y, options.inPage === true ? host : undefined).filter(isMine);
             const at = chain[0]?.getAttribute('state') ?? undefined;
             post({ type: 'inspected', id: message.id, ...(at !== undefined && { at }), nodes: chain.map(describe) });
             return;

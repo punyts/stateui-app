@@ -121,6 +121,25 @@ describe('createRuntime in a page (inPage)', () => {
         expect(ofPaths?.nodes[0]?.rect.y).toBeCloseTo((box.y - origin.y) * 2, 0);
     });
 
+    it('should find the node at a point under an element of the page laid over the app, as an editor lays its layer', () => {
+        // Arrange
+        const { host, runtime, posted } = inPage();
+        runtime.handle(message('load', { document: document_ }));
+        const box = (find(host, 'x-cr-badge') as Element).getBoundingClientRect();
+        const origin = host.getBoundingClientRect();
+        const cover = document.body.appendChild(document.createElement('div'));
+        cover.style.cssText = `position: fixed; left: ${origin.x}px; top: ${origin.y}px; width: 400px; height: 200px; z-index: 5`;
+        const at = { x: box.x - origin.x + 4, y: box.y - origin.y + box.height / 2 };
+
+        // Act
+        runtime.handle(message('inspect', { id: 4, at }));
+
+        // Assert
+        expect(document.elementFromPoint(box.x + 4, box.y + box.height / 2)).toBe(cover);
+        const [answer] = posted.filter((item) => item.type === 'inspected') as unknown as Inspected[];
+        expect(answer?.at).toBe('$.app.children.first');
+    });
+
     it('should not take the nodes of another app in the same page as its own', () => {
         // Arrange: two apps with the same paths, one above the other
         const mine = inPage();

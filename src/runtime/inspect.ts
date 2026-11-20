@@ -16,21 +16,32 @@ function up(element: Element): Element | undefined {
     return root instanceof ShadowRoot ? root.host : undefined;
 }
 
-/** The deepest element at a point, looking into open shadow roots */
-function deepElementAt(doc: Document, x: number, y: number): Element | undefined {
-    let found = doc.elementFromPoint(x, y) ?? undefined;
+/** Whether `outer` holds `inner`, across shadow roots (an element holds itself) */
+function holds(outer: Element, inner: Element): boolean {
+    for (let at: Node | null = inner; at; at = at instanceof ShadowRoot ? at.host : at.parentNode) if (at === outer) return true;
+    return false;
+}
+
+/**
+ * The deepest element at a point, looking into open shadow roots. With `within`, only the elements on the way to it or
+ * inside it count, so an element of the page laid over the app (an editor's layer) does not hide it
+ */
+function deepElementAt(doc: Document, x: number, y: number, within?: Element): Element | undefined {
+    const fits = (element: Element): boolean => within === undefined || holds(element, within) || holds(within, element);
+    const topAt = (root: Document | ShadowRoot): Element | undefined => (within === undefined ? root.elementFromPoint(x, y) ?? undefined : root.elementsFromPoint(x, y).find(fits));
+    let found = topAt(doc);
     for (let depth = 0; found?.shadowRoot && depth < 64; depth++) {
-        const inner = found.shadowRoot.elementFromPoint(x, y);
+        const inner = topAt(found.shadowRoot);
         if (!inner || inner === found) break;
         found = inner;
     }
     return found;
 }
 
-/** The node elements from the one at a point out to the root, innermost first */
-export function nodesAt(doc: Document, x: number, y: number): Element[] {
+/** The node elements from the one at a point out to the root, innermost first; with `within`, see deepElementAt */
+export function nodesAt(doc: Document, x: number, y: number, within?: Element): Element[] {
     const chain: Element[] = [];
-    for (let element = deepElementAt(doc, x, y); element && chain.length < MAX_INSPECT_NODES; element = up(element)) {
+    for (let element = deepElementAt(doc, x, y, within); element && chain.length < MAX_INSPECT_NODES; element = up(element)) {
         if (isNodeElement(element)) chain.push(element);
     }
     return chain;
