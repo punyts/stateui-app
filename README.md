@@ -718,8 +718,9 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
    - `screens` holds each screen's resolved root by name, without its `<-` links.
    - `route` starts as `initialRoute(document)` and is protected: only `navigate` (an `on` entry, the logic,
      `MountedApp.navigate` or the runtime's `command` message) writes it, through `writeRoute`.
-4. `<sui-node>` gets a resolver (component name to the root component's tag) and options (`reflect(name)` from the shapes'
-   `reflect: true` properties). The store is mounted on `host`, the `on` dispatcher is attached and `<ui-app-root>`
+4. The store is mounted on `host` with the app's own resolver (component name to the root component's tag) and node
+   options (`reflect(name)` from the shapes' `reflect: true` properties), so several apps on different libraries share a
+   page and disposing one leaves the others' untouched. The `on` dispatcher is attached and `<ui-app-root>`
    is appended; it holds `<sui-node state="$.app">`. If the library registers its own `ui-app-root` first, that one is used (it then carries no token properties).
    With screens, `startScreens` shows the screen `$.route.screen` names: on its first visit a
    `<sui-node state="$.screens.{name}" data-sui-screen="{name}">` is appended directly to the `[layout-host]` of the

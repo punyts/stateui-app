@@ -66,6 +66,17 @@ defineComponent({
 defineComponent({ tag: 'x-mount-shell', template: '<sui-node state=".body"></sui-node>' });
 defineComponent({ tag: 'x-mount-records', template: '<i>{{ $.title }}</i>' });
 
+/** A second library that names the same components with its own tags, as another app in the page may */
+const loudLibrary: ComponentLibrary = {
+    panel: { tier: 'root', tag: 'x-loud-panel', shape: shapeOf({ children: { type: 'map', items: 'string', default: {} } }) },
+    label: { tier: 'root', tag: 'x-loud-label', shape: shapeOf({ text: { type: 'string', default: '' }, mood: { type: 'string', default: 'plain' } }) }
+};
+defineComponent({
+    tag: 'x-loud-panel',
+    template: '<sui-node repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
+});
+defineComponent({ tag: 'x-loud-label', template: '<strong>{{ $.text }}</strong>' });
+
 /** Every text node below `root`, crossing shadow roots */
 function textOf(root: ParentNode): string {
     let text = '';
@@ -264,6 +275,34 @@ describe('mountApp in Chromium', () => {
         expect(one.store?.get('$.data.name')).toBe('One');
         one.store?.set('$.data.name', 'Changed');
         expect(textOf(second)).toContain('Two');
+    });
+
+    it('should render two apps on different libraries side by side, and keep one working when the other is disposed', () => {
+        // Arrange
+        const first = freshHost();
+        const second = freshHost();
+        const one = start(first, { app: panel({ hello: { component: 'label', text: 'One', mood: 'danger' } }) });
+
+        // Act
+        const two = mountApp(second, { app: panel({ hello: { component: 'label', text: 'Two', mood: 'danger' } }) }, loudLibrary, {});
+        apps.push(two);
+        one.store?.set('$.app.children.more', { component: 'label', text: 'More' });
+
+        // Assert
+        expect(find(first, 'x-mount-label')?.getAttribute('mood')).toBe('danger');
+        expect(find(first, 'x-loud-label')).toBeUndefined();
+        expect(textOf(first)).toContain('More');
+        expect(find(second, 'x-loud-label')?.hasAttribute('mood')).toBe(false);
+        expect(find(second, 'x-mount-label')).toBeUndefined();
+
+        // Act
+        two.dispose();
+        one.store?.set('$.app.children.hello.component', 'button');
+
+        // Assert
+        expect(find(first, 'x-mount-button')).toBeDefined();
+        expect(textOf(first)).toContain('More');
+        expect(errorSpy).not.toHaveBeenCalled();
     });
 
     it('should not call the hooks of a disposed app', () => {

@@ -1,7 +1,7 @@
 import { report } from '@punyts/core';
 import { createStore } from '@punyts/state';
 import type { Store } from '@punyts/state';
-import { defineComponent, mount, setNodeResolver, unmount } from '@punyts/stateui';
+import { defineComponent, mount, unmount } from '@punyts/stateui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { parseShape } from '../../core/shape/index.js';
@@ -69,7 +69,6 @@ interface Fixture {
  */
 function mountRows(on: unknown, renderAt: string = SLOT, nested = false, navigate?: DispatcherOptions['navigate']): Fixture {
     const row = nested ? { component: 'panel', children: { open: { component: 'button', on } } } : { component: 'button', on };
-    setNodeResolver((name) => tags[name]);
     const store = createStore<unknown>({
         app: { component: 'panel', children: { orders: { component: 'records', row } } },
         data: { orders: { k1: { id: 'k1', customer: 'Ada' }, k2: { id: 'k2', customer: 'Grace' } }, selected: '' },
@@ -78,7 +77,7 @@ function mountRows(on: unknown, renderAt: string = SLOT, nested = false, navigat
     store.link(`${SLOT}.row`, '$.data.orders.k1');
     if (renderAt !== SLOT) store.link(`${OWNER}.slots`, '$.runtime.nodes.app.children.orders.slots');
     const host = document.body.appendChild(document.createElement('div'));
-    mount(host, store);
+    mount(host, store, '$', { resolver: (name) => tags[name] });
     for (const path of ['$.app', renderAt]) host.appendChild(document.createElement('sui-node')).setAttribute('state', path);
     const onError = vi.fn();
     createDispatcher({ host, store, library, hooks: { onError }, ...(navigate === undefined ? {} : { navigate }) });
@@ -94,7 +93,6 @@ describe('$row and relative targets in a row template in Chromium', () => {
     });
 
     afterEach(() => {
-        setNodeResolver(undefined);
         vi.restoreAllMocks();
         for (const host of Array.from(document.body.children)) unmount(host);
         document.body.replaceChildren();
@@ -254,7 +252,6 @@ describe('$row and relative targets in a row template in Chromium', () => {
 
     it('should report $row used outside a row template', () => {
         // Arrange
-        setNodeResolver((name) => tags[name]);
         const store = createStore<unknown>({
             app: {
                 component: 'panel',
@@ -262,7 +259,7 @@ describe('$row and relative targets in a row template in Chromium', () => {
             }
         });
         const host = document.body.appendChild(document.createElement('div'));
-        mount(host, store);
+        mount(host, store, '$', { resolver: (name) => tags[name] });
         host.appendChild(document.createElement('sui-node')).setAttribute('state', '$.app');
         const onError = vi.fn();
         createDispatcher({ host, store, library, hooks: { onError } });

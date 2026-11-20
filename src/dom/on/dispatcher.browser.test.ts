@@ -1,7 +1,7 @@
 import { report } from '@punyts/core';
 import { createStore } from '@punyts/state';
 import type { Store } from '@punyts/state';
-import { defineComponent, mount, setNodeResolver, unmount } from '@punyts/stateui';
+import { defineComponent, mount, unmount } from '@punyts/stateui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
@@ -68,11 +68,10 @@ interface Fixture {
 const tags: Record<string, string> = { panel: 'x-on-panel', button: 'x-on-button', dialog: 'x-on-dialog', drawing: 'x-on-drawing' };
 
 function mountApp(app: unknown, data: unknown = {}): Fixture {
-    setNodeResolver((name) => tags[name]);
     // As mountApp builds it: the events have their own branch from the start
     const store = createStore<unknown>({ app, data, raised: {} });
     const host = document.body.appendChild(document.createElement('div'));
-    mount(host, store);
+    mount(host, store, '$', { resolver: (name) => tags[name] });
     const root = host.appendChild(document.createElement('sui-node'));
     root.setAttribute('state', '$.app');
     const hooks = { onEmit: vi.fn(), onError: vi.fn() };
@@ -109,7 +108,6 @@ describe('on dispatch in Chromium', () => {
     });
 
     afterEach(() => {
-        setNodeResolver(undefined);
         errorSpy.mockRestore();
         for (const host of Array.from(document.body.children)) unmount(host);
         document.body.replaceChildren();
@@ -449,7 +447,6 @@ describe('ui-file-transfer in Chromium', () => {
     const reference = { id: 'f1', name: 'a.txt', size: 1, type: 'text/plain' };
 
     afterEach(() => {
-        setNodeResolver(undefined);
         for (const host of Array.from(document.body.children)) unmount(host);
         document.body.replaceChildren();
     });
@@ -515,7 +512,6 @@ describe('ui-file-read in Chromium', () => {
     const read = { file: { id: 'f1', name: 'a.png', size: 1, type: 'image/png' }, data: new ArrayBuffer(1) };
 
     afterEach(() => {
-        setNodeResolver(undefined);
         for (const host of Array.from(document.body.children)) unmount(host);
         document.body.replaceChildren();
     });
@@ -580,7 +576,6 @@ describe('ui-load-3d in Chromium', () => {
     const chunk = { version: '0.1.0', createScene3d: () => ({}) };
 
     afterEach(() => {
-        setNodeResolver(undefined);
         for (const host of Array.from(document.body.children)) unmount(host);
         document.body.replaceChildren();
     });
@@ -668,7 +663,6 @@ describe('shape events from a drawing in Chromium', () => {
     });
 
     afterEach(() => {
-        setNodeResolver(undefined);
         errorSpy.mockRestore();
         for (const host of Array.from(document.body.children)) unmount(host);
         document.body.replaceChildren();

@@ -1,6 +1,6 @@
 import { report } from '@punyts/core';
 import { createStore } from '@punyts/state';
-import { mount, setNodeOptions, setNodeResolver, unmount } from '@punyts/stateui';
+import { mount, unmount } from '@punyts/stateui';
 import type { NodeOptions, StateUIElement } from '@punyts/stateui';
 import { buildError, isValid } from '../../core/errors/index.js';
 import { FunctionTable, functionPaths } from '../../core/functions/index.js';
@@ -33,9 +33,6 @@ import type { AppState, MountContext, MountedApp, MountOptions, StartedContext }
 
 const DEFAULT_LOCALE = 'en';
 const APP_PATH = '$.app';
-
-/** The node resolver and options are global to StateUI; this marks the app that set them last */
-let owner: symbol | undefined;
 
 function rootEntry(library: ComponentLibrary, name: string): { tag: string; shape: Parameters<typeof reflectedProperties>[0] } | undefined {
     const entry = Object.hasOwn(library, name) ? library[name] : undefined;
@@ -316,10 +313,8 @@ export function mountApp(
         }
     }
 
-    const token = Symbol('mountApp');
-    owner = token;
-    setNodeResolver((name) => rootEntry(library, name)?.tag);
-    setNodeOptions(context.options);
+    // Each app's nodes render with its own library and options, so apps on different libraries share a page
+    const resolver = (name: string): string | undefined => rootEntry(library, name)?.tag;
     const rootTag = ensureAppRoot(collected.tokens);
     let functions: FunctionTable | undefined;
     try {
@@ -332,7 +327,7 @@ export function mountApp(
     // The code of the functions the document and the templates of its components name loads before the app shows and
     // its logic starts: at once when it is here, else when its chunks arrive
     const loading = functions?.prepare(functionPaths([document, ...placedTemplates(library, [state.app, state.screens])]));
-    if (loading === undefined) mount(host, store, '$', { callable });
+    if (loading === undefined) mount(host, store, '$', { callable, resolver, nodeOptions: context.options });
     const navigate =
         screens === undefined
             ? undefined
@@ -400,7 +395,7 @@ export function mountApp(
     else
         void loading.then(() => {
             if (disposed) return;
-            mount(host, store, '$', { callable });
+            mount(host, store, '$', { callable, resolver, nodeOptions: context.options });
             startLogic();
         });
     return {
@@ -466,11 +461,6 @@ export function mountApp(
                 }
             }
             disposeLinks(store, appLinks);
-            if (owner === token) {
-                owner = undefined;
-                setNodeResolver(undefined);
-                setNodeOptions(undefined);
-            }
         }
     };
 }
