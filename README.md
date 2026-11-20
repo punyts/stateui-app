@@ -684,8 +684,9 @@ runtime from the catalogs the operator installed, never stored in an app's state
   `callable`. The validator warns `SUI-LOGIC-FUNCTION` for a path the server does not run, and `SUI-LOGIC-FUNCTION-FIT`
   refuses a unit whose inputs or outputs do not fit the function's schemas.
 - **Loading.** `mountApp` (`MountOptions.functions`, the catalogs) loads the functions the document names that run in
-  the browser before its logic starts, effects included. A function named only inside a node's template is not loaded
-  by the mount; one the logic also names is.
+  the browser before its logic starts, effects included, and those the templates of the components it places name
+  (and of the components those templates place). A node written after the mount that names a new function does not
+  load it; it calls nothing until the app mounts again.
 
 ## Starting an application: `mountApp`
 

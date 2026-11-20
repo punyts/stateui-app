@@ -141,16 +141,15 @@ describe('browser logic', () => {
         expect(app.store!.get('$.data.stats.status.state')).toBe('ready');
     });
 
-    it('should let a component template call an expression function by its path, once a lazy catalog loaded it', async () => {
+    it("should load a function that only a placed component's template names, and show the view once it has loaded", async () => {
         // Arrange
         host = document_().body.appendChild(document_().createElement('div'));
         const stars = loaded('$.functions.host.stars', 'expression', ((count: unknown) => '*'.repeat(Number(count))) as FunctionCode);
         const lazy: FunctionCatalog = { name: 'host', entries: [stars].map(({ code: _code, ...entry }) => entry), load: () => Promise.resolve(stars.code) };
         const document = {
             data: {},
-            app: { component: 'page', children: { rating: { component: 'stars', count: 3 } } },
-            // the document names the function, so it loads; the template is not in the document
-            logic: { rules: { never: { when: { path: '$.data.none' }, do: [{ command: 'set', target: '$.data.shown', value: '{{ $.functions.host.stars(1) }}' }] } } }
+            // only the template of `stars` names the function
+            app: { component: 'page', children: { rating: { component: 'stars', count: 3 } } }
         } as unknown as AppDocument;
 
         // Act

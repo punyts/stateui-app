@@ -1,7 +1,7 @@
 import { report } from '@punyts/core';
 import { createStore } from '@punyts/state';
 import { mount, setNodeOptions, setNodeResolver, unmount } from '@punyts/stateui';
-import type { NodeOptions } from '@punyts/stateui';
+import type { NodeOptions, StateUIElement } from '@punyts/stateui';
 import { buildError, isValid } from '../../core/errors/index.js';
 import { FunctionTable, functionPaths } from '../../core/functions/index.js';
 import type { BuildError } from '../../core/errors/index.js';
@@ -40,6 +40,36 @@ let owner: symbol | undefined;
 function rootEntry(library: ComponentLibrary, name: string): { tag: string; shape: Parameters<typeof reflectedProperties>[0] } | undefined {
     const entry = Object.hasOwn(library, name) ? library[name] : undefined;
     return entry?.tier === 'root' ? entry : undefined;
+}
+
+const CUSTOM_TAG = /<([a-z][a-z0-9._]*-[a-z0-9._-]*)[\s/>]/g;
+
+/**
+ * The templates of the components the trees place, and of the components those templates place in turn: what the
+ * document does not hold but a view's expressions may call functions from. A component not defined yet has none
+ */
+function placedTemplates(library: ComponentLibrary, trees: readonly unknown[]): string[] {
+    const tags = new Set<string>();
+    const visit = (value: unknown): void => {
+        if (Array.isArray(value)) {
+            for (const item of value) visit(item);
+        } else if (value !== null && typeof value === 'object') {
+            const component = (value as Record<string, unknown>)['component'];
+            const tag = typeof component === 'string' ? rootEntry(library, component)?.tag : undefined;
+            if (tag !== undefined) tags.add(tag);
+            for (const item of Object.values(value)) visit(item);
+        }
+    };
+    for (const tree of trees) visit(tree);
+    const templates: string[] = [];
+    // A tag a template places joins the set while it is walked, so its template is read too
+    for (const tag of tags) {
+        const template = (customElements.get(tag) as typeof StateUIElement | undefined)?.template;
+        if (template === undefined) continue;
+        templates.push(template);
+        for (const match of template.matchAll(CUSTOM_TAG)) tags.add(match[1] as string);
+    }
+    return templates;
 }
 
 function baseOptions(library: ComponentLibrary, componentTokens: readonly ComponentToken[]): NodeOptions {
@@ -299,9 +329,9 @@ export function mountApp(
     }
     /** What a view's expression calls at a function path: the expression function loaded there */
     const callable = (_value: unknown, path: string): ((...args: never[]) => unknown) | undefined => functions?.expression(path);
-    // The code of the functions the document names loads before the app shows and its logic starts: at once when it
-    // is here, else when its chunks arrive
-    const loading = functions?.prepare(functionPaths(document as unknown as JsonValue));
+    // The code of the functions the document and the templates of its components name loads before the app shows and
+    // its logic starts: at once when it is here, else when its chunks arrive
+    const loading = functions?.prepare(functionPaths([document, ...placedTemplates(library, [state.app, state.screens])]));
     if (loading === undefined) mount(host, store, '$', { callable });
     const navigate =
         screens === undefined
