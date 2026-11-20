@@ -158,6 +158,24 @@ describe('createRuntime in a page (inPage)', () => {
         expect(answer?.nodes).toEqual([]);
     });
 
+    it('should find its own nodes by path when an app before it in the page has the same paths', () => {
+        // Arrange: two apps with the same paths, the other one first in the page
+        const other = inPage();
+        const mine = inPage();
+        other.runtime.handle(message('load', { document: document_ }));
+        mine.runtime.handle(message('load', { document: document_ }));
+        const box = (find(mine.host, 'x-cr-badge') as Element).getBoundingClientRect();
+        const origin = mine.host.getBoundingClientRect();
+
+        // Act
+        mine.runtime.handle(message('inspect', { id: 5, paths: ['$.app.children.first'] }));
+
+        // Assert
+        const [answer] = mine.posted.filter((item) => item.type === 'inspected') as unknown as Inspected[];
+        expect(answer?.nodes.map((node) => node.path)).toEqual(['$.app.children.first']);
+        expect(answer?.nodes[0]?.rect.y).toBeCloseTo(box.y - origin.y, 0);
+    });
+
     it('should answer an app asked for inside the loaded app through the app host it was given', async () => {
         // Arrange
         const attached: EmbeddedApp = { navigate: () => undefined, dispose: () => undefined };

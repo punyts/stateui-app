@@ -47,8 +47,8 @@ export function nodesAt(doc: Document, x: number, y: number, within?: Element): 
     return chain;
 }
 
-/** The node elements of the given paths, found by walking the document and every open shadow root */
-export function nodesOf(doc: Document, paths: readonly string[]): Map<string, Element> {
+/** The node elements of the given paths, found by walking `root` (the document, or an app's element) and every open shadow root */
+export function nodesOf(root: Document | Element, paths: readonly string[]): Map<string, Element> {
     const wanted = new Set(paths);
     const found = new Map<string, Element>();
     const visit = (parent: ParentNode): void => {
@@ -62,7 +62,7 @@ export function nodesOf(doc: Document, paths: readonly string[]): Map<string, El
             visit(child);
         }
     };
-    if (wanted.size > 0) visit(doc);
+    if (wanted.size > 0) visit(root);
     return found;
 }
 

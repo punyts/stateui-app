@@ -607,11 +607,9 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
         return false;
     }
 
-    /** The node elements of some paths in this app */
+    /** The node elements of some paths in this app: in a page, looked for only inside its element, since another app there may have the same paths */
     function mineOf(paths: readonly string[]): Map<string, Element> {
-        const found = nodesOf(doc, paths);
-        for (const [path, element] of found) if (!isMine(element)) found.delete(path);
-        return found;
+        return nodesOf(options.inPage === true ? host : doc, paths);
     }
 
     /** Answers an editor over the frame or the page: the node at a point and its ancestors, or the nodes of some paths */
