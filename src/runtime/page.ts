@@ -19,7 +19,7 @@ export interface StateuiPage {
     readonly mountApp: typeof mountApp;
     /**
      * `createRuntime` in the page: on `host`, with the library, its functions and overlays, `inPage`, no route, and the
-     * 3D chunk looked for beside the page bundle's script
+     * 3D chunk looked for beside the page bundle's script; `apps` is the page's app host for its `embeddedApp` nodes
      */
-    createRuntime(options: Pick<RuntimeCoreOptions, 'host' | 'nonce' | 'post'>): RuntimeCore;
+    createRuntime(options: Pick<RuntimeCoreOptions, 'host' | 'nonce' | 'post' | 'apps'>): RuntimeCore;
 }

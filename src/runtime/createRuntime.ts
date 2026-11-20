@@ -17,6 +17,7 @@ import type { JsonValue } from '../core/types.js';
 import { registerLocaleStep } from '../dom/locale/index.js';
 import { mountApp, registerMountStep } from '../dom/mount/index.js';
 import type { MountedApp } from '../dom/mount/index.js';
+import type { AppHost } from '../dom/embed/types.js';
 import type { CommandContext } from '../dom/on/commands.js';
 import { applyOverlay } from '../dom/theme/index.js';
 import type { ThemeStore } from '../dom/theme/index.js';
@@ -164,6 +165,11 @@ export interface RuntimeCoreOptions extends Omit<RuntimeOptions, 'host'> {
      * before any zoom around it
      */
     readonly inPage?: boolean;
+    /**
+     * The page's app host (`MountOptions.apps`), for the `embeddedApp` nodes of an app in the page: every load mounts
+     * with it. None when absent, and an `embeddedApp` then shows its label
+     */
+    readonly apps?: AppHost;
 }
 
 /** A runtime without its transport: the host hands it messages, and it posts its own through `post` */
@@ -450,6 +456,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
                     route: options.route ?? false,
                     ...(options.inPage === true && { embedded: true }),
                     ...(options.functions !== undefined && { functions: options.functions }),
+                    ...(options.apps !== undefined && { apps: options.apps }),
                     ...(message.instance !== undefined && { instance: message.instance })
                 }
             );

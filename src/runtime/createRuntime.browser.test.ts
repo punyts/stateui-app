@@ -5,6 +5,8 @@ import type { ComponentLibrary } from '../core/resolve/index.js';
 import { parseShape } from '../core/shape/index.js';
 import type { Shape } from '../core/shape/index.js';
 import type { AppDocument } from '../core/types.js';
+import { APP_OPEN_EVENT } from '../dom/embed/types.js';
+import type { AppAsk, AppHost, EmbeddedApp } from '../dom/embed/types.js';
 import { PROTOCOL_VERSION } from './protocol.js';
 import { createRuntime } from './index.js';
 import type { RuntimeCore } from './index.js';
@@ -69,12 +71,12 @@ describe('createRuntime in a page (inPage)', () => {
     });
 
     /** A runtime on a new element of the page, drawn at `zoom` of its size, and what it posted */
-    function inPage(zoom = 1): { host: HTMLElement; runtime: RuntimeCore; posted: Posted[] } {
+    function inPage(zoom = 1, apps?: AppHost): { host: HTMLElement; runtime: RuntimeCore; posted: Posted[] } {
         const frame = document.body.appendChild(document.createElement('div'));
         frame.style.cssText = `width: 400px; transform-origin: 0 0; transform: scale(${zoom})`;
         const host = frame.appendChild(document.createElement('div'));
         const posted: Posted[] = [];
-        const runtime = createRuntime({ host, nonce: NONCE, library, post: (data) => void posted.push(data as Posted), inPage: true });
+        const runtime = createRuntime({ host, nonce: NONCE, library, post: (data) => void posted.push(data as Posted), inPage: true, ...(apps !== undefined && { apps }) });
         runtimes.push(runtime);
         return { host, runtime, posted };
     }
@@ -135,6 +137,24 @@ describe('createRuntime in a page (inPage)', () => {
         const [answer] = mine.posted.filter((item) => item.type === 'inspected') as unknown as Inspected[];
         expect(answer?.at).toBeUndefined();
         expect(answer?.nodes).toEqual([]);
+    });
+
+    it('should answer an app asked for inside the loaded app through the app host it was given', async () => {
+        // Arrange
+        const attached: EmbeddedApp = { navigate: () => undefined, dispose: () => undefined };
+        const asks: AppAsk[] = [];
+        const apps: AppHost = { open: (ask) => { asks.push(ask); return Promise.resolve({ attach: () => attached }); } };
+        const { host, runtime } = inPage(1, apps);
+        runtime.handle(message('load', { document: document_ }));
+        const inside = (find(host, 'x-cr-badge') as Element).appendChild(document.createElement('div'));
+        let result: Promise<EmbeddedApp> | undefined;
+
+        // Act
+        inside.dispatchEvent(new CustomEvent(APP_OPEN_EVENT, { bubbles: true, composed: true, detail: { app: 'shop', live: true, element: inside, onEmit: () => undefined, onNavigate: () => undefined, respond: (given: Promise<EmbeddedApp>) => void (result = given) } }));
+
+        // Assert
+        expect(await result).toBe(attached);
+        expect(asks).toEqual([{ app: 'shop', live: true }]);
     });
 
     it('should remove the app from its element when disposed', () => {
