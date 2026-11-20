@@ -27,6 +27,7 @@ import type { ComponentToken } from '../../core/theme/index.js';
 import { startBrowserLogic } from './logic.js';
 import { startScreens, writeRoute } from './screens.js';
 import type { ScreenView } from './screens.js';
+import { answerAppRequests } from '../embed/answer.js';
 import { mountSteps } from './steps.js';
 import '../route/index.js';
 import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
@@ -76,7 +77,7 @@ function baseOptions(library: ComponentLibrary, componentTokens: readonly Compon
     };
 }
 
-function initialState(document: AppDocument, app: Node, mode: AppMode, screens: Record<string, Node> | undefined): AppState {
+function initialState(document: AppDocument, app: Node, mode: AppMode, screens: Record<string, Node> | undefined, embedded: boolean): AppState {
     const route = initialRoute(document);
     return {
         ...(screens === undefined ? {} : { screens }),
@@ -91,7 +92,8 @@ function initialState(document: AppDocument, app: Node, mode: AppMode, screens: 
             // The document's own icons; the runtime adds the icon set's that the host sends
             icons: cloneJson((document.icons ?? {}) as unknown as JsonObject) as JsonObject,
             empty: {},
-            sync: { mode, status: mode === 'standalone' ? 'standalone' : 'connecting', waiting: 0 }
+            sync: { mode, status: mode === 'standalone' ? 'standalone' : 'connecting', waiting: 0 },
+            ...(embedded ? { embedded: true } : {})
         }
     };
 }
@@ -251,7 +253,7 @@ export function mountApp(
         restoreRowLinks(links.tree, rows, path);
         screenTrees = { ...screenTrees, [name]: links.tree };
     }
-    const state = initialState(document, extracted.tree, mode, screenTrees);
+    const state = initialState(document, extracted.tree, mode, screenTrees, options.embedded === true);
     let instanceActive: Record<string, string> = {};
     if (options.instance !== undefined) {
         const laid = layInstance(
@@ -348,6 +350,8 @@ export function mountApp(
         recordHover: usesRaisedHover(document),
         ...(navigate === undefined ? {} : { navigate })
     });
+    // The apps the components below ask for by name are mounted here, each on its own root
+    const stopApps = options.apps === undefined ? undefined : answerAppRequests(host, options.apps, mountApp);
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));
     const appTag = rootEntry(library, APP_COMPONENT)?.tag;
     const screenView: ScreenView | undefined =
@@ -450,6 +454,7 @@ export function mountApp(
             disposed = true;
             stopLogic?.();
             dispatcher.dispose();
+            stopApps?.();
             screenView?.dispose();
             root.remove();
             unmount(host);

@@ -5,6 +5,8 @@ export type { LocaleStepHandle, LocaleStore, NodeLocale, NodeLocaleOptions, Node
 export { generateSharedSheet } from './articulation/index.js';
 export { generateLayoutBase, generateLayoutSheet, generateLayoutSheets } from './layout/index.js';
 export { mountApp, mountSteps, registerMountStep } from './mount/index.js';
+export { APP_OPEN_EVENT, answerAppRequests } from './embed/index.js';
+export type { AppAsk, AppHost, AppOpenRequest, EmbeddedApp, OpenedApp } from './embed/index.js';
 export { NAVIGATE_EVENT, ROUTE_STEP } from './route/index.js';
 export type { NavigateRequest } from './route/index.js';
 export type { AppState, MountContext, MountedApp, MountOptions, MountStep, StartedContext } from './mount/index.js';

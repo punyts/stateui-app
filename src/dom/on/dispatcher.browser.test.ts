@@ -460,9 +460,9 @@ describe('ui-file-transfer in Chromium', () => {
 
     it('should hand the file, the progress callback and the signal to hooks.transferFile and respond with its promise', async () => {
         // Arrange
-        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const { host, hooks, element, store } = mountApp(panel({ b: { component: 'button' } }));
         const transferFile = vi.fn(() => Promise.resolve(reference));
-        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, transferFile } });
+        const dispatcher = createDispatcher({ host, store, library, hooks: { ...hooks, transferFile } });
         const onProgress = vi.fn();
         const controller = new AbortController();
         const { respond, file, detail } = request(onProgress, controller.signal);
@@ -491,9 +491,9 @@ describe('ui-file-transfer in Chromium', () => {
 
     it('should ignore a detail that is not a file request and stop listening after dispose', () => {
         // Arrange
-        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const { host, element, dispatcher, store } = mountApp(panel({ b: { component: 'button' } }));
         const transferFile = vi.fn(() => Promise.resolve(reference));
-        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { transferFile } });
+        const second = createDispatcher({ host, store, library, hooks: { transferFile } });
         const { respond, detail } = request();
 
         // Act
@@ -524,9 +524,9 @@ describe('ui-file-read in Chromium', () => {
 
     it('should hand the id and the signal to hooks.readFile and respond with its promise', async () => {
         // Arrange
-        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const { host, hooks, element, store } = mountApp(panel({ b: { component: 'button' } }));
         const readFile = vi.fn(() => Promise.resolve(read));
-        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, readFile } });
+        const dispatcher = createDispatcher({ host, store, library, hooks: { ...hooks, readFile } });
         const controller = new AbortController();
         const { respond, detail } = request('f1', controller.signal);
 
@@ -554,9 +554,9 @@ describe('ui-file-read in Chromium', () => {
 
     it('should ignore a detail that is not a read request and stop listening after dispose', () => {
         // Arrange
-        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const { host, element, dispatcher, store } = mountApp(panel({ b: { component: 'button' } }));
         const readFile = vi.fn(() => Promise.resolve(read));
-        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { readFile } });
+        const second = createDispatcher({ host, store, library, hooks: { readFile } });
         const { respond, detail } = request('f1');
 
         // Act
@@ -587,9 +587,9 @@ describe('ui-load-3d in Chromium', () => {
 
     it('should respond with the promise of hooks.load3d and stop the event', async () => {
         // Arrange
-        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const { host, hooks, element, store } = mountApp(panel({ b: { component: 'button' } }));
         const load3d = vi.fn(() => Promise.resolve(chunk));
-        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, load3d } });
+        const dispatcher = createDispatcher({ host, store, library, hooks: { ...hooks, load3d } });
         const outside = vi.fn();
         document.body.addEventListener('ui-load-3d', outside);
         const { respond, detail } = request();
@@ -608,9 +608,9 @@ describe('ui-load-3d in Chromium', () => {
 
     it('should hand on the rejection of hooks.load3d', async () => {
         // Arrange
-        const { host, hooks, element } = mountApp(panel({ b: { component: 'button' } }));
+        const { host, hooks, element, store } = mountApp(panel({ b: { component: 'button' } }));
         const failure = Object.assign(new Error('The 3D chunk script could not be loaded'), { code: 'load_failed' });
-        const dispatcher = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { ...hooks, load3d: () => Promise.reject(failure) } });
+        const dispatcher = createDispatcher({ host, store, library, hooks: { ...hooks, load3d: () => Promise.reject(failure) } });
         const { respond, detail } = request();
 
         // Act
@@ -633,11 +633,31 @@ describe('ui-load-3d in Chromium', () => {
         expect(respond).not.toHaveBeenCalled();
     });
 
+    it('should not answer a request raised in another app’s store, and let it go on', () => {
+        // Arrange
+        const { host, element } = mountApp(panel({ b: { component: 'button' } }));
+        const load3d = vi.fn(() => Promise.resolve(chunk));
+        const around = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { load3d } });
+        const outside = vi.fn();
+        document.body.addEventListener('ui-load-3d', outside);
+        const { respond, detail } = request();
+
+        // Act
+        raise(element('$.app.children.b'), 'ui-load-3d', detail);
+
+        // Assert
+        expect(load3d).not.toHaveBeenCalled();
+        expect(respond).not.toHaveBeenCalled();
+        expect(outside).toHaveBeenCalledTimes(1);
+        document.body.removeEventListener('ui-load-3d', outside);
+        around.dispose();
+    });
+
     it('should ignore a detail without respond and stop listening after dispose', () => {
         // Arrange
-        const { host, element, dispatcher } = mountApp(panel({ b: { component: 'button' } }));
+        const { host, element, dispatcher, store } = mountApp(panel({ b: { component: 'button' } }));
         const load3d = vi.fn(() => Promise.resolve(chunk));
-        const second = createDispatcher({ host, store: createStore<unknown>({ app: {} }), library, hooks: { load3d } });
+        const second = createDispatcher({ host, store, library, hooks: { load3d } });
         const { respond, detail } = request();
 
         // Act

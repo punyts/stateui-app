@@ -8,6 +8,7 @@ import type { AppInstance } from '../../core/snapshot/index.js';
 import type { FunctionCatalog } from '../../core/functions/index.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
 import type { AppMode } from '../../core/validate/index.js';
+import type { AppHost } from '../embed/types.js';
 import type { DispatchHooks } from '../on/index.js';
 import type { SystemHooks } from '../theme/system.js';
 
@@ -37,6 +38,8 @@ export interface AppState {
         empty: JsonObject;
         /** The sync status the host writes: the mode, `standalone`, `connecting`, `online` or `offline`, and the changes waiting */
         sync: { mode: AppMode; status: string; waiting: number };
+        /** True for an app mounted inside another's component (`MountOptions.embedded`): it leaves the document title alone */
+        embedded?: boolean;
     };
 }
 
@@ -98,6 +101,15 @@ export interface MountOptions {
      * runs
      */
     functions?: readonly FunctionCatalog[];
+    /**
+     * The page's app host: what an `embeddedApp` below asks for an app by name. Without it the component shows its label
+     */
+    apps?: AppHost;
+    /**
+     * True when the app is mounted inside another app's component: `$.runtime.embedded` is set, so the app leaves the
+     * document's title alone. The app host's answer sets it, with `route: false`
+     */
+    embedded?: boolean;
 }
 
 /** What `mountApp` returns */

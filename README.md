@@ -741,9 +741,22 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
    With it on or off, an element of the app raises `sui-navigate` (`NAVIGATE_EVENT`, bubbling and composed, detail
    `{ screen, params? }`, as `link` and `menuItem` do for a `screen`) to navigate; the app stops the event, and a
    refusal is a warning that changes nothing.
-5. `dispose()` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and clears the resolver and
-   options (only if no later `mountApp` replaced them). It is safe to call twice. The resolver and options are global to
-   StateUI, so run one app per page at a time.
+5. `dispose()` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and the root's resolver and
+   options, and stops answering app requests. It is safe to call twice.
+
+**Apps inside an app.** `MountOptions.apps` is the page's `AppHost` (`src/dom/embed/`): with it, `mountApp` answers the
+`ui-app-open` event (`APP_OPEN_EVENT`, bubbling and composed) that a component such as `embeddedApp` raises below its
+host. The detail is an `AppOpenRequest`: what is asked (`AppAsk`: `app`, the name the host knows it by, never a URL;
+`screen?`; `live`), the `element` to mount in, `onEmit`, `onNavigate` and `respond`. `answerAppRequests` stops the
+event, calls `apps.open(ask)` and mounts the `OpenedApp` it gives (`document`, `library`, `options?`, `hooks?`) with
+`mountApp` and `{ route: false, embedded: true }`, on the asked screen; `respond` gets an `EmbeddedApp`
+(`navigate(screen)`, `dispose()`). The app inside has its own store, resolver and root, and its emits and the screens it
+moves to itself reach `onEmit` and `onNavigate`. `OpenedApp.follows` is another app's store (a live one, for a preview):
+its `$.data` is copied in at mount and each change after is followed. `mounted` and `disposed` tell the host when the
+app comes and goes. A refused or failed open is a warning naming the app, and the request's promise rejects.
+`MountOptions.embedded` sets `$.runtime.embedded`; the `app` root then leaves the document title alone. The dispatcher of
+each app runs a node's `on` only for events raised inside its own store, and answers the file and 3D requests only when
+they were not raised in another app's store, so an app never lends its hooks to the app inside it.
 
 **Steps.** `registerMountStep(name, { prepare?, start? })` adds a step; it returns a function that removes it. `prepare`
 runs before the store exists and may replace `context.state.theme` and `context.state.locale` or change

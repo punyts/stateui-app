@@ -1,4 +1,5 @@
 import { report } from '@punyts/core';
+import type { Store } from '@punyts/state';
 import { buildError } from '../../core/errors/index.js';
 import type { BuildError } from '../../core/errors/index.js';
 import { readEntry, recordKeys } from '../../core/on/index.js';
@@ -69,11 +70,30 @@ function isLoad3d(value: unknown): value is Load3dRequest {
     return typeof value === 'object' && value !== null && typeof (value as Partial<Load3dRequest>).respond === 'function';
 }
 
-/** The element that raised the event: the first one on its path that is a library component with a scope */
-function raisedBy(event: Event, componentTags: ReadonlySet<string>): { path: string } | undefined {
+/**
+ * Whether the first library component with a scope on the event's path is scoped from another store: the event was
+ * raised in an app mounted inside one of this app's components, which answers it or lets it go on
+ */
+function raisedElsewhere(event: Event, componentTags: ReadonlySet<string>, store: Store<unknown>): boolean {
     for (const target of event.composedPath()) {
         if (!(target instanceof Element) || !componentTags.has(target.localName)) continue;
-        const path = (target as { scope?: { basePath?: unknown } }).scope?.basePath;
+        const scope = (target as { scope?: { store?: unknown } }).scope;
+        if (scope !== undefined) return scope.store !== store;
+    }
+    return false;
+}
+
+/**
+ * The element that raised the event: the first one on its path that is a library component with a scope. Undefined when
+ * that element is scoped from another store: it belongs to an app mounted inside one of this app's components, whose own
+ * dispatcher runs it
+ */
+function raisedBy(event: Event, componentTags: ReadonlySet<string>, store: Store<unknown>): { path: string } | undefined {
+    for (const target of event.composedPath()) {
+        if (!(target instanceof Element) || !componentTags.has(target.localName)) continue;
+        const scope = (target as { scope?: { basePath?: unknown; store?: unknown } }).scope;
+        if (scope?.store !== store) return undefined;
+        const path = scope.basePath;
         return typeof path === 'string' ? { path } : undefined;
     }
     return undefined;
@@ -257,7 +277,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     }
 
     function handle(event: Event): void {
-        const raised = raisedBy(event, tags);
+        const raised = raisedBy(event, tags, store);
         if (!raised) return;
         const payload: unknown = event instanceof CustomEvent ? event.detail : undefined;
         const path = raised.path.startsWith(RUNTIME_NODES) ? raised.path : (runtimeTwin(raised.path) ?? raised.path);
@@ -316,10 +336,10 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         }
     }
 
-    /** Answers `ui-file-transfer` with the host's `transferFile` hook; without one the event is left unanswered */
+    /** Answers `ui-file-transfer` with the host's `transferFile` hook; without one the event goes on. Only a request raised in this app is answered: an app inside a component never gets the hooks of the app around it */
     function transfer(event: Event): void {
         const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
-        if (!isFileTransfer(request) || !hooks?.transferFile) return;
+        if (!isFileTransfer(request) || !hooks?.transferFile || raisedElsewhere(event, tags, store)) return;
         event.stopPropagation();
         const { file, onProgress, signal } = request;
         request.respond(
@@ -330,27 +350,27 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         );
     }
 
-    /** Answers `ui-file-read` with the host's `readFile` hook; without one the event is left unanswered */
+    /** Answers `ui-file-read` with the host's `readFile` hook; without one the event goes on. Only a request raised in this app is answered: an app inside a component never gets the hooks of the app around it */
     function read(event: Event): void {
         const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
-        if (!isFileRead(request) || !hooks?.readFile) return;
+        if (!isFileRead(request) || !hooks?.readFile || raisedElsewhere(event, tags, store)) return;
         event.stopPropagation();
         const { id, signal } = request;
         request.respond(hooks.readFile(id, signal === undefined ? {} : { signal }));
     }
 
-    /** Answers `ui-file-release` with the host's `releaseFile` hook; without one the event is left unanswered */
+    /** Answers `ui-file-release` with the host's `releaseFile` hook; without one the event goes on. Only a request raised in this app is answered: an app inside a component never gets the hooks of the app around it */
     function release(event: Event): void {
         const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
-        if (!isFileRelease(request) || !hooks?.releaseFile) return;
+        if (!isFileRelease(request) || !hooks?.releaseFile || raisedElsewhere(event, tags, store)) return;
         event.stopPropagation();
         request.respond(hooks.releaseFile(request.id));
     }
 
-    /** Answers `ui-load-3d` with the host's `load3d` hook; without one the event is left unanswered */
+    /** Answers `ui-load-3d` with the host's `load3d` hook; without one the event goes on. Only a request raised in this app is answered: an app inside a component never gets the hooks of the app around it */
     function load3d(event: Event): void {
         const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
-        if (!isLoad3d(request) || !hooks?.load3d) return;
+        if (!isLoad3d(request) || !hooks?.load3d || raisedElsewhere(event, tags, store)) return;
         event.stopPropagation();
         request.respond(hooks.load3d());
     }
