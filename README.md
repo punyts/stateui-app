@@ -315,7 +315,8 @@ does not have is `SUI-STATE-TOKEN`, each at the property's state path. Tokens ar
 components, and without it a token is checked by syntax only. A linked value (`<-fill`) is not read, nor a paint name
 where `paints` is linked or where no ancestor has `paints` (a composed tree is checked where it is used). The `label`
 validator (`validateShapeLabels`) warns (`SUI-STATE-LABEL`) for a node whose shape has an `interactive` property, which
-it sets to `true`, without a non-blank `_label` or a `<-_label` link.
+it sets to `true`, without a name: its shape's naming property (`_label`, else `_alt` as an image's, else `_title` as a
+card's), non-blank or linked.
 
 The `scenes` validator (`validateSceneCount`, graphics G3.4) warns (`SUI-DOC-LIMIT-SCENES`) when one page would show more
 than `MAX_SCENES_PER_PAGE` (16) `scene3d` nodes: each scene has its own WebGL context and Chromium keeps at most 16 per

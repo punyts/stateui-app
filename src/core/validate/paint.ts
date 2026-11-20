@@ -103,20 +103,25 @@ export function validatePaints(context: DocumentValidationContext): BuildError[]
     return errors;
 }
 
+/** The content properties that name an interactive shape, in the order a shape's own is looked for */
+const NAMES = ['_label', '_alt', '_title'] as const;
+
 /**
  * The `label` plug-in of `validateDocument`: a warning (`SUI-STATE-LABEL`) for a node whose shape has an `interactive`
- * property, which the node sets to `true`, and which has no `_label` (missing, empty or blank) and no `<-_label` link.
- * An interactive shape is a button to the keyboard and to a screen reader, and `_label` is its name
+ * property, which the node sets to `true`, and which has no name: its shape's naming property (`_label`, else `_alt`,
+ * as an image's, else `_title`, as a card's) missing, empty or blank, and not linked. An interactive shape is a button
+ * to the keyboard and to a screen reader, and that property is its name
  */
 export function validateShapeLabels(context: DocumentValidationContext): BuildError[] {
     const errors: BuildError[] = [];
     forEachTree(context, (node, path, shape) => {
         if (shape === undefined || !Object.hasOwn(shape.properties, 'interactive')) return;
         const values = node as JsonObject;
-        if (values['interactive'] !== true || Object.hasOwn(values, `${PREFIXES.link}_label`)) return;
-        const label = values['_label'];
-        if (typeof label === 'string' && label.trim() !== '') return;
-        errors.push(buildError('SUI-STATE-LABEL', { component: node.component, path, statePath: path }));
+        const property = NAMES.find((name) => Object.hasOwn(shape.properties, name)) ?? '_label';
+        if (values['interactive'] !== true || Object.hasOwn(values, `${PREFIXES.link}${property}`)) return;
+        const name = values[property];
+        if (typeof name === 'string' && name.trim() !== '') return;
+        errors.push(buildError('SUI-STATE-LABEL', { component: node.component, path, name: property, statePath: path }));
     });
     return errors;
 }

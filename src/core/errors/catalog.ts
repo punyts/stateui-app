@@ -85,7 +85,7 @@ export const ERROR_CATALOG = {
     },
     'SUI-STATE-TOKEN': { template: 'Property "{name}" at {path} names the token {token}, which is not in the theme' },
     'SUI-STATE-LABEL': {
-        template: 'Interactive shape "{component}" at {path} has no _label, so keyboard and screen reader users cannot name it',
+        template: 'Interactive shape "{component}" at {path} has no {name}, so keyboard and screen reader users cannot name it',
         severity: 'warning'
     },
     'SUI-LINK-ROW': { template: 'Reference {target} at {path} uses $row outside a row template' },

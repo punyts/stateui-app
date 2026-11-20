@@ -12,9 +12,10 @@ function shapeOf(source: Record<string, unknown>): Shape {
     return result.shape as Shape;
 }
 
-const SHAPES = ['dot', 'group'];
+const SHAPES = ['dot', 'group', 'tile'];
 const paint = { fill: { type: 'string', validators: { color: true } }, stroke: { type: 'string', validators: { color: true } } };
 const interaction = { interactive: { type: 'boolean', default: false }, _label: { type: 'string', kind: 'content', default: '' } };
+const titled = { interactive: { type: 'boolean', default: false }, _title: { type: 'string', kind: 'content', default: '' } };
 
 // A fixture drawing, a group that opens no paint scope and a shape: the real ones are in stateui-components
 const LIBRARY: ComponentLibrary = {
@@ -39,7 +40,8 @@ const LIBRARY: ComponentLibrary = {
         })
     },
     group: { tier: 'shape', shape: shapeOf({ childComponents: SHAPES, properties: { ...paint } }) },
-    dot: { tier: 'shape', shape: shapeOf({ properties: { r: { type: 'number', default: 1 }, ...paint, ...interaction }, events: ['press'] }) }
+    dot: { tier: 'shape', shape: shapeOf({ properties: { r: { type: 'number', default: 1 }, ...paint, ...interaction }, events: ['press'] }) },
+    tile: { tier: 'shape', shape: shapeOf({ properties: { ...titled }, events: ['press'] }) }
 };
 
 const hasToken = themeTokenLookup(LIBRARY);
@@ -142,5 +144,22 @@ describe('the label document validator', () => {
         });
 
         expect(found(app, { data: { name: 'Seat 2' } })).toEqual([]);
+    });
+
+    it('should take the name a shape has when it has no _label, as a card is named by its _title', () => {
+        // Arrange
+        const app = sketch({
+            a: { component: 'tile', interactive: true, _title: 'Orders' },
+            b: { component: 'tile', interactive: true, '<-_title': '$.data.name' },
+            c: { component: 'tile', interactive: true }
+        });
+
+        // Act
+        const result = validateDocument({ app, data: { name: 'Seat 2' } }, LIBRARY, { hasToken });
+        const warnings = result.errors.filter((error) => error.code === 'SUI-STATE-LABEL');
+
+        // Assert
+        expect(warnings.map((error) => error.statePath)).toEqual(['$.app.children.c']);
+        expect(warnings[0]?.message).toBe('Interactive shape "tile" at $.app.children.c has no _title, so keyboard and screen reader users cannot name it');
     });
 });
