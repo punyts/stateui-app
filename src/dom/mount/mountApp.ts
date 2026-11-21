@@ -1,4 +1,4 @@
-import { report } from '@punyts/core';
+import { isReported, report } from '@punyts/core';
 import { createStore } from '@punyts/state';
 import { mount, unmount } from '@punyts/stateui';
 import type { NodeOptions, StateUIElement } from '@punyts/stateui';
@@ -15,6 +15,7 @@ import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { collectComponentTokens, nodeChildren, reflectedProperties } from '../../core/shape/index.js';
 import { layInstance } from '../../core/snapshot/index.js';
 import { PREFIXES } from '../../core/types.js';
+import { REPORT, elapsed, reportClock } from '../../core/report.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue, Node } from '../../core/types.js';
 import { refusedChildren, validateDocument } from '../../core/validate/index.js';
 import type { AppMode } from '../../core/validate/index.js';
@@ -29,6 +30,7 @@ import { startScreens, writeRoute } from './screens.js';
 import type { ScreenView } from './screens.js';
 import { answerAppRequests } from '../embed/answer.js';
 import { mountSteps } from './steps.js';
+import { startBrowserReporting } from './reporting.js';
 import '../route/index.js';
 import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
 
@@ -169,6 +171,11 @@ function restoreRowLinks(tree: Node, rowLinks: readonly Link[], treePath = APP_P
 }
 
 function failed(errors: BuildError[]): MountedApp {
+    if (isReported(REPORT.mount)) {
+        const codes: Record<string, number> = {};
+        for (const error of errors) if (error.severity !== 'warning') codes[error.code] = (codes[error.code] ?? 0) + 1;
+        report(REPORT.mount, 'App not mounted', { codes });
+    }
     return {
         store: undefined,
         baseOverlay: undefined,
@@ -207,6 +214,9 @@ function stepError(name: string): BuildError {
  * as `logic.failed` and `notify.<name>`. In Full mode the app server runs the server units and the browser runs only
  * the units with `runs: "browser"` (`logicFor`), none when there are none.
  *
+ * The first mount on a page turns on the report categories `localStorage['punyts.report']` lists and logs them to the
+ * console (`startBrowserReporting`).
+ *
  * `dispose` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and the node resolver
  * and options, so a second `mountApp` on a fresh host starts clean
  */
@@ -217,6 +227,8 @@ export function mountApp(
     hooks: DispatchHooks & SystemHooks = {},
     options: MountOptions = {}
 ): MountedApp {
+    startBrowserReporting();
+    const mountStarted = reportClock();
     const mode = options.mode ?? 'standalone';
     const validation = validateDocument(document, library, { mode });
     if (!isValid(validation.errors)) return failed(validation.errors);
@@ -400,8 +412,20 @@ export function mountApp(
         void loading.then(() => {
             if (disposed) return;
             mount(host, store, '$', { callable, resolver, nodeOptions: context.options });
+            if (isReported(REPORT.mount)) report(REPORT.mount, 'App rendered after its functions loaded', { ms: elapsed(mountStarted) });
             startLogic();
         });
+    if (isReported(REPORT.mount)) {
+        report(REPORT.mount, 'App mounted', {
+            mode,
+            screens: Object.keys(screens ?? {}).length,
+            steps: steps.length,
+            links: appLinks.length,
+            warnings: errors.length,
+            functions: loading === undefined ? 'ready' : 'loading',
+            ms: elapsed(mountStarted)
+        });
+    }
     return {
         store,
         baseOverlay,
@@ -466,6 +490,7 @@ export function mountApp(
                 }
             }
             disposeLinks(store, appLinks);
+            if (isReported(REPORT.mount)) report(REPORT.mount, 'App unmounted', { mode });
         }
     };
 }

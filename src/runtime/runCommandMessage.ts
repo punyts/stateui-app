@@ -1,4 +1,5 @@
-import { report } from '@punyts/core';
+import { isReported, report } from '@punyts/core';
+import { REPORT } from '../core/report.js';
 import { buildError } from '../core/errors/index.js';
 import type { BuildError } from '../core/errors/index.js';
 import { isSystemCommand } from '../core/on/index.js';
@@ -61,6 +62,7 @@ export function runCommandMessage(run: CommandRun, target: string, command: stri
     };
     try {
         runCommand({ command, target, ...(value === undefined ? {} : { value }) }, context);
+        if (isReported(REPORT.command)) report(REPORT.command, 'Runtime command ran', { target, command });
         return undefined;
     } catch (error) {
         const failure = error instanceof CommandFailure ? error : undefined;

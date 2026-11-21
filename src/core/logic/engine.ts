@@ -1,4 +1,6 @@
+import { isReported, report } from '@punyts/core';
 import type { JsonValue } from '../types.js';
+import { REPORT, elapsed, reportClock } from '../report.js';
 import { runCommand } from './commands.js';
 import { createEffectRunner } from './effects.js';
 import type { CommandContext } from './commands.js';
@@ -142,6 +144,12 @@ function setExplicitly(change: LogicChange, path: string): boolean {
 
 function deepEqual(a: JsonValue | undefined, b: JsonValue | undefined): boolean {
     return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+/** The kind of a value, for a message that must not hold the value itself */
+function kindOf(value: JsonValue | undefined): string {
+    if (value === null) return 'null';
+    return Array.isArray(value) ? 'list' : typeof value;
 }
 
 function parentOf(path: string): string {
@@ -585,7 +593,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         for (const column of compiled.columns) {
             const index = columnIndex(column, values[column.name]);
             if (index === 'missing') return { skip: `input "${column.name}" has no value` };
-            if (index === 'outside') return { fail: `input "${column.name}" is ${JSON.stringify(values[column.name])}, which is not one of its values` };
+            if (index === 'outside') return { fail: `input "${column.name}" holds a ${kindOf(values[column.name])} that is not one of its values` };
             indexes.push(index);
         }
         const row = lookupRow(compiled, indexes);
@@ -644,6 +652,8 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         const runFor = every ? allRecords(plan) : [...records.values()];
         if (runFor.length === 0) return { ran: false, changes: [] };
 
+        const category = plan.compute ? REPORT.compute : REPORT.table;
+        const started = isReported(category) ? reportClock() : undefined;
         const copy = new WorkingCopy((path) => host.get(path));
         for (const captures of runFor) {
             const scope: Scope = { read: (path) => copy.get(path), captures, functions, call };
@@ -683,6 +693,11 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
                 unitFailed(unit, { reason: (error as Error).message });
             }
         }
+        if (started !== undefined) {
+            const details = { records: runFor.length, writes: copy.writes.length, ms: elapsed(started) };
+            if (plan.compute) report(category, 'Compute ran', { compute: unit.name, ...details });
+            else report(category, 'Table ran', { table: unit.name, ...details });
+        }
         if (copy.writes.length === 0) return { ran: true, changes: [] };
         const before = copy.writes.map((write) => host.get(write.path));
         try {
@@ -706,6 +721,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             if (args[index] !== undefined) values[input.name] = args[index] as JsonValue;
         });
         const found = tableLookup(plan.compiled, values);
+        if (isReported(REPORT.table)) report(REPORT.table, 'Table looked up', { table: unit.name, row: typeof found === 'number' ? found : 'none' });
         if (typeof found !== 'number') return null;
         const scope: Scope = { read: (path) => host.get(path), captures: {}, inputs: values, functions, call };
         const outputs: Record<string, JsonValue> = {};
@@ -836,6 +852,16 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     };
     const guard = (change: LogicChange): string | undefined => refusal(change)?.reason ?? host.guard?.(change);
 
+    /** Reports a machine's transition or a rule's firing: names, states, the trigger and the count of writes, never values */
+    const reportFired = (unit: Unit, hit: Hit, writes: number): void => {
+        const when = hit.transition.when;
+        const on = hit.path ?? (when.result !== undefined ? `result ${when.result}` : when.after !== undefined ? `after ${when.after}ms` : 'start');
+        if (unit.machine) {
+            const from = hit.state ?? '';
+            report(REPORT.machine, 'Machine moved', { machine: unit.name, from, to: hit.transition.to ?? from, on, writes });
+        } else report(REPORT.rule, 'Rule fired', { rule: unit.name, on, writes });
+    };
+
     /** Runs a transition and commits its writes; returns them as changes, or nothing when it failed */
     const fire = (unit: Unit, hit: Hit, results: Results): LogicChange[] => {
         const copy = new WorkingCopy((path) => host.get(path));
@@ -879,6 +905,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
             ...(unit.machine && hit.transition.to !== undefined && hit.transition.to !== hit.state ? { to: hit.transition.to } : {}),
             writes: copy.writes.slice(0, MAX_TRACE_WRITES).map((write) => write.path)
         });
+        if (unit.machine ? isReported(REPORT.machine) : isReported(REPORT.rule)) reportFired(unit, hit, copy.writes.length);
         for (const notice of context.after) notice();
         for (const { name, result } of context.results) results.push({ unit, name, result });
         for (const { name, result } of context.durable) {

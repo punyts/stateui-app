@@ -1,4 +1,6 @@
+import { isReported, report } from '@punyts/core';
 import type { AppBlueprint, DataBinding, PartKind, PartRef } from '../blueprint/types.js';
+import { REPORT, elapsed, reportClock } from '../report.js';
 import { EXPOSES_KEY } from '../convention/index.js';
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
@@ -172,6 +174,7 @@ function bindModules(blueprint: AppBlueprint, parts: PartSource, assembler: Asse
  * Pure: the blueprint and the parts are never changed and the document shares nothing with them
  */
 export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options: AssembleOptions = {}): AssembleResult {
+    const started = isReported(REPORT.assemble) ? reportClock() : undefined;
     const assembler = new Assembler(parts, options);
     const document: AppDocument = { app: cloneJson(blueprint.app as unknown as JsonValue) as Node };
 
@@ -229,5 +232,12 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     if (blueprint.icons !== undefined && Object.keys(blueprint.icons).length > 0) document.icons = cloneJson(blueprint.icons as unknown as JsonValue) as unknown as AppDocument['icons'];
     if (blueprint.locales !== undefined) document.locales = cloneJson(blueprint.locales as unknown as JsonValue) as AppDocument['locales'];
 
+    if (started !== undefined) {
+        const uses: Partial<Record<PartKind, number>> = {};
+        for (const part of assembler.uses) uses[part.kind] = (uses[part.kind] ?? 0) + 1;
+        const codes: Record<string, number> = {};
+        for (const error of assembler.errors) codes[error.code] = (codes[error.code] ?? 0) + 1;
+        report(REPORT.assemble, 'App assembled', { screens: Object.keys(screens).length, uses, errors: assembler.errors.length, codes, ms: elapsed(started) });
+    }
     return { document, errors: assembler.errors, uses: assembler.uses };
 }

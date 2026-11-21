@@ -1,4 +1,6 @@
+import { isReported, report } from '@punyts/core';
 import type { Store, WriteOptions } from '@punyts/state';
+import { REPORT } from '../../core/report.js';
 import { ROUTE_PATH, screenPath } from '../../core/route/index.js';
 
 /** The state path of the app node */
@@ -110,6 +112,9 @@ export function startScreens(options: ScreenViewOptions): ScreenView {
         // After appending: connecting a `<sui-node>` sets its display
         for (const [key, element] of elements) setShown(element, key === name);
         const switched = shown !== undefined && name !== undefined && name !== shown;
+        if (name !== undefined && name !== shown && isReported(REPORT.mount)) {
+            report(REPORT.mount, switched ? 'Screen changed' : 'Screen shown', { screen: name, ...(switched ? { from: shown } : {}) });
+        }
         shown = name;
         if (switched) focusScreen(elements.get(name) as HTMLElement);
     };

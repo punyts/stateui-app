@@ -1,3 +1,5 @@
+import { isReported, report } from '@punyts/core';
+import { REPORT, elapsed, reportClock } from '../core/report.js';
 import { CHUNK_LOAD_TIMEOUT_MS } from './limits.js';
 
 /** The one global the 3D chunk script sets (`@punyts/stateui-3d`) */
@@ -112,7 +114,17 @@ export function createChunkLoader(doc: Document, options: ChunkLoaderOptions = {
             return () => {
                 let load = loads.get(hash);
                 if (load === undefined) {
+                    const started = reportClock();
+                    if (isReported(REPORT.mount)) report(REPORT.mount, 'Lazy chunk loading', { chunk: '3d', hash });
                     load = start(hash);
+                    load.then(
+                        () => {
+                            if (isReported(REPORT.mount)) report(REPORT.mount, 'Lazy chunk loaded', { chunk: '3d', hash, ms: elapsed(started) });
+                        },
+                        (error: unknown) => {
+                            if (isReported(REPORT.mount)) report(REPORT.mount, 'Lazy chunk failed', { chunk: '3d', hash, code: error instanceof Load3dError ? error.code : 'script_error', ms: elapsed(started) });
+                        }
+                    );
                     loads.set(hash, load);
                 }
                 return load;

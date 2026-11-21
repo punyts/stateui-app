@@ -1,4 +1,5 @@
-import { report } from '@punyts/core';
+import { isReported, report } from '@punyts/core';
+import { REPORT } from '../../core/report.js';
 import type { Store } from '@punyts/state';
 import { buildError } from '../../core/errors/index.js';
 import type { BuildError } from '../../core/errors/index.js';
@@ -334,6 +335,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
                 return;
             }
         }
+        if (isReported(REPORT.command)) report(REPORT.command, 'Commands ran', { event: type, path: self.path, commands: commands.map((command) => command.command) });
     }
 
     /** Answers `ui-file-transfer` with the host's `transferFile` hook; without one the event goes on. Only a request raised in this app is answered: an app inside a component never gets the hooks of the app around it */

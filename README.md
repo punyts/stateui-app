@@ -1047,6 +1047,34 @@ A node can carry `theme`, a sparse token tree like `theme.tokens`, to override t
 
 Limits: a `var()` is substituted where it is declared. A semantic token that references another semantic token is resolved on `ui-app-root`, so a node override of the target does not change the referencing token below it; only components that use the overridden token directly, and unset component tokens (which fall back to their semantic default), follow an override. A node `theme` override of a `space` token is not carried into a nested density host, which re-declares `space.*` from the default expression.
 
+## Reporting
+The library reports through `@punyts/core`'s `report` under the categories below, all off by default
+(`stateui-app.*` turns them on). A report names paths, ids, names, kinds, counts and durations (`ms`, to a tenth),
+never a value of state, a record, a request, an answer or an expression. The categories are listed in
+`src/core/report.ts` (`REPORT`).
+
+| Category | Reports |
+|---|---|
+| `stateui-app.validate` | "Document validated": `valid`, `mode`, `errors`, `warnings`, the count of each code (`codes`), `ms` |
+| `stateui-app.assemble` | "App assembled": `screens`, the parts used by kind (`uses`), `errors`, `codes`, `ms` |
+| `stateui-app.mount` | "App mounted" (`mode`, `screens`, `steps`, `links`, `warnings`, `functions`, `ms`), "App not mounted" (`codes`), "App rendered after its functions loaded", "App unmounted"; "Screen shown" and "Screen changed" (`screen`, `from`); "Theme applied" (the active names), "Theme overlay applied" (`kind`, `overlay`), "Theme switched" (`theme`); "Lazy chunk loading", "loaded" and "failed" (`chunk`, `hash`, `code`, `ms`) |
+| `stateui-app.command` | "Commands ran" for an `on` entry (`event`, `path`, the command names), "Runtime command ran" for a `command` message (`target`, `command`) |
+| `stateui-app.logic.machine` | "Machine moved": `machine`, `from`, `to`, `on` (the trigger path, `result <name>`, `after <ms>ms` or `start`), the count of `writes` |
+| `stateui-app.logic.rule` | "Rule fired": `rule`, `on`, `writes` |
+| `stateui-app.logic.table` | "Table ran" (`table`, `records`, `writes`, `ms`) and "Table looked up" by `lookup()` (`table`, `row`) |
+| `stateui-app.logic.compute` | "Compute ran": `compute`, `records`, `writes`, `ms` |
+| `stateui-app.logic.effect` | "Effect started", "finished" (`records`, `ms`), "failed" (`ms`, or the library's own `reason`), "cancelled" and "answered from its cache", each with `effect` and `run` |
+| `stateui-app.build` | "Library scanned", "Component built" or "not built" per component (`component`, `errors`), "Library built" (`built`, `entries`, `patterns`, `presets`, `files`, `errors`, `warnings`, `ms`) |
+
+Reports on a path that runs per event, firing or record check `isReported` first, so they cost nothing while off.
+`/core` and the logic engine stay free of DOM and Node code. Failures stay `report.error` and `report.warning`.
+
+**In the browser** the first `mountApp` on a page reads `localStorage['punyts.report']`, a comma-separated list of
+categories (`localStorage.setItem('punyts.report', 'stateui-app.*,state.set')`, then reload). When it names any, they
+are added to the reporter's categories and logged to the console with `consoleLogger`. Reading storage may throw (a
+private window, the runtime's sandboxed frame of opaque origin); then nothing is turned on. The build CLI is a host of
+its own and prints as before.
+
 ## Build and test
 Build `@punyts/core`, `@punyts/expression`, `@punyts/state`, `@punyts/state-sync` and `@punyts/stateui` first. The runtime bundle and its test (`runtime-bundle/build.test.ts`, part of `npm test`) read `@punyts/stateui-components`, a dev dependency that is itself built against this package's `dist`: build this package, then stateui-components, then run the tests and `build:runtime-bundle`. From the workspace root, `npm run build` does all of it in order.
 

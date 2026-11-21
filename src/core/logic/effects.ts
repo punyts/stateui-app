@@ -1,3 +1,5 @@
+import { isReported, report } from '@punyts/core';
+import { REPORT, elapsed, reportClock } from '../report.js';
 import { cloneJson, isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { pathSteps } from './pattern.js';
@@ -119,6 +121,7 @@ export function createEffectRunner(effects: Readonly<Record<string, LogicEffect>
         const map = host.get(at(into));
         if (!isObject(map) || entry.keys.some((key) => !Object.hasOwn(map, key))) return false;
         remember(state, token, entry);
+        if (isReported(REPORT.effect)) report(REPORT.effect, 'Effect answered from its cache', { effect: state.name, records: entry.keys.length });
         const records = entry.keys.map((key) => map[key] as JsonValue);
         deps.apply(
             state.name,
@@ -157,6 +160,7 @@ export function createEffectRunner(effects: Readonly<Record<string, LogicEffect>
         const run = host.functions?.effect(state.effect.run);
         if (!run && !host.effect) {
             const reason = `no effect function is loaded at ${state.effect.run}`;
+            if (isReported(REPORT.effect)) report(REPORT.effect, 'Effect failed', { effect: state.name, run: state.effect.run, reason });
             deps.failed({ kind: 'effect', name: state.name, reason });
             deps.apply(state.name, [status(state, { token, state: 'error', reason })], `${state.name} failed`);
             return;
@@ -164,6 +168,14 @@ export function createEffectRunner(effects: Readonly<Record<string, LogicEffect>
         const controller = new AbortController();
         state.running = { token, controller };
         deps.apply(state.name, [status(state, { token, state: 'loading' })], `${state.name} loading`);
+        const started = reportClock();
+        if (isReported(REPORT.effect)) report(REPORT.effect, 'Effect started', { effect: state.name, run: state.effect.run });
+        /** Reports how the call ended, with its duration and the count of records it answered; never the answer or the error */
+        const ended = (outcome: 'finished' | 'failed', records?: number): void => {
+            if (!isReported(REPORT.effect)) return;
+            const details = { effect: state.name, run: state.effect.run, ...(records === undefined ? {} : { records }), ms: elapsed(started) };
+            report(REPORT.effect, outcome === 'finished' ? 'Effect finished' : 'Effect failed', details);
+        };
         const current = (): boolean => !deps.stopped() && !controller.signal.aborted && state.token === token;
         Promise.resolve()
             .then(() =>
@@ -177,13 +189,16 @@ export function createEffectRunner(effects: Readonly<Record<string, LogicEffect>
                     state.running = undefined;
                     try {
                         answered(state, token, answer);
+                        ended('finished', Array.isArray(answer.records) ? answer.records.length : undefined);
                     } catch (error) {
+                        ended('failed');
                         deps.apply(state.name, [status(state, { token, state: 'error', reason: (error as Error).message })], `${state.name} failed`);
                     }
                 },
                 (error: unknown) => {
                     if (!current()) return;
                     state.running = undefined;
+                    ended('failed');
                     deps.apply(state.name, [status(state, { token, state: 'error', reason: error instanceof Error ? error.message : String(error) })], `${state.name} failed`);
                 }
             );
@@ -203,6 +218,7 @@ export function createEffectRunner(effects: Readonly<Record<string, LogicEffect>
             }
         }
         if (token === state.token) return;
+        if (state.running !== undefined && isReported(REPORT.effect)) report(REPORT.effect, 'Effect cancelled', { effect: state.name, run: state.effect.run });
         state.running?.controller.abort();
         state.running = undefined;
         state.token = token;

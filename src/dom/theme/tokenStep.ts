@@ -1,5 +1,6 @@
-import { report } from '@punyts/core';
+import { isReported, report } from '@punyts/core';
 import { buildError } from '../../core/errors/index.js';
+import { REPORT } from '../../core/report.js';
 import { cloneJson } from '../../core/resolve/index.js';
 import {
     OVERLAY_KINDS,
@@ -90,6 +91,7 @@ function follow(context: StartedContext): () => void {
         }
         store.apply(TOKENS_PATH, cloneJson((overlays[kind] as Record<string, { tokens: JsonObject }>)[name]!.tokens));
         applied[kind] = name;
+        if (isReported(REPORT.mount)) report(REPORT.mount, 'Theme overlay applied', { kind, overlay: name });
     };
 
     const switchTheme = (): void => {
@@ -112,6 +114,7 @@ function follow(context: StartedContext): () => void {
         for (const kind of OVERLAY_KINDS) {
             if (store.get(`${ACTIVE_PATH}.${kind}`) !== active[kind]) store.set(`${ACTIVE_PATH}.${kind}`, active[kind] as never);
         }
+        if (isReported(REPORT.mount)) report(REPORT.mount, 'Theme switched', { theme: name, active });
     };
 
     const listeners = OVERLAY_KINDS.map((kind): [string, () => void] => [`${ACTIVE_PATH}.${kind}`, () => sync(kind)]);
@@ -140,6 +143,7 @@ registerMountStep(THEME_STEP, {
         if (theme === undefined) delete active[THEME_KEY];
         else active[THEME_KEY] = theme;
         context.state.theme = { tokens: themeTokens(themeSource(document, theme), active, context), active };
+        if (isReported(REPORT.mount)) report(REPORT.mount, 'Theme applied', { active: { ...active } });
     },
     start: follow
 });

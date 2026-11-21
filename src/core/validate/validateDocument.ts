@@ -1,4 +1,6 @@
+import { isReported, report } from '@punyts/core';
 import { buildError, isValid } from '../errors/index.js';
+import { REPORT, elapsed, reportClock } from '../report.js';
 import type { BuildError } from '../errors/index.js';
 import { appIconNames } from '../icons/appIcons.js';
 import { checkLimits } from '../limits.js';
@@ -127,6 +129,14 @@ function withAppIcons(document: Record<string, JsonValue>, options: ValidateDocu
     return { ...options, isIconName: (name) => own.has(name) || isIconName(name) };
 }
 
+/** Reports a validation: whether it passed, the counts of errors and warnings, the count of each code and the duration */
+function reportValidated(errors: readonly BuildError[], valid: boolean, mode: string | undefined, started: number): void {
+    const codes: Record<string, number> = {};
+    for (const error of errors) codes[error.code] = (codes[error.code] ?? 0) + 1;
+    const warnings = errors.filter((error) => error.severity === 'warning').length;
+    report(REPORT.validate, 'Document validated', { valid, ...(mode === undefined ? {} : { mode }), errors: errors.length - warnings, warnings, codes, ms: elapsed(started) });
+}
+
 /**
  * Runs every structural check on a document without a DOM and returns all errors in one pass, each with a state
  * path. `catalog` is the component library (`ComponentLibrary`) or the content of `catalog.json`.
@@ -143,6 +153,7 @@ export function validateDocument(
     catalog: ComponentLibrary | CatalogSource,
     options: ValidateDocumentOptions = {}
 ): DocumentValidation {
+    const started = isReported(REPORT.validate) ? reportClock() : undefined;
     let errors: BuildError[];
     try {
         if (!isObject(document as JsonValue)) {
@@ -163,5 +174,7 @@ export function validateDocument(
     }
 
     const all = located(errors);
-    return { valid: isValid(all), errors: all };
+    const valid = isValid(all);
+    if (started !== undefined) reportValidated(all, valid, options.mode, started);
+    return { valid, errors: all };
 }

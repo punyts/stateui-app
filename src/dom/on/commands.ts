@@ -198,7 +198,7 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
         const path = writePath(command, context);
         const current = context.store.get(path);
         if (current !== undefined && current !== null && typeof current !== 'boolean') {
-            throw new CommandFailure(`${path} holds ${JSON.stringify(current)}, not a boolean`);
+            throw new CommandFailure(`${path} holds ${Array.isArray(current) ? 'a list' : `a ${typeof current}`}, not a boolean`);
         }
         write(path, current !== true, context);
     } else if (command.command === 'emit') {

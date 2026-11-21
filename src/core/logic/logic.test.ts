@@ -1107,7 +1107,7 @@ describe('createLogicEngine: lookup tables', () => {
 
         // Assert
         expect(memory.get('$.data.label')).toBeUndefined();
-        expect(memory.failures).toEqual([{ kind: 'table', name: 'size', reason: 'input "kind" is "c", which is not one of its values' }]);
+        expect(memory.failures).toEqual([{ kind: 'table', name: 'size', reason: 'input "kind" holds a string that is not one of its values' }]);
     });
 
     it('should run per record for the records whose inputs changed', () => {

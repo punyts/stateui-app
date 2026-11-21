@@ -1,8 +1,10 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { isReported, report } from '@punyts/core';
 import { dirname, join } from 'node:path';
 import { checkComposedExposes, parseComposed, scanLibrary } from '../core/convention/index.js';
 import type { ExposedPath, FileMap, ParsedComposed, ScannedComponent } from '../core/convention/index.js';
 import { buildError } from '../core/errors/index.js';
+import { REPORT, elapsed, reportClock } from '../core/report.js';
 import type { BuildError } from '../core/errors/index.js';
 import { validateComponentOverlay, validateLocaleOverlay } from '../core/locale/index.js';
 import { resolveNode } from '../core/resolve/index.js';
@@ -311,11 +313,13 @@ async function collectLibraryTokens(sourceDir: string, components: readonly Scan
  * builds of the same input are byte-identical. Files in `outDir` from earlier builds are not removed
  */
 export async function buildLibrary(sourceDir: string, outDir: string, options: BuildOptions = {}): Promise<BuildResult> {
+    const started = reportClock();
     const stateui = await loadStateUI();
     const fileMap: Record<string, true> = {};
     for (const path of await listFiles(sourceDir)) fileMap[path] = true;
     const scan = scanLibrary(fileMap as FileMap);
     const errors: BuildError[] = [...scan.errors];
+    if (isReported(REPORT.build)) report(REPORT.build, 'Library scanned', { components: scan.components.length, errors: scan.errors.length });
 
     const partials = await readShapePartials(options.sharedShapeDir);
     const library = await collectLibraryTokens(sourceDir, scan.components, partials);
@@ -365,6 +369,9 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
         }
         const compiled = await compileComponent(stateui, sourceDir, component, options, library, partials);
         errors.push(...compiled.errors);
+        if (isReported(REPORT.build)) {
+            report(REPORT.build, compiled.errors.length > 0 ? 'Component not built' : 'Component built', { component: component.name, errors: compiled.errors.length });
+        }
         if (compiled.errors.length > 0) continue;
         for (const [file, text] of compiled.files) output.set(file, text);
         built.push({ component, files: [...compiled.files.keys()].sort() });
@@ -418,5 +425,18 @@ export async function buildLibrary(sourceDir: string, outDir: string, options: B
         await writeFile(target, output.get(file) as string, 'utf8');
     }
 
+    if (isReported(REPORT.build)) {
+        const warnings = errors.filter((error) => error.severity === 'warning').length;
+        report(REPORT.build, 'Library built', {
+            built: built.length,
+            entries: entries.length,
+            patterns: patterns.length,
+            presets: themePresets.length,
+            files: files.length,
+            errors: errors.length - warnings,
+            warnings,
+            ms: elapsed(started)
+        });
+    }
     return { built, errors, files, catalog };
 }
