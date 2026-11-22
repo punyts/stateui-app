@@ -75,6 +75,9 @@ export const FILE_IDLE_TIMEOUT_MS = 120_000;
 /** How long `releaseFile` waits for the host's `fileReleased`, in milliseconds; then it rejects with `offline`. The idle timeout of a transfer */
 export const FILE_RELEASE_TIMEOUT_MS = FILE_IDLE_TIMEOUT_MS;
 
+/** How long `exportFile` waits for the host's `fileExported`, in milliseconds; then it rejects with `offline` */
+export const FILE_EXPORT_TIMEOUT_MS = 120_000;
+
 /** How long `readFile` waits for the host's `fileData`, in milliseconds; then it rejects with `offline` */
 export const FILE_READ_TIMEOUT_MS = 30_000;
 
@@ -122,5 +125,7 @@ export const MESSAGE_BYTE_LIMITS = {
     fileRead: MAX_FILE_JSON_BYTES,
     fileData: MAX_FILE_JSON_BYTES,
     fileRelease: MAX_FILE_JSON_BYTES,
-    fileReleased: MAX_FILE_JSON_BYTES
+    fileReleased: MAX_FILE_JSON_BYTES,
+    fileExport: MAX_EVENT_BYTES,
+    fileExported: MAX_FILE_JSON_BYTES
 } as const;

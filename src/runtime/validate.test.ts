@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
         );
     });
 
@@ -43,7 +43,10 @@ describe('runtime message validator', () => {
         base('fileData', { requestId: 1, ok: false, code: 'not_found', message: 'Gone' }),
         base('fileRelease', { requestId: 1, id: '0b6e8c1a-3f1e-4a52-9a43-2f4f1c8f2d10' }),
         base('fileReleased', { requestId: 1, ok: true }),
-        base('fileReleased', { requestId: 1, ok: false, code: 'offline', message: 'Gone' })
+        base('fileReleased', { requestId: 1, ok: false, code: 'offline', message: 'Gone' }),
+        base('fileExport', { requestId: 1, source: '$.data.products', name: 'Products.csv', request: { columns: [{ key: 'name', field: 'name', title: 'Name' }] } }),
+        base('fileExported', { requestId: 1, ok: true, rows: 0 }),
+        base('fileExported', { requestId: 1, ok: false, code: 'too_large', message: 'Too many rows' })
     ])('should accept a valid $type message', (value) => {
         expect(validateMessage(value).ok).toBe(true);
     });
@@ -104,6 +107,10 @@ describe('runtime message validator', () => {
         ['fileRelease with an extra field', base('fileRelease', { requestId: 1, id: 'f', more: 1 })],
         ['fileReleased with a file reference', base('fileReleased', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' } })],
         ['fileReleased without ok', base('fileReleased', { requestId: 1 })],
+        ['fileExport of a path outside data', base('fileExport', { requestId: 1, source: '$.server.keys', name: 'a.csv', request: { columns: [{ key: 'n', field: 'n', title: 'N' }] } })],
+        ['fileExport with a name that is not a csv', base('fileExport', { requestId: 1, source: '$.data.a', name: 'a.exe', request: { columns: [{ key: 'n', field: 'n', title: 'N' }] } })],
+        ['fileExport with rows', base('fileExport', { requestId: 1, source: '$.data.a', name: 'a.csv', request: { columns: [{ key: 'n', field: 'n', title: 'N' }], rows: [] } })],
+        ['fileExported without rows', base('fileExported', { requestId: 1, ok: true })],
         ['fileReleased without a requestId', base('fileReleased', { ok: true })],
         ['fileReleased with an unknown code', base('fileReleased', { requestId: 1, ok: false, code: 'nope', message: 'm' })],
         ['failed fileReleased without a message', base('fileReleased', { requestId: 1, ok: false, code: 'internal' })]

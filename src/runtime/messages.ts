@@ -8,10 +8,10 @@ export type { AppEventName } from '../core/types.js';
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased', 'fileExported'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'key', 'inspected', 'watched'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'fileExport', 'key', 'inspected', 'watched'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -356,6 +356,23 @@ export interface FileReleaseMessage extends Envelope<'fileRelease'> {
 export type FileReleasedMessage = Envelope<'fileReleased'> &
     ({ requestId: number; ok: true } | { requestId: number; ok: false; code: FileErrorCode; message: string });
 
+/**
+ * A grid asks for its records as a CSV file the user saves (`exportFile`). `source` is the resolved state path of its
+ * records (under `$.data` or `$.external`), `name` the file name and `request` the visible columns, filters and sort
+ * (`RecordExportRequest` of `@punyts/stateui-app/core`); never rows. The host has the authority build the file from the
+ * persona's own instance, saves it, and answers with `fileExported`
+ */
+export interface FileExportMessage extends Envelope<'fileExport'> {
+    requestId: number;
+    source: string;
+    name: string;
+    request: JsonObject;
+}
+
+/** The answer to `fileExport`: `ok: true` with the number of rows written once the file is handed to the browser to save, otherwise the reason */
+export type FileExportedMessage = Envelope<'fileExported'> &
+    ({ requestId: number; ok: true; rows: number } | { requestId: number; ok: false; code: FileErrorCode; message: string });
+
 export type InboundMessage =
     | LoadMessage
     | WriteMessage
@@ -369,7 +386,8 @@ export type InboundMessage =
     | FileProgressMessage
     | FileResultMessage
     | FileDataMessage
-    | FileReleasedMessage;
+    | FileReleasedMessage
+    | FileExportedMessage;
 export type OutboundMessage =
     | ReadyMessage
     | ChangeMessage
@@ -380,6 +398,7 @@ export type OutboundMessage =
     | FileCancelMessage
     | FileReadMessage
     | FileReleaseMessage
+    | FileExportMessage
     | KeyMessage
     | InspectedMessage
     | WatchedMessage;

@@ -5,6 +5,7 @@ import type { JsonValue } from '../../core/types.js';
 import type { FileData, ReadFile } from '../../runtime/fileRead.js';
 import type { Load3d, Scene3dChunk } from '../../runtime/load3d.js';
 import type { FileProgress, ReleaseFile, TransferFile } from '../../runtime/fileTransfer.js';
+import type { ExportFile, FileExportSpec } from '../../runtime/fileExport.js';
 import type { FileReference } from '../../runtime/messages.js';
 
 /** The event a component raises to hand a file to the host's `transferFile` hook; a controller cannot reach the hooks, so the dispatcher answers it. Bubbles and is composed */
@@ -53,6 +54,19 @@ export interface FileReleaseRequest {
     /** The id of the file's reference */
     readonly id: string;
     respond(result: Promise<void>): void;
+}
+
+/** The event a component raises to have its records exported as a file the user saves, through the host's `exportFile` hook (C1). Bubbles and is composed */
+export const FILE_EXPORT_EVENT = 'ui-file-export';
+
+/**
+ * The `detail` of `ui-file-export`: the resolved state path of the records, the file name and the export request
+ * (`RecordExportRequest`), never rows. The dispatcher calls `respond` once, synchronously, with the promise
+ * `hooks.exportFile` returns (the rows written), and stops the event. When the host gives no hook `respond` is never
+ * called, so a component treats an event that comes back unanswered as an export that cannot be made
+ */
+export interface FileExportRequest extends FileExportSpec {
+    respond(result: Promise<number>): void;
 }
 
 /** The event a `scene3d` raises to get the 3D renderer chunk through the host's `load3d` hook (G3.3). Bubbles and is composed */
@@ -104,6 +118,11 @@ export interface DispatchHooks {
      * mounted without a host that takes files
      */
     releaseFile?: ReleaseFile;
+    /**
+     * Has the authority build a CSV file of a grid's records and hands it to the browser to save (C1). Set by the
+     * runtime inside the preview frame; absent when the app is mounted without a host that exports
+     */
+    exportFile?: ExportFile;
     /**
      * Loads the 3D renderer chunk and resolves with `globalThis.__stateui3d` (G3.3). Set by the runtime inside the
      * preview frame when the host named a `3d` chunk in `load`; absent otherwise

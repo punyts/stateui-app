@@ -365,3 +365,7 @@ export { NAVIGATE_COMMAND, ROUTE_PATH, checkNavigate, initialRoute, isRouteRefus
 export type { NavigateProblem, RouteScreens, RouteState } from './route/index.js';
 export { APP_COMPONENT, findAppNodes, screenPath } from './route/index.js';
 export { FRAGMENT_PREFIX, formatFragment, parseFragment, sameRoute } from './route/index.js';
+export { FIELD_PATTERN, FILTER_KINDS, SORT_DIRECTIONS, cellText, compareSortValues, fieldValue, foldText, isSortNothing, optionLabels, passesFilters, readFilters } from './records/index.js';
+export type { FilterColumn, FilterKind, SortDirection } from './records/index.js';
+export { EXPORT_NAME_PATTERN, EXPORT_SOURCE_PATTERN, MAX_EXPORT_COLUMNS, MAX_EXPORT_OPTIONS, MAX_EXPORT_ROWS, MAX_EXPORT_TEXT, exportColumnsOf, exportRecords, readExportRequest, toCsv } from './records/index.js';
+export type { ExportColumn, RecordExport, RecordExportRequest } from './records/index.js';

@@ -23,6 +23,7 @@ import { applyOverlay } from '../dom/theme/index.js';
 import type { ThemeStore } from '../dom/theme/index.js';
 import { createFileReads } from './fileRead.js';
 import { createFileTransfers } from './fileTransfer.js';
+import { createFileExports } from './fileExport.js';
 import { describeNode, nodesAt, nodesOf, rectOf } from './inspect.js';
 import { MAX_ERROR_TEXT, MAX_ERRORS } from './limits.js';
 import { createChunkLoader } from './load3d.js';
@@ -35,6 +36,7 @@ import type {
     FileDataMessage,
     FileProgressMessage,
     FileReleasedMessage,
+    FileExportedMessage,
     FileResultMessage,
     IconsMap,
     InboundMessage,
@@ -220,7 +222,8 @@ export interface RuntimeCore {
  *
  * Files: the dispatcher's `transferFile` hook posts `file` (answered by `fileProgress` and `fileResult`), its
  * `readFile` hook posts `fileRead` (answered by `fileData`) and its `releaseFile` hook posts `fileRelease` (answered by
- * `fileReleased`; the cached bytes of a released file are dropped). The bytes of read files are kept by id across loads
+ * `fileReleased`; the cached bytes of a released file are dropped); its `exportFile` hook posts `fileExport` (answered by
+ * `fileExported`). The bytes of read files are kept by id across loads
  * (`createFileReads`, at most `FILE_CACHE_BYTES`) and released a moment after a change once no value of the app node,
  * the screens or the data holds the id any more; `dispose` cancels the waiting reads and drops them all.
  *
@@ -266,6 +269,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
         },
         sendRelease: (requestId, id) => post({ type: 'fileRelease', requestId, id })
     });
+    const exports = createFileExports({ sendExport: (message) => post({ type: 'fileExport', ...message }) });
 
     /**
      * The ids a node still uses: an id is used while it appears anywhere in the values of the app node, the screens or the
@@ -441,6 +445,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
                     readFile: reads.readFile,
                     // A file given back is gone from the host, so its cached bytes go too
                     releaseFile: (id) => files.releaseFile(id).then(() => reads.forget(id)),
+                    exportFile: exports.exportFile,
                     // Only a host that serves the 3D chunk names it; without the hook a scene shows its fallback
                     ...(message.chunks?.['3d'] !== undefined && { load3d: chunks.load3d(message.chunks['3d']) }),
                     onEmit(name, payload) {
@@ -715,6 +720,9 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
             case 'fileReleased':
                 files.released(message as FileReleasedMessage);
                 return;
+            case 'fileExported':
+                exports.exported(message as FileExportedMessage);
+                return;
             case 'ping':
                 post({ type: 'pong', id: message.id });
                 return;
@@ -804,6 +812,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
             teardown();
             files.cancelAll();
             reads.cancelAll();
+            exports.cancelAll();
             chunks.dispose();
             if (releaseTimer !== undefined) clearTimeout(releaseTimer);
             localeStep.unregister();

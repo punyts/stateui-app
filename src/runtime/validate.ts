@@ -19,6 +19,7 @@ import {
 } from './limits.js';
 import { CHANGE_OPS, FILE_ERROR_CODES, MAX_FLOATING, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
 import { isAppEvent } from '../core/types.js';
+import { EXPORT_NAME_PATTERN, EXPORT_SOURCE_PATTERN, readExportRequest } from '../core/records/index.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
 
 /** Why a message was dropped */
@@ -336,7 +337,16 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
     fileRead: (m) => hasOnlyKeys(m, ['requestId', 'id']) && isPositiveInteger(m['requestId']) && isText(m['id'], MAX_FILE_ID_LENGTH),
     fileData: isFileData,
     fileRelease: (m) => hasOnlyKeys(m, ['requestId', 'id']) && isPositiveInteger(m['requestId']) && isText(m['id'], MAX_FILE_ID_LENGTH),
-    fileReleased: (m) => (m['ok'] === true ? hasOnlyKeys(m, ['requestId', 'ok']) && isPositiveInteger(m['requestId']) : isFileResult(m))
+    fileReleased: (m) => (m['ok'] === true ? hasOnlyKeys(m, ['requestId', 'ok']) && isPositiveInteger(m['requestId']) : isFileResult(m)),
+    fileExport: (m) =>
+        hasOnlyKeys(m, ['requestId', 'source', 'name', 'request']) &&
+        isPositiveInteger(m['requestId']) &&
+        typeof m['source'] === 'string' &&
+        EXPORT_SOURCE_PATTERN.test(m['source']) &&
+        typeof m['name'] === 'string' &&
+        EXPORT_NAME_PATTERN.test(m['name']) &&
+        readExportRequest(m['request']) !== undefined,
+    fileExported: (m) => (m['ok'] === true ? hasOnlyKeys(m, ['requestId', 'ok', 'rows']) && isPositiveInteger(m['requestId']) && isInteger(m['rows']) : isFileResult(m))
 };
 
 function isMessageType(value: unknown): value is MessageType {
