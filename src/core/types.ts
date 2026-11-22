@@ -74,6 +74,13 @@ export const APP_EVENTS = ['sync.rejected', 'logic.failed'] as const;
 /** An app event: one of `APP_EVENTS`, or `notify.<name>` raised by the logic's `notify` command */
 export type AppEventName = (typeof APP_EVENTS)[number] | `notify.${string}`;
 
+/**
+ * The messages an app's toasts (`$.app.toasts`, a `toastRegion`) show by themselves when the root node has no
+ * `sync.rejected` entry: `unsaved` for a change refused while the server holds too many unsaved changes (rejection code
+ * `unsaved`), `rejected` for any other refused change. A `toastRegion` whose `messages` has the same key shows that instead
+ */
+export const SYNC_NOTICES = { unsaved: 'syncUnsaved', rejected: 'syncRejected' } as const;
+
 /** `notify.<name>`: the app events the logic's `notify` command raises */
 const NOTIFY_EVENT = /^notify.[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 

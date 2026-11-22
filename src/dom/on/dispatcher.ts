@@ -4,11 +4,11 @@ import type { Store } from '@punyts/state';
 import { buildError } from '../../core/errors/index.js';
 import type { BuildError } from '../../core/errors/index.js';
 import { readEntry, recordKeys } from '../../core/on/index.js';
-import type { Frame, TreeNode } from '../../core/on/index.js';
+import type { Frame, OnCommand, TreeNode } from '../../core/on/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
 import { runtimePath } from '../../core/links/index.js';
-import { RESERVED_KEYS } from '../../core/types.js';
+import { RESERVED_KEYS, SYNC_NOTICES } from '../../core/types.js';
 import type { JsonValue } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import { createRaisedRecorder } from './raised.js';
@@ -18,6 +18,8 @@ import type { Dispatcher, DispatcherOptions, FileExportRequest, FileReadRequest,
 
 const DEFAULT_ROOT = '$.app';
 const RUNTIME_NODES = '$.runtime.nodes.';
+/** The app event of a change the server refused */
+const SYNC_REJECTED = 'sync.rejected';
 
 
 /**
@@ -314,7 +316,25 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             );
             return;
         }
+        runCommands(type, payload, chain, commands, found);
+    }
 
+    /**
+     * The notice of a refused change in an app whose root has no `sync.rejected` entry: the app's toasts show the
+     * built-in message for the rejection's code (`SYNC_NOTICES`). A root that is not an `app` node with toasts shows
+     * nothing, as before
+     */
+    function noticeRejected(payload: unknown, chain: Frame[]): void {
+        const self = chain[chain.length - 1];
+        if (!self || self.node.component !== 'app' || !isNodeValue(store.get(`${self.path}.toasts`))) return;
+        const code = payload !== null && typeof payload === 'object' ? (payload as { code?: unknown }).code : undefined;
+        const value = code === 'unsaved' ? SYNC_NOTICES.unsaved : SYNC_NOTICES.rejected;
+        runCommands(SYNC_REJECTED, payload, chain, [{ command: 'show', target: `${self.path}.toasts`, value }]);
+    }
+
+    /** Runs the commands of an `on` entry of the last node of `chain`, stopping at the first that fails */
+    function runCommands(type: string, payload: unknown, chain: Frame[], commands: readonly OnCommand[], found?: { owner?: Frame[]; rowPath?: string }): void {
+        const self = chain[chain.length - 1] as Frame;
         const context: CommandContext = {
             chain,
             relative: found?.owner ?? chain,
@@ -401,7 +421,11 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     return {
         raise(name, payload): void {
             const chain = chainTo(rootPath);
-            if (chain) run(name, payload, chain);
+            if (!chain) return;
+            const on: unknown = chain[chain.length - 1]?.node[RESERVED_KEYS.on];
+            const handled = on !== null && typeof on === 'object' && !Array.isArray(on) && Object.hasOwn(on, name);
+            if (name === SYNC_REJECTED && !handled) noticeRejected(payload, chain);
+            else run(name, payload, chain);
         },
         dispose(): void {
             recorder.dispose();
