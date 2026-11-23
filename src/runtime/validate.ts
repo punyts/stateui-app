@@ -20,6 +20,7 @@ import {
 } from './limits.js';
 import { CHANGE_OPS, FILE_ERROR_CODES, MAX_FLOATING, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
 import { isAppEvent } from '../core/types.js';
+import { MAX_REQUEST_ID, MAX_REQUEST_NOTE } from '../core/on/types.js';
 import { EXPORT_NAME_PATTERN, EXPORT_SOURCE_PATTERN, readExportRequest } from '../core/records/index.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
 
@@ -35,7 +36,7 @@ const encoder = new TextEncoder();
  */
 const SYNC_PATH = /^\$\.(data|app|screens|route|theme|locale|raised)(\.[^.\s]+)*$/;
 /** The sync status the host writes */
-const STATUS_PATH = /^\$\.runtime\.sync(\.[^.\s]+)*$/;
+const STATUS_PATH = /^\$\.runtime\.(sync|requests)(\.[^.\s]+)*$/;
 const MODES = ['standalone', 'persisted', 'full'];
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 const NAME = /^[A-Za-z][A-Za-z0-9_.:-]*$/;
@@ -105,7 +106,7 @@ function isSafePath(path: unknown, pattern: RegExp): path is string {
 
 /**
  * True when `path` is a state path a write may reach: a synced branch (`$.data`, `$.app`, `$.screens`, `$.route`,
- * `$.theme`, `$.locale`) or the sync status (`$.runtime.sync`)
+ * `$.theme`, `$.locale`), the sync status (`$.runtime.sync`) or the requests the host knows (`$.runtime.requests`)
  */
 export function isWritablePath(path: unknown): path is string {
     return isSafePath(path, SYNC_PATH) || isSafePath(path, STATUS_PATH);
@@ -300,6 +301,11 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     key: (m) => hasOnlyKeys(m, ['key']) && isKeyChord(m['key']),
+    decide: (m) =>
+        hasOnlyKeys(m, ['action', 'id', 'note']) &&
+        (m['action'] === 'approve' || m['action'] === 'reject' || m['action'] === 'withdraw') &&
+        isText(m['id'], MAX_REQUEST_ID) &&
+        (m['note'] === undefined || (m['action'] === 'reject' && isText(m['note'], MAX_REQUEST_NOTE))),
     inspect: (m) =>
         hasOnlyKeys(m, ['id', 'at', 'paths']) &&
         isInteger(m['id']) &&

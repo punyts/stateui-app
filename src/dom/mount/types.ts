@@ -38,6 +38,8 @@ export interface AppState {
         empty: JsonObject;
         /** The sync status the host writes: the mode, `standalone`, `connecting`, `online` or `offline`, and the changes waiting */
         sync: { mode: AppMode; status: string; waiting: number };
+        /** The requests that wait for the owner, as the host's sync client knows them, by id (docs/design/statenet-requests.md) */
+        requests: JsonObject;
         /** True for an app mounted inside another's component (`MountOptions.embedded`): it leaves the document title alone */
         embedded?: boolean;
     };

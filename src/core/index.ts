@@ -96,6 +96,9 @@ export { diffInstance, layInstance, snapshotState } from './snapshot/index.js';
 export type { AppInstance, InstanceBase, LaidInstance, SnapshotOptions, SnapshotStore, StateSnapshot } from './snapshot/index.js';
 export {
     COMMAND_KEYS,
+    MAX_REQUEST_ID,
+    MAX_REQUEST_NOTE,
+    REQUEST_COMMANDS,
     SYSTEM_COMMANDS,
     findProvider,
     findRowProvider,
@@ -114,6 +117,7 @@ export type {
     OnEntry,
     ParsedTarget,
     RecordKey,
+    RequestDecision,
     ResolvedTree,
     SystemCommand,
     TreeNode,

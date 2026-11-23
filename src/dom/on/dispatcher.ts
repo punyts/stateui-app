@@ -20,6 +20,7 @@ const DEFAULT_ROOT = '$.app';
 const RUNTIME_NODES = '$.runtime.nodes.';
 /** The app event of a change the server refused */
 const SYNC_REJECTED = 'sync.rejected';
+const SYNC_REQUESTED = 'sync.requested';
 
 
 /**
@@ -326,16 +327,16 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     }
 
     /**
-     * The notice of a refused change in an app whose root has no `sync.rejected` entry: the app's toasts show the
-     * built-in message for the rejection's code (`SYNC_NOTICES`). A root that is not an `app` node with toasts shows
-     * nothing, as before
+     * The notice of a sync event in an app whose root has no entry for it: the app's toasts show the built-in message
+     * (`SYNC_NOTICES`), for a refused change by the rejection's code, and for a change kept as a request `requested`.
+     * A root that is not an `app` node with toasts shows nothing
      */
-    function noticeRejected(payload: unknown, chain: Frame[]): void {
+    function notice(name: string, payload: unknown, chain: Frame[]): void {
         const self = chain[chain.length - 1];
         if (!self || self.node.component !== 'app' || !isNodeValue(store.get(`${self.path}.toasts`))) return;
         const code = payload !== null && typeof payload === 'object' ? (payload as { code?: unknown }).code : undefined;
-        const value = code === 'unsaved' ? SYNC_NOTICES.unsaved : SYNC_NOTICES.rejected;
-        runCommands(SYNC_REJECTED, payload, chain, [{ command: 'show', target: `${self.path}.toasts`, value }]);
+        const value = name === SYNC_REQUESTED ? SYNC_NOTICES.requested : code === 'unsaved' ? SYNC_NOTICES.unsaved : SYNC_NOTICES.rejected;
+        runCommands(name, payload, chain, [{ command: 'show', target: `${self.path}.toasts`, value }]);
     }
 
     /** Runs the commands of an `on` entry of the last node of `chain`, stopping at the first that fails */
@@ -351,7 +352,8 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             store,
             payload,
             emit: (name, payload) => hooks?.onEmit?.(name, payload),
-            ...(options.navigate === undefined ? {} : { navigate: options.navigate })
+            ...(options.navigate === undefined ? {} : { navigate: options.navigate }),
+            ...(hooks?.decide === undefined ? {} : { decide: hooks.decide })
         };
         for (const command of commands) {
             try {
@@ -439,7 +441,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             if (!chain) return;
             const on: unknown = chain[chain.length - 1]?.node[RESERVED_KEYS.on];
             const handled = on !== null && typeof on === 'object' && !Array.isArray(on) && Object.hasOwn(on, name);
-            if (name === SYNC_REJECTED && !handled) noticeRejected(payload, chain);
+            if ((name === SYNC_REJECTED || name === SYNC_REQUESTED) && !handled) notice(name, payload, chain);
             else run(name, payload, chain);
         },
         dispose(): void {

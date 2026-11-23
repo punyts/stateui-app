@@ -206,10 +206,12 @@ export interface RuntimeCore {
  *   whole node below `$.app` or `$.screens.{name}` is mounted as a load would; `$.route` is protected, so a write of it
  *   is refused: the host moves it with a `navigate` command) and of the sync status `$.runtime.sync`, as sync
  *   writes: they post no `change`. It merges its `icons` into `$.runtime.icons`, but for the document's own.
- * - `event` raises an app event (`sync.rejected`): the root node's `on` entry for it runs with the payload.
+ * - `event` raises an app event (`sync.rejected`, `sync.requested`): the root node's `on` entry for it runs with the
+ *   payload, or else the app's toasts show the event's notice. `write` also reaches `$.runtime.requests`, the requests
+ *   the host's sync client knows (docs/design/statenet-requests.md).
  * - `ping` is answered with `pong`, and `inspect` with `inspected` (the nodes on screen, for an editor over the frame).
  * - `command` runs a component command with the runner the dispatcher uses for `on` (`target` is a `$.app` node path;
- *   the system commands `set`, `toggle` and `emit` are refused). `locale` applies a language overlay (`switchLocale`,
+ *   the other system commands are refused). `locale` applies a language overlay (`switchLocale`,
  *   from the document's `locales` and `options.componentOverlays`) and leaves `$.data` alone. `theme` applies the
  *   overlay `name` of `kind` (`applyOverlay`: the shipped overlays and the document's `themes`). A failure posts
  *   `error` and changes nothing. With no application mounted these, `write` and `event` are counted as `unhandled`.
@@ -219,7 +221,8 @@ export interface RuntimeCore {
  * `$.server`, link aliases and the runtime properties of a node (`"runtime": true` in its shape) make none, and a
  * snapshot or a write does not set a runtime property. The value of an `inputType: "password"` field (and the data such a field is
  * linked to) never leaves the frame: such a change is not posted, and it is cut out of the value of a change above it.
- * It posts `emit` from the dispatcher hook and `error` for validation and runtime errors.
+ * It posts `emit` and `decide` (a `request.*` command) from the dispatcher hooks and `error` for validation and
+ * runtime errors.
  *
  * Files: the dispatcher's `transferFile` hook posts `file` (answered by `fileProgress` and `fileResult`), its
  * `readFile` hook posts `fileRead` (answered by `fileData`) and its `releaseFile` hook posts `fileRelease` (answered by
@@ -455,6 +458,9 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
                     onEmit(name, payload) {
                         const json = payload === undefined ? undefined : toJson(payload);
                         post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
+                    },
+                    decide(decision) {
+                        post({ type: 'decide', ...decision });
                     },
                     onError(error) {
                         postErrors([error]);

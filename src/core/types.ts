@@ -69,17 +69,19 @@ export interface AppDocument {
 
 /** The top-level keys of a document */
 /** The app events the host raises, which the root node's (`$.app`) `on` entries may use */
-export const APP_EVENTS = ['sync.rejected', 'logic.failed'] as const;
+export const APP_EVENTS = ['sync.rejected', 'sync.requested', 'logic.failed'] as const;
 
 /** An app event: one of `APP_EVENTS`, or `notify.<name>` raised by the logic's `notify` command */
 export type AppEventName = (typeof APP_EVENTS)[number] | `notify.${string}`;
 
 /**
- * The messages an app's toasts (`$.app.toasts`, a `toastRegion`) show by themselves when the root node has no
- * `sync.rejected` entry: `unsaved` for a change refused while the server holds too many unsaved changes (rejection code
- * `unsaved`), `rejected` for any other refused change. A `toastRegion` whose `messages` has the same key shows that instead
+ * The messages an app's toasts (`$.app.toasts`, a `toastRegion`) show by themselves when the root node has no entry
+ * for the app event: for `sync.rejected`, `unsaved` for a change refused while the server holds too many unsaved
+ * changes (rejection code `unsaved`) and `rejected` for any other refused change; for `sync.requested`, `requested` for
+ * a change kept as a request for the owner to decide (docs/design/statenet-requests.md). A `toastRegion` whose
+ * `messages` has the same key shows that instead
  */
-export const SYNC_NOTICES = { unsaved: 'syncUnsaved', rejected: 'syncRejected' } as const;
+export const SYNC_NOTICES = { unsaved: 'syncUnsaved', rejected: 'syncRejected', requested: 'syncRequested' } as const;
 
 /** `notify.<name>`: the app events the logic's `notify` command raises */
 const NOTIFY_EVENT = /^notify.[A-Za-z][A-Za-z0-9_-]{0,63}$/;

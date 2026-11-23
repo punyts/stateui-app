@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+- **Requests that wait for the owner reach the app: `$.runtime.requests`, `request.*` commands and `syncRequested`**
+  (docs/design/statenet-requests.md, R2). A `write` may set `$.runtime.requests` and a link may target it; mounts start
+  it empty. The app event `sync.requested` (`{ id, path }`) shows `SYNC_NOTICES.requested` on the toasts when the root
+  has no entry for it. The system commands `request.approve`, `request.reject` and `request.withdraw`
+  (`REQUEST_COMMANDS`) take the id in `value` or `from` (`request.reject` also `{ id, note }`, the note at most
+  `MAX_REQUEST_NOTE` 500); `validateOn` reports one with a target or no id as `SUI-ON-SHAPE`. They hand a
+  `RequestDecision` to the new `DispatchHooks.decide`, and the runtime posts the new outbound message `decide`. Tests:
+  `src/core/on/on.test.ts`, `src/runtime/validate.test.ts`, `src/runtime/startRuntime.browser.test.ts`.
 - **A seeded `random` among the logic functions** (docs/design/stateui-game-input.md). `random(seed)` is a number in [0, 1) and `random(seed, n)` a whole number from 0 to n - 1, depending only on the seed (its JSON text, through FNV-1a and mulberry32's mix), so replicas and the authority agree; a missing seed or an `n` that is not a whole number from 1 to 2^32 gives `null`. Tests: `src/core/logic/logic.test.ts` ("values: random").
 - **A read grant may be up to 4096 characters** (`MAX_GRANT_LENGTH`; a `grant` message up to `MAX_GRANT_BYTES`, 8 KiB). The grant is now a signed grant token (docs/design/statenet-permissions.md, S14c), about 500 characters with today's owner numbers, which 512 nearly cut off. Test: `src/runtime/validate.test.ts`.
 - **The path matcher moved to `@punyts/state`.** Breaking: `compilePattern`, `matchPattern`, `PathPattern` and `PatternMatch` are no longer exported from `@punyts/stateui-app/core`; import them from `@punyts/state`. The logic engine uses them from there; `writeSteps` and `expressionPaths` stay (`src/core/logic/writtenPaths.ts`). The pattern tests moved with it (state `src/Pattern.test.ts`).

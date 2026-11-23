@@ -1,7 +1,26 @@
 import type { JsonValue } from '../types.js';
 
+/**
+ * The commands that decide a request waiting for the owner (docs/design/statenet-requests.md): their argument is the
+ * request's id, or `{ id, note }` for `request.reject`
+ */
+export const REQUEST_COMMANDS = ['request.approve', 'request.reject', 'request.withdraw'] as const;
+
+/** The longest note a rejection takes to its requester */
+export const MAX_REQUEST_NOTE = 500;
+
+/** The longest request id a request command takes */
+export const MAX_REQUEST_ID = 64;
+
+/** What a request command hands the host */
+export interface RequestDecision {
+    action: 'approve' | 'reject' | 'withdraw';
+    id: string;
+    note?: string;
+}
+
 /** The commands the runtime provides itself; every other command belongs to a root component's shape */
-export const SYSTEM_COMMANDS = ['set', 'toggle', 'emit', 'navigate'] as const;
+export const SYSTEM_COMMANDS = ['set', 'toggle', 'emit', 'navigate', ...REQUEST_COMMANDS] as const;
 
 export type SystemCommand = (typeof SYSTEM_COMMANDS)[number];
 

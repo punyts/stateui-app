@@ -1,5 +1,5 @@
-import type { Frame, Located, OnCommand, TreeNode } from '../../core/on/index.js';
-import { findProvider, findRowProvider, parseTarget, resolveTarget } from '../../core/on/index.js';
+import type { Frame, Located, OnCommand, RequestDecision, TreeNode } from '../../core/on/index.js';
+import { findProvider, findRowProvider, MAX_REQUEST_ID, MAX_REQUEST_NOTE, parseTarget, REQUEST_COMMANDS, resolveTarget } from '../../core/on/index.js';
 import { cloneJson, entryShape } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { Shape } from '../../core/shape/index.js';
@@ -37,6 +37,8 @@ export interface CommandContext {
     emit(name: string, payload: unknown): void;
     /** Moves `$.route` to a screen; returns why it cannot. Absent in an app without screens */
     navigate?(screen: string, params: JsonValue | undefined): string | undefined;
+    /** Hands a request command's decision to the host. Absent when the app is mounted without a host that decides */
+    decide?(decision: RequestDecision): void;
 }
 
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
@@ -187,6 +189,22 @@ function runComponentCommand(command: OnCommand, context: CommandContext): void 
     else handler.call(element?.commands, value, context.payload, row);
 }
 
+/**
+ * The decision of a request command from its argument: the request's id, or `{ id, note }` for `request.reject`;
+ * throws when the argument is neither
+ */
+export function requestDecision(command: string, value: JsonValue | undefined): RequestDecision {
+    const action = command.slice('request.'.length) as RequestDecision['action'];
+    const object = value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
+    const id = object !== undefined ? object['id'] : value;
+    const note = action === 'reject' ? object?.['note'] : undefined;
+    if (typeof id !== 'string' || id.length === 0 || id.length > MAX_REQUEST_ID) throw new CommandFailure(`${command} needs the id of a request`);
+    if (note !== undefined && note !== null && (typeof note !== 'string' || note.length > MAX_REQUEST_NOTE)) {
+        throw new CommandFailure(`the note of ${command} is text of at most ${MAX_REQUEST_NOTE} characters`);
+    }
+    return { action, id, ...(typeof note === 'string' && note.length > 0 && { note }) };
+}
+
 /** Runs one command; throws when it fails */
 export function runCommand(command: OnCommand, context: CommandContext): void {
     if (command.command === 'set') {
@@ -210,6 +228,10 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
         const params = command.from !== undefined ? valueOf(command, context) : withRows(command.value, context);
         const reason = context.navigate(command.target, params);
         if (reason !== undefined) throw new CommandFailure(reason);
+    } else if ((REQUEST_COMMANDS as readonly string[]).includes(command.command)) {
+        const decision = requestDecision(command.command, command.from !== undefined ? valueOf(command, context) : withRows(command.value, context));
+        if (context.decide === undefined) throw new CommandFailure(`the app has no host that decides requests, so ${command.command} does nothing`);
+        context.decide(decision);
     } else {
         runComponentCommand(command, context);
     }

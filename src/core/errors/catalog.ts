@@ -93,7 +93,7 @@ export const ERROR_CATALOG = {
         template: 'Link target {target} at {path} does not exist or is not an exposed runtime property'
     },
     'SUI-LINK-TARGET': {
-        template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, be $.runtime.sync, or be a node reference (^name.path or .path)'
+        template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, be $.runtime.sync or $.runtime.requests, or be a node reference (^name.path or .path)'
     },
     'SUI-LINK-SERVER': {
         template: 'Link "{key}" at {path} has target {target}; $.server is server-only and never reaches the browser'

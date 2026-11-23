@@ -16,14 +16,16 @@ const SEGMENT = '[A-Za-z0-9_-]+';
 const DATA_TARGET = new RegExp(`^\\$\\.data(\\.${SEGMENT})*$`);
 /** The sync status the host writes (`$.runtime.sync`): an app links a badge to it */
 const SYNC_TARGET = /^\$\.runtime\.sync(\.(mode|status|waiting))?$/;
+/** The requests that wait for the owner, which the host writes (`$.runtime.requests`): an app lists them */
+const REQUESTS_TARGET = /^\$\.runtime\.requests$/;
 const ROW_TARGET = new RegExp(`^\\$row(\\.${SEGMENT})*$`);
 const NODE_REFERENCE = new RegExp(`^(\\^${SEGMENT}|)(\\.${SEGMENT})+$`);
 /** `$.server` and the paths below it: server-only, so never a link target */
 const SERVER_TARGET = /^\$\.server(\.|$)/;
 
-/** True for a target a link may have: `$.data`, `$row`, `$.runtime.sync`, or a node reference (`^name.path`, `.path`) */
+/** True for a target a link may have: `$.data`, `$row`, `$.runtime.sync`, `$.runtime.requests`, or a node reference (`^name.path`, `.path`) */
 function isLinkTarget(target: string): boolean {
-    return DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target) || NODE_REFERENCE.test(target);
+    return DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target) || REQUESTS_TARGET.test(target) || NODE_REFERENCE.test(target);
 }
 
 /** The shape of a root component, if the library has one */

@@ -1058,6 +1058,39 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('emit')).toEqual([{ v: PROTOCOL_VERSION, nonce: NONCE, type: 'emit', name: 'saved', payload: { id: 3 } }]);
     });
 
+    it('should post decide for a request command, and refuse one with no id as a runtime error', () => {
+        // Arrange
+        const press = (): void => void find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+        const reject: AppDocument = { app: panel({ no: { component: 'button', on: { press: { command: 'request.reject', value: { id: 'r-1', note: 'Not this week' } } } } }) };
+        const wrong: AppDocument = { app: panel({ bad: { component: 'button', on: { press: { command: 'request.approve', value: 7 } } } }) };
+
+        // Act
+        send(message('load', { document: reject }));
+        press();
+        send(message('load', { document: wrong }));
+        press();
+
+        // Assert
+        expect(ofType('decide')).toEqual([{ v: PROTOCOL_VERSION, nonce: NONCE, type: 'decide', action: 'reject', id: 'r-1', note: 'Not this week' }]);
+        expect(JSON.stringify(ofType('error'))).toContain('request.approve needs the id of a request');
+    });
+
+    it('should take the requests the host writes as a sync write, for a request command to read', async () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ yes: { component: 'button', on: { press: { command: 'request.approve', from: '$.runtime.requests.rq.id' } } } }) };
+        send(message('load', { document, mode: 'full' }));
+
+        // Act
+        send(message('write', { writes: [{ path: '$.runtime.requests', value: { rq: { id: 'rq', path: '$.data.a', op: 'set', value: 2, status: 'pending', mine: false, by: 'p:ann' } } }] }));
+        await tick();
+        find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+
+        // Assert
+        expect(ofType('decide')).toEqual([{ v: PROTOCOL_VERSION, nonce: NONCE, type: 'decide', action: 'approve', id: 'rq' }]);
+        expect(ofType('change')).toHaveLength(0);
+        expect(handle.stats().dropped.invalid).toBe(0);
+    });
+
     it('should drop a write to $.runtime as invalid', () => {
         // Arrange
         send(message('load', { document: { app: panel({}) } }));

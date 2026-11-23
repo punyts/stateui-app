@@ -1,5 +1,6 @@
 import type { Store } from '@punyts/state';
 import type { BuildError } from '../../core/errors/index.js';
+import type { RequestDecision } from '../../core/on/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
 import type { FileData, ReadFile } from '../../runtime/fileRead.js';
@@ -119,6 +120,11 @@ export interface DispatchHooks {
     /** Called by the system command `emit` with the event name (the command's `target`) and its payload */
     onEmit?(name: string, payload: unknown): void;
     /**
+     * Called by the `request.*` commands with the decision on a request waiting for the owner
+     * (docs/design/statenet-requests.md). Set by the runtime; absent when the app is mounted without a host that decides
+     */
+    decide?(decision: RequestDecision): void;
+    /**
      * Hands a file to the host and resolves with the reference of the stored file (E8.39). Set by the runtime inside
      * the preview frame; absent when the app is mounted without a host that takes files
      */
@@ -174,7 +180,7 @@ export interface DispatcherOptions {
 }
 
 export interface Dispatcher {
-    /** Runs the root node's `on` entry for an app event (`sync.rejected`) with the payload */
+    /** Runs the root node's `on` entry for an app event (`sync.rejected`, `sync.requested`) with the payload; without one, a sync event shows its notice */
     raise(name: string, payload?: unknown): void;
     /** Removes every listener; later events do nothing. Safe to call more than once */
     dispose(): void;

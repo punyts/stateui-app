@@ -95,6 +95,7 @@ function initialState(document: AppDocument, app: Node, mode: AppMode, screens: 
             icons: cloneJson((document.icons ?? {}) as unknown as JsonObject) as JsonObject,
             empty: {},
             sync: { mode, status: mode === 'standalone' ? 'standalone' : 'connecting', waiting: 0 },
+            requests: {},
             ...(embedded ? { embedded: true } : {})
         }
     };
@@ -206,8 +207,9 @@ function stepError(name: string): BuildError {
  * before anything renders: `store` is undefined and `errors` says why. It does not throw for a bad document.
  * `options.mode` (`standalone` when absent) is how the app keeps its state: the document is validated for it (no
  * `$.server` in Standalone or Persisted) and `$.runtime.sync` starts as `{ mode, status, waiting: 0 }`, with the status
- * `standalone` or `connecting`; the host writes later statuses. `raise` runs the root node's `on` entry for an app
- * event (`sync.rejected`).
+ * `standalone` or `connecting`; the host writes later statuses. `$.runtime.requests` starts empty; the host writes the
+ * requests its sync client knows (docs/design/statenet-requests.md). `raise` runs the root node's `on` entry for an app
+ * event (`sync.rejected`, `sync.requested`).
  *
  * Outside Full mode the document's `logic` runs in the browser (`startBrowserLogic`), every unit whatever its `runs`:
  * machines and rules look up the store's own writes, and their failures and `notify` events reach the root node's `on`

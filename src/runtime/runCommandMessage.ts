@@ -35,8 +35,8 @@ export interface CommandRun {
  * state path (`$.app...`, or `$.screens.{name}...` for a node of a screen) of a node, and the component's element
  * handles the command. Returns the error to post, or
  * undefined when it ran. `navigate` takes a screen name as its target and the params as its value, and moves
- * `$.route` as the `on` command does. The other system commands `set`, `toggle` and `emit` are refused (a write
- * goes through `write` messages, and the minion's own events must not loop back to it). A target or command that does
+ * `$.route` as the `on` command does. The other system commands are refused (a write goes through `write`
+ * messages, the minion's own events must not loop back to it, and the minion does not decide requests). A target or command that does
  * not resolve is found before anything runs, so nothing changes
  */
 export function runCommandMessage(run: CommandRun, target: string, command: string, value: JsonValue | undefined): BuildError | undefined {

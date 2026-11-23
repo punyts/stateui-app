@@ -83,6 +83,29 @@ describe('validateOn', () => {
         expect(errors).toEqual([]);
     });
 
+    it('should accept the request commands with the id in value or from, and refuse one with a target or no id', () => {
+        // Arrange
+        const good = button({
+            press: [
+                { command: 'request.approve', value: 'r-1' },
+                { command: 'request.reject', value: { id: 'r-1', note: 'Not now' } },
+                { command: 'request.withdraw', from: '$.data.picked' }
+            ]
+        });
+        const bad = button({ press: [{ command: 'request.approve', target: 'r-1', value: 'r-1' }, { command: 'request.reject' }] });
+
+        // Act
+        const accepted = check(good);
+        const refused = check(bad);
+
+        // Assert
+        expect(accepted).toEqual([]);
+        expect(refused.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-ON-SHAPE', '$.app.children.b.on.press.0'],
+            ['SUI-ON-SHAPE', '$.app.children.b.on.press.1']
+        ]);
+    });
+
     it('should accept a component command on an absolute target', () => {
         const app: Node = {
             component: 'toolbar',

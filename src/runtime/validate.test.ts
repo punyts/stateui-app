@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'grant', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
+            ['change', 'command', 'decide', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'grant', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
         );
     });
 
@@ -23,6 +23,11 @@ describe('runtime message validator', () => {
         base('write', { writes: [{ path: '$.data.a', value: 1 }, { path: '$.app.children.x', remove: true }] }),
         base('write', { writes: [{ path: '$.runtime.sync', value: { mode: 'full', status: 'offline', waiting: 2 } }, { path: '$.theme.mode', value: 'dark' }] }),
         base('event', { name: 'sync.rejected', payload: { path: '$.data.a', reason: 'no' } }),
+        base('event', { name: 'sync.requested', payload: { id: 'r-1', path: '$.data.a' } }),
+        base('write', { writes: [{ path: '$.runtime.requests', value: { 'r-1': { id: 'r-1', path: '$.data.a', op: 'set', value: 1, status: 'pending', mine: true } } }] }),
+        base('decide', { action: 'approve', id: 'r-1' }),
+        base('decide', { action: 'reject', id: 'r-1', note: 'Not this week' }),
+        base('decide', { action: 'withdraw', id: 'r-1' }),
         base('command', { target: '$.app.children.x', command: 'open', value: 'a' }),
         base('locale', { locale: 'de-CH' }),
         base('theme', { kind: 'mode', name: 'dark' }),
@@ -107,6 +112,12 @@ describe('runtime message validator', () => {
         ['fileRelease with an extra field', base('fileRelease', { requestId: 1, id: 'f', more: 1 })],
         ['fileReleased with a file reference', base('fileReleased', { requestId: 1, ok: true, file: { id: 'f', name: 'a', size: 3, type: 'image/png' } })],
         ['fileReleased without ok', base('fileReleased', { requestId: 1 })],
+        ['decide with an unknown action', base('decide', { action: 'apply', id: 'r-1' })],
+        ['decide without an id', base('decide', { action: 'approve' })],
+        ['decide with a long id', base('decide', { action: 'approve', id: 'x'.repeat(65) })],
+        ['decide approve with a note', base('decide', { action: 'approve', id: 'r-1', note: 'yes' })],
+        ['decide reject with a long note', base('decide', { action: 'reject', id: 'r-1', note: 'x'.repeat(501) })],
+        ['decide with another key', base('decide', { action: 'approve', id: 'r-1', value: 1 })],
         ['fileExport of a path outside data', base('fileExport', { requestId: 1, source: '$.server.keys', name: 'a.csv', request: { columns: [{ key: 'n', field: 'n', title: 'N' }] } })],
         ['fileExport with a name that is not a csv', base('fileExport', { requestId: 1, source: '$.data.a', name: 'a.exe', request: { columns: [{ key: 'n', field: 'n', title: 'N' }] } })],
         ['fileExport with rows', base('fileExport', { requestId: 1, source: '$.data.a', name: 'a.csv', request: { columns: [{ key: 'n', field: 'n', title: 'N' }], rows: [] } })],
@@ -158,6 +169,7 @@ describe('runtime message validator', () => {
         expect(isWritablePath('$.theme.tokens')).toBe(true);
         expect(isWritablePath('$.locale')).toBe(true);
         expect(isWritablePath('$.runtime.sync.status')).toBe(true);
+        expect(isWritablePath('$.runtime.requests')).toBe(true);
         expect(isWritablePath('$.runtime.icons')).toBe(false);
         expect(isWritablePath('$.server.token')).toBe(false);
         expect(isWritablePath('$.data..a')).toBe(false);

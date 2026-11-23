@@ -3,7 +3,8 @@ export const RUNTIME_PATHS = {
     nodes: '$.runtime.nodes',
     icons: '$.runtime.icons',
     empty: '$.runtime.empty',
-    sync: '$.runtime.sync'
+    sync: '$.runtime.sync',
+    requests: '$.runtime.requests'
 } as const;
 
 /**
