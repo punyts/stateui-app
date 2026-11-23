@@ -9,7 +9,8 @@ import { ROUTE_PATH } from '../../core/route/index.js';
 import { isRoutePath, writeRoute } from './screens.js';
 import type { AppDocument, JsonValue, Node } from '../../core/types.js';
 
-const WATCHED = ['$.app.$all', '$.data.$all'];
+/** The events nodes raise (`$.raised`, dom/on/raised.ts) are watched too, so a rule or machine triggers on one */
+const WATCHED = ['$.app.$all', '$.data.$all', '$.raised.$all'];
 /** Also watched in an app with screens */
 const SCREEN_WATCHED = ['$.screens.$all', '$.route.$all'];
 const WRITE = { origin: LOGIC_ORIGIN };

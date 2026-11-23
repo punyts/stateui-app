@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **Fix: browser logic hears the events nodes raise.** `startBrowserLogic` watched `$.app`, `$.data`, `$.screens` and
+  `$.route` but not `$.raised`, so outside Full mode a rule or machine whose trigger was a `$.raised` path (a press, a
+  contact) never ran. It now watches `$.raised` too. Test: `src/dom/mount/logic.browser.test.ts` ("should run a rule on
+  an event a node raised").
 - **Requests that wait for the owner reach the app: `$.runtime.requests`, `request.*` commands and `syncRequested`**
   (docs/design/statenet-requests.md, R2). A `write` may set `$.runtime.requests` and a link may target it; mounts start
   it empty. The app event `sync.requested` (`{ id, path }`) shows `SYNC_NOTICES.requested` on the toasts when the root

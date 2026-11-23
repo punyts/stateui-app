@@ -306,6 +306,21 @@ describe('browser logic', () => {
         expect(store.get('$.data.stats.count')).toBe(2);
     });
 
+    it('should run a rule on an event a node raised, from the first one written into $.raised and each one after', async () => {
+        // Arrange
+        const mounted = mount(documentWith({ rules: { pressed: { when: { path: '$.raised.app.children.count.press' }, do: [{ command: 'increment', target: '$.data.qty' }] } } }));
+        const store = mounted.store!;
+
+        // Act: as the recorder writes them, untagged and always a change
+        store.set('$.raised.app', { children: { count: { press: true } } } as never, { always: true });
+        await flush();
+        store.set('$.raised.app.children.count.press', true as never, { always: true });
+        await flush();
+
+        // Assert
+        expect(store.get('$.data.qty')).toBe(3);
+    });
+
     it('should stop when the app is disposed', async () => {
         const mounted = mount(documentWith(COUNT));
         const store = mounted.store!;
