@@ -1,6 +1,6 @@
 import { cloneJson, isObject } from '../resolve/merge.js';
 import type { JsonValue } from '../types.js';
-import { pathSteps } from './pattern.js';
+import { pathSteps } from '@punyts/state';
 import type { LogicWrite } from './types.js';
 
 /** The value at `steps` inside `value` */

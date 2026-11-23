@@ -2,7 +2,7 @@ import { isReported, report } from '@punyts/core';
 import { REPORT, elapsed, reportClock } from '../report.js';
 import { cloneJson, isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
-import { pathSteps } from './pattern.js';
+import { pathSteps } from '@punyts/state';
 import { covers } from './working.js';
 import { MAX_EFFECT_CACHE } from './types.js';
 import type { LogicChange, LogicEffect, LogicEffectAnswer, LogicEffectInfo, LogicEffectStatus, LogicFailure, LogicHost, LogicWrite } from './types.js';

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createLogicEngine } from './engine.js';
 import { PathIndex } from './pathIndex.js';
-import { compilePattern } from './pattern.js';
-import type { PathPattern } from './pattern.js';
+import { compilePattern } from '@punyts/state';
+import type { PathPattern } from '@punyts/state';
 import type { JsonValue } from '../types.js';
 import type { LogicDocument, LogicWrite } from './types.js';
 
