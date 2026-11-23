@@ -516,9 +516,12 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
   `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
   `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,
-  `string`, `slice`, `now`, `today`. `slice(value, start, end?)` cuts a string, or the items of an array or
+  `string`, `slice`, `random`, `now`, `today`. `slice(value, start, end?)` cuts a string, or the items of an array or
   map, like JavaScript's `slice` (negative positions count from the end); `now()` is the UTC time as an ISO string and
-  `today()` the local date as `YYYY-MM-DD`, for a "due today" comparison.
+  `today()` the local date as `YYYY-MM-DD`, for a "due today" comparison. `random(seed)` is a number in [0, 1) and `random(seed, n)` a whole number from 0 to n - 1; the
+  value depends only on the seed (read as its JSON text), so every replica and the authority compute the same one: seed it
+  from state (`random($.data.game.id + ':' + $.data.game.turn, 6)`). A missing seed or a bad `n` gives `null`; it is not
+  cryptographic.
 - **Deriving at start.** `engine.start()` first runs, once, each rule or table that only derives values: every
   trigger a `path` without `was` or `after`, every command `set`, `merge`, `copy` or `query`, and no machine.
   Each fires for every concrete path its trigger matches that has a value (`$.data.products.{id}.price` fires for each

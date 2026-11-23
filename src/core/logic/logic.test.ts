@@ -2003,3 +2003,48 @@ describe('readLogic: functions', () => {
         expect(Object.keys(result.logic.rules ?? {})).toEqual(['label']);
     });
 });
+
+describe('values: random', () => {
+    const scope = Object.freeze({ read: () => undefined, trigger: 0, captures: Object.freeze({}) });
+
+    it('should give the same value for the same seed and a whole number below n', () => {
+        // Arrange
+        const seeds = Array.from({ length: 200 }, (_, index) => `game1:${index}`);
+
+        // Act
+        const first = seeds.map((seed) => evaluate(`random('${seed}', 6)`, scope));
+        const again = seeds.map((seed) => evaluate(`random('${seed}', 6)`, scope));
+        const unit = evaluate("random('game1:0')", scope) as number;
+
+        // Assert
+        expect(again).toEqual(first);
+        expect(first.every((value) => Number.isInteger(value) && (value as number) >= 0 && (value as number) < 6)).toBe(true);
+        expect(new Set(first).size).toBe(6);
+        expect(unit).toBeGreaterThanOrEqual(0);
+        expect(unit).toBeLessThan(1);
+        expect(evaluate("random('game1:1')", scope)).not.toBe(unit);
+    });
+
+    it('should spread its values evenly over n', () => {
+        // Arrange
+        const counts = [0, 0, 0, 0];
+
+        // Act
+        for (let index = 0; index < 4000; index += 1) counts[evaluate(`random(${index}, 4)`, scope) as number] += 1;
+
+        // Assert
+        expect(counts.every((count) => count > 900 && count < 1100)).toBe(true);
+    });
+
+    it('should read the seed as JSON and give null for no seed or a bad n', () => {
+        // Act
+        const number = evaluate('random(7)', scope);
+        const text = evaluate("random('7')", scope);
+        const bad = ['random(null)', 'random()', "random('a', 0)", "random('a', 2.5)", "random('a', 'six')", "random('a', -1)"].map((text) => evaluate(text, scope));
+
+        // Assert
+        expect(number).not.toBe(text);
+        expect(bad).toEqual([null, null, null, null, null, null]);
+        expect(evaluate("random('a', null)", scope)).toBe(evaluate("random('a')", scope));
+    });
+});

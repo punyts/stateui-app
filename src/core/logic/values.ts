@@ -45,9 +45,40 @@ function numbers(value: unknown, field?: unknown): number[] {
         .filter((item): item is number => typeof item === 'number' && Number.isFinite(item));
 }
 
+/** The largest `n` of `random(seed, n)`: the hash gives 32 bits */
+const RANDOM_MAX = 2 ** 32;
+
+/**
+ * A number in [0, 1) that depends only on `seed` (read as its JSON text), or with `n` a whole number from 0 to n - 1:
+ * FNV-1a over the text, mixed by mulberry32's output step. Every replica computes the same value for the same seed.
+ * Null for a missing or null seed, a seed that is not JSON, or an `n` that is not a whole number from 1 to 2^32.
+ * Not cryptographic
+ */
+export function seededRandom(seed: unknown, n?: unknown): number | null {
+    if (seed === undefined || seed === null) return null;
+    if (n !== undefined && n !== null && !(typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= RANDOM_MAX)) return null;
+    let text: string | undefined;
+    try {
+        text = JSON.stringify(seed);
+    } catch {
+        return null;
+    }
+    if (text === undefined) return null;
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    let mixed = (hash + 0x6d2b79f5) | 0;
+    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    const unit = ((mixed ^ (mixed >>> 14)) >>> 0) / RANDOM_MAX;
+    return n === undefined || n === null ? unit : Math.floor(unit * (n as number));
+}
+
 /**
  * The fixed function library of logic expressions. Every function is pure except `now` and `today`; a map is read in key order,
- * like an array
+ * like an array. `random` is pure too: its value depends only on its seed (`seededRandom`)
  */
 export const LOGIC_FUNCTIONS: Readonly<Record<string, (...args: unknown[]) => unknown>> = {
     size: (value) => (typeof value === 'string' || Array.isArray(value) ? value.length : entries(value).length),
@@ -83,6 +114,7 @@ export const LOGIC_FUNCTIONS: Readonly<Record<string, (...args: unknown[]) => un
         const to = end === undefined || end === null || !Number.isFinite(Number(end)) ? undefined : Number(end);
         return typeof value === 'string' ? value.slice(from, to) : entries(value).slice(from, to);
     },
+    random: (seed, n) => seededRandom(seed, n),
     now: () => new Date().toISOString(),
     today: () => {
         const date = new Date();
