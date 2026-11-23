@@ -200,12 +200,13 @@ describe('runtime message validator', () => {
             { url: url + '#x' },
             { url, grant: 'no dots or spaces' },
             { url, grant: 'a.b.c' },
-            { url, grant: 'a.' + 'b'.repeat(511) },
+            { url, grant: 'a.' + 'b'.repeat(4095) },
             { url, extra: 1 },
             'https://magnetic.example/files'
         ]) {
             expect(validateMessage(base('load', { document, files })).ok, JSON.stringify(files)).toBe(false);
         }
+        expect(validateMessage(base('grant', { grant: 'a.' + 'b'.repeat(4000) })).ok).toBe(true);
         expect(validateMessage(base('grant', { grant: 'x' })).ok).toBe(false);
         expect(validateMessage(base('grant', { grant, extra: 1 })).ok).toBe(false);
     });

@@ -24,6 +24,9 @@ export const MAX_EVENT_BYTES = 64 * 1024;
 /** Largest message of the small types: `locale`, `theme`, `ready`, `ping`, `pong` */
 export const MAX_SMALL_BYTES = 1024;
 
+/** Largest `grant`: a read grant of `MAX_GRANT_LENGTH` in its envelope */
+export const MAX_GRANT_BYTES = 8 * 1024;
+
 /** Most path writes in one `write` message */
 export const MAX_WRITES = 500;
 
@@ -106,7 +109,7 @@ export const MESSAGE_BYTE_LIMITS = {
     command: MAX_EVENT_BYTES,
     locale: MAX_SMALL_BYTES,
     theme: MAX_SMALL_BYTES,
-    grant: MAX_SMALL_BYTES,
+    grant: MAX_GRANT_BYTES,
     event: MAX_EVENT_BYTES,
     ready: MAX_SMALL_BYTES,
     change: MAX_CHANGE_BYTES,

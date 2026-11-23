@@ -5,8 +5,8 @@
  * carries the grant as `?g=`
  */
 
-/** The longest read grant the runtime holds, the same bound the server checks */
-export const MAX_GRANT_LENGTH = 512;
+/** The longest read grant the runtime holds, the same bound the server checks (a signed grant token, `PathTokens` in stateui-mcp) */
+export const MAX_GRANT_LENGTH = 4096;
 
 /** The longest `files.url` of a `load` */
 export const MAX_FILES_URL_LENGTH = 512;
