@@ -11,11 +11,9 @@ import { hostFunctions } from '../functions/fixtures/hostFunctions.js';
 import { validateDocument } from '../validate/index.js';
 import {
     WorkingCopy,
-    compilePattern,
     createLogicEngine,
     createLogicIndex,
     evaluate,
-    matchPattern,
     readLogic,
     resolveValue
 } from './index.js';
@@ -194,43 +192,6 @@ function userChange(memory: ReturnType<typeof memoryHost>, engine: ReturnType<ty
     memory.apply({ path, value });
     engine.changes([previous === undefined ? { path, value } : { path, value, previous }]);
 }
-
-describe('path patterns', () => {
-    it('should match a change at, below and above a pattern with captures', () => {
-        // Arrange
-        const pattern = compilePattern('$.data.tasks.{task}.status');
-
-        // Act
-        const at = matchPattern(pattern!, '$.data.tasks.t1.status');
-        const below = matchPattern(pattern!, '$.data.tasks.t1.status.code');
-        const above = matchPattern(pattern!, '$.data.tasks', { t1: { status: 'open' }, t2: { status: 'done' } });
-
-        // Assert
-        expect(at).toEqual([{ path: '$.data.tasks.t1.status', captures: { task: 't1' } }]);
-        expect(below).toEqual([{ path: '$.data.tasks.t1.status', captures: { task: 't1' } }]);
-        expect(above.map((match) => match.captures['task'])).toEqual(['t1', 't2']);
-    });
-
-    it('should not match a change on another branch', () => {
-        const pattern = compilePattern('$.app.children.*.open');
-
-        expect(matchPattern(pattern!, '$.app.children.a.saved')).toEqual([]);
-        expect(matchPattern(pattern!, '$.data.x')).toEqual([]);
-    });
-
-    it('should keep a literal step that a replaced parent removed', () => {
-        const pattern = compilePattern('$.data.contacts');
-
-        expect(matchPattern(pattern!, '$.data', {})).toEqual([{ path: '$.data.contacts', captures: {} }]);
-    });
-
-    it('should refuse patterns that are not paths', () => {
-        expect(compilePattern('data.x')).toBeUndefined();
-        expect(compilePattern('$.data..x')).toBeUndefined();
-        expect(compilePattern('$.data.{a}.{a}')).toBeUndefined();
-        expect(compilePattern('$.data.{1x}')).toBeUndefined();
-    });
-});
 
 describe('WorkingCopy', () => {
     it('should lay writes over the host values in order', () => {

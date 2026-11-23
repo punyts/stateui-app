@@ -8,7 +8,7 @@ import type { Shape } from '../shape/index.js';
 import { RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { covers } from './working.js';
-import { pathSteps } from './pattern.js';
+import { pathSteps } from '@punyts/state';
 
 const FORM = 'form';
 const FIELD = /Field$/;

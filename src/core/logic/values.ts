@@ -2,7 +2,7 @@ import Expression from '@punyts/expression';
 import type { CompiledExpression } from '@punyts/expression';
 import { cloneJson, isObject } from '../resolve/merge.js';
 import type { JsonObject, JsonValue } from '../types.js';
-import { fillCaptures, isStatePath } from './pattern.js';
+import { fillCaptures, isStatePath } from '@punyts/state';
 import { isFunctionPath } from '../functions/table.js';
 import type { LogicHost, LogicResult } from './types.js';
 

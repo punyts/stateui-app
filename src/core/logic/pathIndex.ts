@@ -1,5 +1,5 @@
-import { pathSteps } from './pattern.js';
-import type { PathPattern } from './pattern.js';
+import { pathSteps } from '@punyts/state';
+import type { PathPattern } from '@punyts/state';
 
 interface IndexNode<T> {
     readonly literal: Map<string, IndexNode<T>>;
