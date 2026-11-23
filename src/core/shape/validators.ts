@@ -3,6 +3,9 @@ import { isColor } from '../theme/value.js';
 import type { JsonValue } from '../types.js';
 import {
     MAX_COLOR_LENGTH,
+    MAX_EDIT_FACES,
+    MAX_EDIT_VERTICES,
+    MAX_FACE_SIDES,
     MAX_PATH_COMMANDS,
     MAX_PATH_DATA_LENGTH,
     MAX_PATTERN_INPUT,
@@ -174,6 +177,23 @@ function isPathData(value: string): boolean {
 function isPoints(value: JsonValue[]): boolean {
     if (value.length > MAX_POINTS) return false;
     return value.every((point) => Array.isArray(point) && point.length === 2 && isFiniteNumber(point[0]) && isFiniteNumber(point[1]));
+}
+
+/** True for a list of 3 to `MAX_FACE_SIDES` distinct integer indices below `count` */
+function isFace(face: JsonValue, count: number): boolean {
+    if (!Array.isArray(face) || face.length < 3 || face.length > MAX_FACE_SIDES) return false;
+    if (!face.every((index) => typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < count)) return false;
+    return new Set(face).size === face.length;
+}
+
+/** True for a geometry that is not `custom`, or a custom one whose vertices and faces are well formed and within the limits */
+function isPolyMesh(value: JsonValue): boolean {
+    if (!isObject(value) || value.kind !== 'custom') return true;
+    const { vertices, faces } = value;
+    if (!Array.isArray(vertices) || vertices.length > MAX_EDIT_VERTICES) return false;
+    if (!vertices.every((vertex) => Array.isArray(vertex) && vertex.length === 3 && vertex.every(isFiniteNumber))) return false;
+    if (!Array.isArray(faces) || faces.length > MAX_EDIT_FACES) return false;
+    return faces.every((face) => isFace(face, vertices.length));
 }
 
 function parseFileRef(options: JsonValue): FileRefOptions | undefined {
@@ -380,6 +400,11 @@ export const VALIDATORS: { [K in ValidatorName]: ValidatorRule<K> } = {
         parse: parseFileRef,
         applies: (type) => type === 'string' || type === 'object',
         check: (value, options) => isFileRef(value, options)
+    },
+    polyMesh: {
+        parse: parseTrue,
+        applies: (type) => type === 'object',
+        check: (value) => isPolyMesh(value)
     }
 };
 

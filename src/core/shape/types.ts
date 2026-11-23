@@ -82,6 +82,12 @@ export interface ValidatorOptions {
     fields?: Record<string, ObjectField>;
     /** The value is a file reference `{ id, name, size, type }`, or with `dataUrl` a `data:` URL of an image type */
     fileRef?: FileRefOptions;
+    /**
+     * The value is a `mesh` geometry whose `custom` kind holds `vertices` (at most `MAX_EDIT_VERTICES` `[x, y, z]` of
+     * finite numbers) and `faces` (at most `MAX_EDIT_FACES` lists of 3 to `MAX_FACE_SIDES` distinct indices into
+     * `vertices`); any other kind passes. The option is `true`
+     */
+    polyMesh?: true;
 }
 
 /** A property that is required only while a sibling property holds (or does not hold) a value */
@@ -171,3 +177,12 @@ export const MAX_PATH_COMMANDS = 2000;
 
 /** Most `[x, y]` pairs the `points` validator accepts */
 export const MAX_POINTS = 10000;
+
+/** Most vertices of a custom mesh geometry (the `polyMesh` validator) */
+export const MAX_EDIT_VERTICES = 4000;
+
+/** Most faces of a custom mesh geometry (the `polyMesh` validator) */
+export const MAX_EDIT_FACES = 4000;
+
+/** Most vertices of one face of a custom mesh geometry (the `polyMesh` validator); a face has at least 3 */
+export const MAX_FACE_SIDES = 32;

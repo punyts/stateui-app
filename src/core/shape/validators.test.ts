@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_COLOR_LENGTH, MAX_PATH_COMMANDS, MAX_PATH_DATA_LENGTH, MAX_POINTS, VALIDATORS, colorForm, parseShape, validateNode } from './index.js';
+import { MAX_COLOR_LENGTH, MAX_EDIT_FACES, MAX_EDIT_VERTICES, MAX_FACE_SIDES, MAX_PATH_COMMANDS, MAX_PATH_DATA_LENGTH, MAX_POINTS, VALIDATORS, colorForm, parseShape, validateNode } from './index.js';
 import type { Shape } from './index.js';
 import type { JsonValue, Node } from '../types.js';
 
@@ -301,6 +301,46 @@ describe('graphics validators', () => {
         it('should still check a file reference on a property that is a string or an object', () => {
             expect(passes(either, { id: UUID, name: 'm.glb', size: 9, type: 'model/gltf-binary' })).toBe(true);
             expect(passes(either, { id: UUID, name: 'm.glb', size: 9, type: 'model/gltf' })).toBe(false);
+        });
+    });
+
+    describe('polyMesh', () => {
+        const shape = shapeWith('object', { polyMesh: true });
+        const square = { kind: 'custom', vertices: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], faces: [[0, 1, 2, 3]] };
+
+        it('should accept a custom geometry of vertices and faces, and any geometry of another kind', () => {
+            // Act and assert
+            expect(passes(shape, square)).toBe(true);
+            expect(passes(shape, { kind: 'custom', vertices: [], faces: [] })).toBe(true);
+            expect(passes(shape, { kind: 'box', width: 2 })).toBe(true);
+        });
+
+        it.each([
+            ['no vertices', { kind: 'custom', faces: [] }],
+            ['no faces', { kind: 'custom', vertices: [] }],
+            ['a vertex of two numbers', { ...square, vertices: [[0, 0], [1, 0, 0], [1, 1, 0]] }],
+            ['a vertex that is not finite', { ...square, vertices: [[0, 0, null], [1, 0, 0], [1, 1, 0]] }],
+            ['a face of two indices', { ...square, faces: [[0, 1]] }],
+            ['an index out of range', { ...square, faces: [[0, 1, 4]] }],
+            ['an index repeated in a face', { ...square, faces: [[0, 1, 1]] }],
+            ['an index that is not an integer', { ...square, faces: [[0, 1, 2.5]] }]
+        ])('should refuse a custom geometry with %s', (_name, value) => {
+            // Act and assert
+            expect(passes(shape, value as JsonValue)).toBe(false);
+        });
+
+        it('should refuse more vertices, faces or sides of a face than the limits', () => {
+            // Arrange
+            const ring = Array.from({ length: MAX_FACE_SIDES + 1 }, (_, index) => [Math.cos(index), Math.sin(index), 0]);
+            const corner = (count: number): JsonValue => Array.from({ length: count }, () => [0, 1, 2]);
+            const vertices = Array.from({ length: MAX_EDIT_VERTICES }, () => [0, 0, 0]);
+
+            // Act and assert
+            expect(passes(shape, { kind: 'custom', vertices: ring, faces: [ring.slice(1).map((_, index) => index)] })).toBe(true);
+            expect(passes(shape, { kind: 'custom', vertices: ring, faces: [ring.map((_, index) => index)] })).toBe(false);
+            expect(passes(shape, { kind: 'custom', vertices, faces: corner(MAX_EDIT_FACES) })).toBe(true);
+            expect(passes(shape, { kind: 'custom', vertices: [...vertices, [0, 0, 0]], faces: [] })).toBe(false);
+            expect(passes(shape, { kind: 'custom', vertices, faces: corner(MAX_EDIT_FACES + 1) })).toBe(false);
         });
     });
 

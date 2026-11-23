@@ -254,7 +254,7 @@ describe('parseShape', () => {
         });
 
         it('should hold exactly the closed set of validator names', () => {
-            expect(Object.keys(VALIDATORS)).toEqual(['oneOf', 'eachOf', 'pattern', 'regex', 'range', 'length', 'color', 'pathData', 'points', 'vector', 'fields', 'fileRef']);
+            expect(Object.keys(VALIDATORS)).toEqual(['oneOf', 'eachOf', 'pattern', 'regex', 'range', 'length', 'color', 'pathData', 'points', 'vector', 'fields', 'fileRef', 'polyMesh']);
         });
 
         it.each([
@@ -264,7 +264,8 @@ describe('parseShape', () => {
             ['vector', 'array', 3],
             ['fields', 'object', { x: { type: 'number' } }],
             ['fileRef', 'string', { types: ['image/png'], dataUrl: true }],
-            ['fileRef', 'object', { types: ['image/png'] }]
+            ['fileRef', 'object', { types: ['image/png'] }],
+            ['polyMesh', 'object', true]
         ])('should accept the %s validator on type %s and keep its options', (name, type, options) => {
             const shape = propertyShape({ type, validators: { [name]: options } });
 
@@ -283,7 +284,8 @@ describe('parseShape', () => {
             ['points', 'string'],
             ['vector', 'object'],
             ['fields', 'array'],
-            ['fileRef', 'number']
+            ['fileRef', 'number'],
+            ['polyMesh', 'array']
         ])('should reject the %s validator on type %s', (name, type) => {
             const options = { vector: 2, fields: { x: { type: 'number' } }, fileRef: { types: ['image/png'] } }[name] ?? true;
 

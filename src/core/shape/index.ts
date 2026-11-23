@@ -9,6 +9,9 @@ export type { ComponentCategory } from './categories.js';
 export type { KeyRule, RuleContext } from './table.js';
 export {
     MAX_COLOR_LENGTH,
+    MAX_EDIT_FACES,
+    MAX_EDIT_VERTICES,
+    MAX_FACE_SIDES,
     MAX_PATH_COMMANDS,
     MAX_PATH_DATA_LENGTH,
     MAX_PATTERN_INPUT,

@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **A `polyMesh` validator for custom mesh geometry** (docs/design/stateui-mesh-editor.md, V1). An object property
+  with `"polyMesh": true` takes a geometry whose `kind` is `custom` only with `vertices` (at most `MAX_EDIT_VERTICES`,
+  4000, `[x, y, z]` of finite numbers) and `faces` (at most `MAX_EDIT_FACES`, 4000, lists of 3 to `MAX_FACE_SIDES`, 32,
+  distinct indices into `vertices`); anything else is `SUI-STATE-INVALID`. Other kinds pass. The three limits are
+  exported from `/core`. Test: `src/core/shape/validators.test.ts` ("polyMesh").
 - **Fix: browser logic hears the events nodes raise.** `startBrowserLogic` watched `$.app`, `$.data`, `$.screens` and
   `$.route` but not `$.raised`, so outside Full mode a rule or machine whose trigger was a `$.raised` path (a press, a
   contact) never ran. It now watches `$.raised` too. Test: `src/dom/mount/logic.browser.test.ts` ("should run a rule on
