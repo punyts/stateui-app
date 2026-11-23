@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
+            ['change', 'command', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'grant', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
         );
     });
 
@@ -180,6 +180,34 @@ describe('runtime message validator', () => {
             expect(validateMessage(base('load', { document, keys })).ok, JSON.stringify(keys)).toBe(false);
         }
         expect(validateMessage(base('key', { key: 'mod+e', extra: 1 })).ok).toBe(false);
+    });
+
+    it('should take the files of a load and a grant only of their shapes', () => {
+        // Arrange
+        const document = { app: { component: 'panel' } };
+        const url = 'https://magnetic.example/paths/7/apps/0b6e8c1a-3f1e-4a52-9a43-2f4f1c8f2d10/files';
+        const grant = 'N3guMGI2ZS4xNzAw.q1w2e3r4t5y6u7i8o9p0-_';
+
+        // Act and Assert
+        expect(validateMessage(base('load', { document, files: { url, grant } })).ok).toBe(true);
+        expect(validateMessage(base('load', { document, files: { url: 'http://localhost:3000/paths/7/apps/a/files' } })).ok).toBe(true);
+        expect(validateMessage(base('grant', { grant })).ok).toBe(true);
+        for (const files of [
+            { url: '/paths/7/apps/a/files' },
+            { url: 'javascript:alert(1)' },
+            { url: 'https://user:pw@magnetic.example/files' },
+            { url: url + '?g=x' },
+            { url: url + '#x' },
+            { url, grant: 'no dots or spaces' },
+            { url, grant: 'a.b.c' },
+            { url, grant: 'a.' + 'b'.repeat(511) },
+            { url, extra: 1 },
+            'https://magnetic.example/files'
+        ]) {
+            expect(validateMessage(base('load', { document, files })).ok, JSON.stringify(files)).toBe(false);
+        }
+        expect(validateMessage(base('grant', { grant: 'x' })).ok).toBe(false);
+        expect(validateMessage(base('grant', { grant, extra: 1 })).ok).toBe(false);
     });
 
     it('should take an inspect of a point or of paths, and an inspected answer with boxes', () => {

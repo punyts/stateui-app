@@ -1,4 +1,5 @@
 import { isIconsMap } from './icons.js';
+import { isFilesSource, isGrant } from './fileUrl.js';
 import {
     CHUNK_HASH_PATTERN,
     CHUNK_NAMES,
@@ -261,7 +262,7 @@ function isOpen(value: unknown): boolean {
 /** The structural check of the fields of each type; the envelope is already known to be sound */
 const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => boolean> = {
     load: (m) =>
-        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks', 'keys', 'active', 'locale', 'open']) &&
+        hasOnlyKeys(m, ['document', 'state', 'instance', 'icons', 'mode', 'chunks', 'keys', 'active', 'locale', 'open', 'files']) &&
         (m['mode'] === undefined || MODES.includes(m['mode'] as string)) &&
         isJsonObject(m['document']) &&
         isRecord(m['document']['app']) &&
@@ -272,7 +273,8 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['keys'] === undefined || (Array.isArray(m['keys']) && m['keys'].length <= MAX_KEYS && m['keys'].every(isKeyChord))) &&
         (m['active'] === undefined || isActive(m['active'])) &&
         (m['locale'] === undefined || isLocale(m['locale'])) &&
-        (m['open'] === undefined || isOpen(m['open'])),
+        (m['open'] === undefined || isOpen(m['open'])) &&
+        (m['files'] === undefined || isFilesSource(m['files'])),
     write: (m) =>
         hasOnlyKeys(m, ['writes', 'icons']) &&
         Array.isArray(m['writes']) &&
@@ -285,6 +287,7 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         isText(m['command'], MAX_NAME_LENGTH) &&
         (m['value'] === undefined || isJson(m['value'])),
     locale: (m) => hasOnlyKeys(m, ['locale']) && isLocale(m['locale']),
+    grant: (m) => hasOnlyKeys(m, ['grant']) && isGrant(m['grant']),
     theme: (m) => hasOnlyKeys(m, ['kind', 'name']) && isText(m['kind'], MAX_NAME_LENGTH) && isText(m['name'], MAX_NAME_LENGTH),
     event: (m) =>
         hasOnlyKeys(m, ['name', 'payload']) &&
