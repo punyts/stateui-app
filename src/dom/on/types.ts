@@ -3,6 +3,7 @@ import type { BuildError } from '../../core/errors/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
 import type { FileData, ReadFile } from '../../runtime/fileRead.js';
+import type { FileUrl } from '../../runtime/fileUrl.js';
 import type { Load3d, Scene3dChunk } from '../../runtime/load3d.js';
 import type { FileProgress, ReleaseFile, TransferFile } from '../../runtime/fileTransfer.js';
 import type { ExportFile, FileExportSpec } from '../../runtime/fileExport.js';
@@ -39,6 +40,20 @@ export interface FileReadRequest {
     /** Aborting it cancels the read */
     readonly signal?: AbortSignal;
     respond(result: Promise<FileData>): void;
+}
+
+/** The event a component raises for the URL of a stored file through the host's `fileUrl` hook. Bubbles and is composed */
+export const FILE_URL_EVENT = 'ui-file-url';
+
+/**
+ * The `detail` of `ui-file-url`. The dispatcher calls `respond` once, synchronously, with the URL `hooks.fileUrl` gives
+ * (undefined when the hook has none for the id), and stops the event. When the host gives no hook `respond` is never
+ * called, so a component treats an event that comes back unanswered as a file it cannot show
+ */
+export interface FileUrlRequest {
+    /** The id of the file's reference */
+    readonly id: string;
+    respond(url: string | undefined): void;
 }
 
 /** The event a component raises to give a stored file back through the host's `releaseFile` hook. Bubbles and is composed */
@@ -113,6 +128,11 @@ export interface DispatchHooks {
      * the preview frame; absent when the app is mounted without a host that reads files
      */
     readFile?: ReadFile;
+    /**
+     * Gives the URL a stored file is read from on `/paths`, with the read grant the frame holds. Set by the runtime;
+     * absent when the app is mounted without a host that serves files by URL
+     */
+    fileUrl?: FileUrl;
     /**
      * Gives a stored file back to the host (G2.5). Set by the runtime inside the preview frame; absent when the app is
      * mounted without a host that takes files

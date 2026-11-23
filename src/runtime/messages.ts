@@ -1,4 +1,5 @@
 import type { AppInstance } from '../core/snapshot/index.js';
+import type { FilesSource } from './fileUrl.js';
 import type { AppDocument, AppEventName, JsonObject, JsonValue } from '../core/types.js';
 
 export { APP_EVENTS } from '../core/types.js';
@@ -8,7 +9,7 @@ export type { AppEventName } from '../core/types.js';
 export const PROTOCOL_VERSION = 1;
 
 /** Messages the host sends to the runtime */
-export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased', 'fileExported'] as const;
+export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'grant', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased', 'fileExported'] as const;
 
 /** Messages the runtime sends to the host */
 export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'fileExport', 'key', 'inspected', 'watched'] as const;
@@ -137,6 +138,8 @@ export interface LoadMessage extends Envelope<'load'> {
     active?: Record<string, string>;
     locale?: string;
     open?: { screen: string; params?: JsonValue };
+    /** Where the app's files are read on `/paths`, and the read grant the frame appends (`FilesSource`); absent where the host serves none */
+    files?: FilesSource;
 }
 
 /** Path writes for `$.data` and `$.app`, with the icons the new revision uses for the first time */
@@ -158,6 +161,11 @@ export interface CommandMessage extends Envelope<'command'> {
 /** Switch the language to a code the document or the library has an overlay for */
 export interface LocaleMessage extends Envelope<'locale'> {
     locale: string;
+}
+
+/** Replace the read grant of `/paths` the runtime appends to file URLs; the host sends one before the last runs out */
+export interface GrantMessage extends Envelope<'grant'> {
+    grant: string;
 }
 
 /** Apply the theme overlay `name` of `kind` (`mode`, `brand` or `motion`) */
@@ -379,6 +387,7 @@ export type InboundMessage =
     | CommandMessage
     | LocaleMessage
     | ThemeMessage
+    | GrantMessage
     | EventMessage
     | PingMessage
     | InspectMessage

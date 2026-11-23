@@ -1,4 +1,4 @@
-export { FILE_EXPORT_EVENT, FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT, LOAD_3D_EVENT, createDispatcher } from './on/index.js';
+export { FILE_EXPORT_EVENT, FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT, FILE_URL_EVENT, LOAD_3D_EVENT, createDispatcher } from './on/index.js';
 export type { CommandElement, CommandHandler, DispatchHooks, Dispatcher, DispatcherOptions, FileExportRequest, FileReadRequest, FileReleaseRequest, FileTransferRequest, Load3dRequest } from './on/index.js';
 export { createNodeLocale, registerLocaleStep, switchLocale } from './locale/index.js';
 export type { LocaleStepHandle, LocaleStore, NodeLocale, NodeLocaleOptions, NodeLocaleStore } from './locale/index.js';

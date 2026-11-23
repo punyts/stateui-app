@@ -106,6 +106,7 @@ export const MESSAGE_BYTE_LIMITS = {
     command: MAX_EVENT_BYTES,
     locale: MAX_SMALL_BYTES,
     theme: MAX_SMALL_BYTES,
+    grant: MAX_SMALL_BYTES,
     event: MAX_EVENT_BYTES,
     ready: MAX_SMALL_BYTES,
     change: MAX_CHANGE_BYTES,

@@ -22,6 +22,7 @@ import type { CommandContext } from '../dom/on/commands.js';
 import { applyOverlay } from '../dom/theme/index.js';
 import type { ThemeStore } from '../dom/theme/index.js';
 import { createFileReads } from './fileRead.js';
+import { createFileUrls } from './fileUrl.js';
 import { createFileTransfers } from './fileTransfer.js';
 import { createFileExports } from './fileExport.js';
 import { describeNode, nodesAt, nodesOf, rectOf } from './inspect.js';
@@ -282,6 +283,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
         return new Set(ids.filter((id) => text.includes(id.toLowerCase())));
     }
 
+    const urls = createFileUrls();
     const chunks = createChunkLoader(doc, options.chunkBase === undefined ? {} : { base: options.chunkBase });
     const reads = createFileReads(
         {
@@ -419,6 +421,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
     function load(message: LoadMessage): void {
         teardown();
         hostKeys = new Set(message.keys ?? []);
+        urls.set(message.files);
         documentIcons = appIconNames(message.document.icons);
         passwordData = passwordDataPaths(message.document);
         themeOverlays = buildOverlayCatalog(message.document.themes).overlays;
@@ -443,6 +446,7 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
                 {
                     transferFile: files.transferFile,
                     readFile: reads.readFile,
+                    fileUrl: urls.fileUrl,
                     // A file given back is gone from the host, so its cached bytes go too
                     releaseFile: (id) => files.releaseFile(id).then(() => reads.forget(id)),
                     exportFile: exports.exportFile,
@@ -704,6 +708,9 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
                 return;
             case 'theme':
                 theme(message);
+                return;
+            case 'grant':
+                urls.grant(message.grant);
                 return;
             case 'event':
                 appEvent(message);

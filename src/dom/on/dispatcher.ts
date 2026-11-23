@@ -13,8 +13,8 @@ import type { JsonValue } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import { createRaisedRecorder } from './raised.js';
 import type { CommandContext } from './commands.js';
-import { FILE_EXPORT_EVENT, FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT, LOAD_3D_EVENT } from './types.js';
-import type { Dispatcher, DispatcherOptions, FileExportRequest, FileReadRequest, FileReleaseRequest, FileTransferRequest, Load3dRequest } from './types.js';
+import { FILE_EXPORT_EVENT, FILE_READ_EVENT, FILE_RELEASE_EVENT, FILE_TRANSFER_EVENT, FILE_URL_EVENT, LOAD_3D_EVENT } from './types.js';
+import type { Dispatcher, DispatcherOptions, FileExportRequest, FileReadRequest, FileReleaseRequest, FileTransferRequest, FileUrlRequest, Load3dRequest } from './types.js';
 
 const DEFAULT_ROOT = '$.app';
 const RUNTIME_NODES = '$.runtime.nodes.';
@@ -60,6 +60,12 @@ function isFileTransfer(value: unknown): value is FileTransferRequest {
 function isFileRead(value: unknown): value is FileReadRequest {
     if (typeof value !== 'object' || value === null) return false;
     const request = value as Partial<FileReadRequest>;
+    return typeof request.id === 'string' && request.id.length > 0 && typeof request.respond === 'function';
+}
+
+function isFileUrl(value: unknown): value is FileUrlRequest {
+    if (typeof value !== 'object' || value === null) return false;
+    const request = value as Partial<FileUrlRequest>;
     return typeof request.id === 'string' && request.id.length > 0 && typeof request.respond === 'function';
 }
 
@@ -387,6 +393,14 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         request.respond(hooks.readFile(id, signal === undefined ? {} : { signal }));
     }
 
+    /** Answers `ui-file-url` with the host's `fileUrl` hook; without one the event goes on. Only a request raised in this app is answered: an app inside a component never gets the hooks of the app around it */
+    function fileUrl(event: Event): void {
+        const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
+        if (!isFileUrl(request) || !hooks?.fileUrl || raisedElsewhere(event, tags, store)) return;
+        event.stopPropagation();
+        request.respond(hooks.fileUrl(request.id));
+    }
+
     /** Answers `ui-file-release` with the host's `releaseFile` hook; without one the event goes on. Only a request raised in this app is answered: an app inside a component never gets the hooks of the app around it */
     function release(event: Event): void {
         const request: unknown = event instanceof CustomEvent ? event.detail : undefined;
@@ -414,6 +428,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     for (const name of names) host.addEventListener(name, handle, true);
     host.addEventListener(FILE_TRANSFER_EVENT, transfer);
     host.addEventListener(FILE_READ_EVENT, read);
+    host.addEventListener(FILE_URL_EVENT, fileUrl);
     host.addEventListener(FILE_RELEASE_EVENT, release);
     host.addEventListener(FILE_EXPORT_EVENT, exportFile);
     host.addEventListener(LOAD_3D_EVENT, load3d);
@@ -432,6 +447,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             for (const name of names) host.removeEventListener(name, handle, true);
             host.removeEventListener(FILE_TRANSFER_EVENT, transfer);
             host.removeEventListener(FILE_READ_EVENT, read);
+            host.removeEventListener(FILE_URL_EVENT, fileUrl);
             host.removeEventListener(FILE_RELEASE_EVENT, release);
             host.removeEventListener(FILE_EXPORT_EVENT, exportFile);
             host.removeEventListener(LOAD_3D_EVENT, load3d);
