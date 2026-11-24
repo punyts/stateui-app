@@ -31,6 +31,7 @@ import type { ScreenView } from './screens.js';
 import { answerAppRequests } from '../embed/answer.js';
 import { mountSteps } from './steps.js';
 import { startBrowserReporting } from './reporting.js';
+import { fillPage } from './pageFill.js';
 import '../route/index.js';
 import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
 
@@ -219,7 +220,10 @@ function stepError(name: string): BuildError {
  * The first mount on a page turns on the report categories `localStorage['punyts.report']` lists and logs them to the
  * console (`startBrowserReporting`).
  *
- * `dispose` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and the node resolver
+ * The host is marked `sui-app`, and a page sheet makes an app on the body, or on an element right below it, fill the
+ * viewport, with two or more apps there side by side in equal columns (`fillPage`).
+ *
+ * `dispose` removes the root element and the mark, unmounts, unlinks, removes the dispatcher's listeners and the node resolver
  * and options, so a second `mountApp` on a fresh host starts clean
  */
 export function mountApp(
@@ -367,6 +371,8 @@ export function mountApp(
     // The apps the components below ask for by name are mounted here, each on its own root
     const stopApps = options.apps === undefined ? undefined : answerAppRequests(host, options.apps, mountApp);
     const root = host.appendChild(host.ownerDocument.createElement(rootTag));
+    // An app on the body, or right below it, fills the viewport; apps there sit side by side
+    const unfill = fillPage(host);
     const appTag = rootEntry(library, APP_COMPONENT)?.tag;
     const screenView: ScreenView | undefined =
         screens === undefined
@@ -483,6 +489,7 @@ export function mountApp(
             stopApps?.();
             screenView?.dispose();
             root.remove();
+            unfill();
             unmount(host);
             for (const dispose of disposers.reverse()) {
                 try {

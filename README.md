@@ -746,7 +746,13 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
    With it on or off, an element of the app raises `sui-navigate` (`NAVIGATE_EVENT`, bubbling and composed, detail
    `{ screen, params? }`, as `link` and `menuItem` do for a `screen`) to navigate; the app stops the event, and a
    refusal is a warning that changes nothing.
-5. `dispose()` removes the root element, unmounts, unlinks, removes the dispatcher's listeners and the root's resolver and
+5. The host is marked `sui-app` (`fillPage`, `src/dom/mount/pageFill.ts`), and the document adopts a constructed
+   sheet once: an app on the body, or on an element right below it, fills the viewport (the page scrolls when the app is
+   taller), and two or more apps there sit side by side in equal columns. The body loses its margin and becomes a
+   grid of one row of at least the viewport's height and a column per element. A grid stretches only an auto width and
+   height, so a host the page gives a size keeps it. Every selector is in `:where()`, so a page that lays out its own
+   body wins. An app deeper in the page is sized by the page.
+6. `dispose()` removes the root element and the host's mark, unmounts, unlinks, removes the dispatcher's listeners and the root's resolver and
    options, and stops answering app requests. It is safe to call twice.
 
 **Apps inside an app.** `MountOptions.apps` is the page's `AppHost` (`src/dom/embed/`): with it, `mountApp` answers the

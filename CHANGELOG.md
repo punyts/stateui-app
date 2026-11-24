@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- **An app on the page's body fills the viewport, and apps there sit side by side.** `mountApp` marks its host
+  `sui-app` and the document adopts one constructed sheet (`fillPage`, `src/dom/mount/pageFill.ts`): with an app on the
+  body or on an element right below it, the body loses its margin and becomes a grid of one row of at least the
+  viewport's height and an equal column per element; a host the page gives a size keeps it. The selectors are in
+  `:where()`, so a page's own body layout wins. An app deeper in the page is left to the page. `dispose` takes the mark off once no other
+  app is mounted on the host. Test: `src/dom/mount/pageFill.browser.test.ts`.
 - **A `polyMesh` validator for custom mesh geometry** (docs/design/stateui-mesh-editor.md, V1). An object property
   with `"polyMesh": true` takes a geometry whose `kind` is `custom` only with `vertices` (at most `MAX_EDIT_VERTICES`,
   4000, `[x, y, z]` of finite numbers) and `faces` (at most `MAX_EDIT_FACES`, 4000, lists of 3 to `MAX_FACE_SIDES`, 32,
