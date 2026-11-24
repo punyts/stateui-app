@@ -468,7 +468,8 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
 - **Triggers.** `path` is a state path whose steps may be `*` (one segment) or `{name}` (one segment, captured); it
   matches a change at, below or above it. `result` is the `as` name of a `save-data` or `delete-data` command of the
   same machine (or a `call`). `is` compares the value (or the result status, `accepted` or `rejected`), `was` the value
-  before the change (`$previous`), `if` is an expression. `debounce` (milliseconds) fires a path trigger once the path
+  before the change (`$previous`); either takes a list, any item of which matches (`"was": ["paid", "packed"]`).
+  `if` is an expression. `debounce` (milliseconds) fires a path trigger once the path
   has been quiet that long, with the last change. `after` (milliseconds, a machine transition with `from` only) fires
   that long after the machine entered the state; an `after` transition that stays in its state repeats.
 - **Machines.** The current state is the value at `state` (`initial` is written when it has none). The first
@@ -531,7 +532,8 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   trigger a `path` without `was` or `after`, every command `set`, `merge`, `copy` or `query`, and no machine.
   Each fires for every concrete path its trigger matches that has a value (`$.data.products.{id}.price` fires for each
   product), in chain order, traced with the cause `start`, so a count or a total is right before the first change.
-  Rules that notify, toggle, save, call or navigate, and those with `was`, wait for a change. `start({ derive: false })`
+  Rules that notify, toggle, save, call or navigate, those with `was`, and those whose conditions or values read
+  `$previous`, `now()` or `today()` (a stamp records a change), wait for a change. `start({ derive: false })`
   skips the pass and `engine.derive()` runs it later (the app server does so once an instance is attached to its
   shared datasets, so the derived values are written through).
 - **All or nothing.** A transition's commands run on a working copy and commit together. A failing command commits

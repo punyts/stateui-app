@@ -942,6 +942,28 @@ describe('createLogicEngine: deriving rules at start', () => {
         expect(memory.get('$.data.seen')).toBeUndefined();
         expect(memory.commits).toEqual([]);
     });
+
+    it('should leave a rule that stamps the time or reads $previous until a change', () => {
+        // Arrange
+        const logic = {
+            rules: {
+                stamp: { when: { path: '$.data.bag.{id}.qty', if: '$trigger > 0' }, do: [{ command: 'set', target: '$.data.bag.{id}.at', value: '{{ now() }}' }] },
+                moved: { when: { path: '$.data.count', if: '$previous !== $trigger' }, do: [{ command: 'set', target: '$.data.moved', value: true }] }
+            }
+        } as unknown as LogicDocument;
+        const memory = memoryHost(DATA);
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        engine.start();
+        memory.apply({ path: '$.data.bag.a.qty', value: 5 });
+        engine.changes([{ path: '$.data.bag.a.qty', value: 5, previous: 2 }]);
+
+        // Assert
+        expect(memory.get('$.data.bag.a.at')).toEqual(expect.any(String));
+        expect(memory.get('$.data.bag.b.at')).toBeUndefined();
+        expect(memory.get('$.data.moved')).toBeUndefined();
+    });
 });
 
 describe('createLogicEngine: $previous and was', () => {
@@ -967,6 +989,32 @@ describe('createLogicEngine: $previous and was', () => {
 
         // Assert
         expect(memory.get('$.data.log')).toEqual({ i1: 'draft to sent' });
+    });
+
+    it('should match is and was against each item of a list', () => {
+        // Arrange
+        const logic = {
+            rules: {
+                shipped: {
+                    when: { path: '$.data.orders.{id}.status', was: ['paid', 'packed'], is: ['shipped', 'delivered'] },
+                    do: [{ command: 'set', target: '$.data.log.{id}', value: '{{ $previous }} to {{ $trigger }}' }]
+                }
+            }
+        } as unknown as LogicDocument;
+        const memory = memoryHost({ data: { orders: { o1: { status: 'packed' }, o2: { status: 'draft' }, o3: { status: 'paid' } }, log: {} } });
+        const engine = createLogicEngine(logic, memory.host);
+        const move = (id: string, from: string, to: string): void => {
+            memory.apply({ path: `$.data.orders.${id}.status`, value: to });
+            engine.changes([{ path: `$.data.orders.${id}.status`, value: to, previous: from }]);
+        };
+
+        // Act
+        move('o1', 'packed', 'shipped');
+        move('o2', 'draft', 'shipped');
+        move('o3', 'paid', 'cancelled');
+
+        // Assert
+        expect(memory.get('$.data.log')).toEqual({ o1: 'packed to shipped' });
     });
 
     it('should derive $previous when the change is above or below the trigger path', () => {

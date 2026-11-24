@@ -338,15 +338,25 @@ function isGuard(commands: readonly LogicCommand[]): boolean {
 /** The commands that only compute state from state, and so may run at start without acting on anything */
 const DERIVE_COMMANDS: ReadonlySet<string> = new Set(['set', 'merge', 'copy', 'query']);
 
+/** An expression that answers a change rather than the state: the value before it, or the time it happened */
+const READS_CHANGE = /\$previous\b|\b(?:now|today)\s*\(/;
+
 /**
  * True for a table, and for a rule that only derives values: every trigger is a `path` with no `was` (which needs a
- * change), and every command is `set`, `merge`, `copy` or `query`. A machine never is
+ * change), every command is `set`, `merge`, `copy` or `query`, and no condition or value reads `$previous`,
+ * `now()` or `today()` (a stamp records a change, so running it at start would stamp every record). A machine never is
  */
 function derivesOnly(unit: Unit): boolean {
     if (unit.declared) return true;
     if (unit.machine) return false;
     if (unit.transitions.some((transition) => transition.when.path === undefined || transition.when.was !== undefined || transition.when.after !== undefined)) return false;
+    if (READS_CHANGE.test(JSON.stringify(unit.transitions))) return false;
     return unitCommands(unit).every((command) => DERIVE_COMMANDS.has(command.command));
+}
+
+/** True when `value` equals `expected`, or one of its items when `expected` is a list (`was: ["paid", "packed"]`) */
+function matches(value: JsonValue | undefined, expected: JsonValue | undefined): boolean {
+    return Array.isArray(expected) ? expected.some((item) => deepEqual(value, item)) : deepEqual(value, expected);
 }
 
 /**
@@ -532,8 +542,8 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     const fromOf = (state: string | undefined): { from?: string } => (state === undefined ? {} : { from: state });
 
     const passes = (when: LogicTransition['when'], scope: Scope, compared: JsonValue | undefined): boolean => {
-        if (Object.hasOwn(when, 'is') && !deepEqual(compared, when.is)) return false;
-        if (Object.hasOwn(when, 'was') && !deepEqual(scope.previous, when.was)) return false;
+        if (Object.hasOwn(when, 'is') && !matches(compared, when.is)) return false;
+        if (Object.hasOwn(when, 'was') && !matches(scope.previous, when.was)) return false;
         return when.if === undefined || condition(when.if, scope);
     };
 

@@ -60,9 +60,9 @@ export interface LogicTrigger {
     path?: string;
     /** The `as` name of a `save-data` or `delete-data` command: of the same machine for a transition, of a rule for a rule */
     result?: string;
-    /** The value at the path, or the result status (`accepted`, `rejected`), must equal this */
+    /** The value at the path, or the result status (`accepted`, `rejected`), must equal this, or one of its items when it is a list */
     is?: JsonValue;
-    /** The value at the path before the change (`$previous`) must equal this */
+    /** The value at the path before the change (`$previous`) must equal this, or one of its items when it is a list */
     was?: JsonValue;
     /** Milliseconds a machine stays in `from` before the transition fires; no `path` or `result` with it */
     after?: number;

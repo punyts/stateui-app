@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **`is` and `was` match any item of a list.** `"was": ["paid", "packed"]` fires when the value before the change is
+  either. Breaking: a list no longer matches a list value equal to it; compare whole lists in `if`. Test:
+  `core/logic/logic.test.ts` ("match is and was against each item of a list").
+- **A stamp no longer runs at start for every record.** Fix: a rule with a path trigger and only `set` commands
+  derived at start even when it wrote `now()`, so every matching seed record was stamped with today; a rule whose
+  conditions or values read `$previous`, `now()` or `today()` now waits for a change. Test:
+  `core/logic/logic.test.ts` ("a rule that stamps the time or reads $previous").
 - **A list keeps the rows a `query` wrote after a reload** (docs/design/magnetic-starter-apps.md). Fix: `layInstance`
   took only keys the definition has, so a list whose `items` the definition left unset or empty lost them on load.
   A node now also takes a property its component declares (`mountApp` passes the library's, `DeclaredProperties`),
