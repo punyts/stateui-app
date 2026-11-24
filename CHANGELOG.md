@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **A host can take Ctrl+Shift+= and Ctrl+Shift+-.** With Shift held, the runtime names `+` as `shift+=` and `_` as
+  `shift+-`, the keys they are on, and puts `shift+` before `=` and `-` as it does before a letter or a digit, so the
+  chords `mod+shift+=` and `mod+shift+-` reach the host. Before, Shift made `+` and `_`, which no chord can name.
+  Breaking for a host that named a bare `=` or `-` and expected it with Shift held. Test:
+  `src/runtime/startRuntime.browser.test.ts`.
 - **An app on the page's body fills the viewport, and apps there sit side by side.** `mountApp` marks its host
   `sui-app` and the document adopts one constructed sheet (`fillPage`, `src/dom/mount/pageFill.ts`): with an app on the
   body or on an element right below it, the body loses its margin and becomes a grid of one row of at least the

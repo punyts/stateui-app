@@ -179,6 +179,27 @@ describe('startRuntime in Chromium', () => {
         expect(seen).toEqual(['e']);
     });
 
+    it('should name Shift with + and _ by the keys they are on, so a host can take Ctrl+Shift+= and Ctrl+Shift+-', () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ hello: { component: 'label', text: 'hi' } }) };
+        send(message('load', { document, keys: ['mod+shift+=', 'mod+shift+-'] }));
+        const press = (init: KeyboardEventInit): KeyboardEvent => {
+            const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+            host.dispatchEvent(event);
+            return event;
+        };
+
+        // Act
+        const zoomIn = press({ key: '+', ctrlKey: true, shiftKey: true });
+        const zoomOut = press({ key: '_', ctrlKey: true, shiftKey: true });
+        const pageZoom = press({ key: '=', ctrlKey: true });
+
+        // Assert
+        expect(ofType('key').map((posted) => posted['key'])).toEqual(['mod+shift+=', 'mod+shift+-']);
+        expect(zoomIn.defaultPrevented && zoomOut.defaultPrevented).toBe(true);
+        expect(pageZoom.defaultPrevented).toBe(false);
+    });
+
     it('should post a bare key and Escape the host named only while the person is not typing', () => {
         // Arrange
         const document: AppDocument = { app: panel({ hello: { component: 'label', text: 'hi' } }) };

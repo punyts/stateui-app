@@ -65,6 +65,8 @@ const MAX_POSTED_ERRORS = 200;
 const BENIGN_ERROR = /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/;
 /** How long after a change the runtime looks for read files no node uses any more, in milliseconds */
 const FILE_RELEASE_DELAY_MS = 1000;
+/** A key Shift makes of another, named by the key it is on in a host's chord (`mod+shift+=` for Ctrl+Shift+=) */
+const SHIFTED: Readonly<Record<string, string>> = { '+': '=', _: '-' };
 /** The branches whose values can hold a file reference: the app node, the screens and the data */
 const FILE_USE_ROOTS = ['$.app', '$.screens', DATA_ROOT];
 
@@ -791,14 +793,17 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
 
     /**
      * A chord the host named goes to the host, and not to the app. One without `mod` (a bare key, or Escape) goes only
-     * while the person is not typing, so the host can take single keys and a text field still gets its letters
+     * while the person is not typing, so the host can take single keys and a text field still gets its letters. With
+     * Shift, `+` is named `shift+=` and `_` `shift+-`, the keys they are on, so a host can name Ctrl+Shift+= and
+     * Ctrl+Shift+-
      */
     function onKey(event: KeyboardEvent): void {
         if (hostKeys.size === 0) return;
-        const key = event.key === 'Escape' ? 'escape' : event.key.length === 1 ? event.key.toLowerCase() : '';
+        const named = event.key === 'Escape' ? 'escape' : event.key.length === 1 ? event.key.toLowerCase() : '';
+        const key = event.shiftKey ? (SHIFTED[named] ?? named) : named;
         if (key === '') return;
         const mod = event.ctrlKey || event.metaKey;
-        const chord = `${mod ? 'mod+' : ''}${event.shiftKey && key.length === 1 && /[a-z0-9]/.test(key) ? 'shift+' : ''}${event.altKey ? 'alt+' : ''}${key}`;
+        const chord = `${mod ? 'mod+' : ''}${event.shiftKey && key.length === 1 && /[a-z0-9=-]/.test(key) ? 'shift+' : ''}${event.altKey ? 'alt+' : ''}${key}`;
         if (!hostKeys.has(chord)) return;
         if (!mod && typing(event)) return;
         event.preventDefault();
