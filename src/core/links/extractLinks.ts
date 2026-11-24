@@ -87,20 +87,28 @@ class Extractor {
     }
 
     /**
-     * A node reference as a runtime path: `^orders.current.customer` gives `$.runtime.nodes.app.…orders.current.customer`.
-     * Relative references resolve against the owner of the row template they sit in, not the slot. Undefined when the
-     * node does not exist or its shape has no such exposed property. Without a library the reference stays as written
+     * A node reference as a state path. An exposed runtime property gives its runtime path (`^orders.current.customer`
+     * gives `$.runtime.nodes.app.…orders.current.customer`); a stored property its node's state path (`^notes.value`
+     * gives `$.screens.home.…notes.value`). Relative references resolve against the owner of the row template they sit
+     * in, not the slot. Undefined when the node does not exist or its shape has no such property, or the property is
+     * content or a runtime property it does not expose. Without a library the reference stays as written
      */
-    private reference(target: string): { target: string; exposed?: string } | undefined {
+    private reference(target: string): { target: string; exposed?: string; stored?: true } | undefined {
         if (this.options.library === undefined) return { target };
         const parsed = parseTarget(target);
         const chain =
             this.options.owner ?? (this.rowOwner === undefined ? this.frames : this.frames.slice(0, this.rowOwner + 1));
         const located = parsed ? resolveTarget(parsed, chain, chain[0]?.path ?? ROOT_PATH) : undefined;
         if (located?.kind !== 'property') return undefined;
-        if (shapeOf(this.options, located.node.component)?.properties[located.property]?.exposed !== true) return undefined;
-        const exposed = `${runtimePath(located.path)}.${located.property}`;
-        return { target: [exposed, ...located.rest].join('.'), exposed };
+        const property = shapeOf(this.options, located.node.component)?.properties[located.property];
+        if (property === undefined || property.kind === 'content') return undefined;
+        if (property.exposed) {
+            const exposed = `${runtimePath(located.path)}.${located.property}`;
+            return { target: [exposed, ...located.rest].join('.'), exposed };
+        }
+        // A stored property (a field's value, a screen's filter) links to the node's own state path
+        if (property.runtime) return undefined;
+        return { target: [`${located.path}.${located.property}`, ...located.rest].join('.'), stored: true };
     }
 
     private record(path: string, key: string, target: JsonValue): void {
@@ -126,12 +134,14 @@ class Extractor {
             this.errors.push(buildError('SUI-LINK-MISSING', { target, path, statePath: path }));
             return;
         }
-        // The component creates the exposed property after links are applied, so the target may not exist yet
+        // The component creates the exposed property after links are applied, and a stored property the definition
+        // leaves unset has no value yet, so the target may not exist
         this.links.push({
             statePath: path,
             key,
             target: resolved.target,
-            ...(resolved.exposed === undefined ? {} : { allowMissing: true, exposed: resolved.exposed })
+            ...(resolved.exposed === undefined ? {} : { allowMissing: true, exposed: resolved.exposed }),
+            ...(resolved.stored === true ? { allowMissing: true } : {})
         });
     }
 }
@@ -141,10 +151,11 @@ class Extractor {
  * with `$.data` or `$row`, or be a node reference (`^name.path`, `.path`) to an exposed runtime property;
  * anything else (`..x`, `$.app…`) is `SUI-LINK-TARGET`.
  *
- * With `options.library` a node reference is resolved against the tree to the runtime path of the property
- * (`^orders.current` gives `$.runtime.nodes.app.…orders.current`); a node that does not exist, or whose shape has no
- * such exposed property, is `SUI-LINK-MISSING`. A resolved reference carries `exposed` and `allowMissing`, since the
- * component creates the property after links are applied (see `applyLinks`). Inside a row template relative references resolve
+ * With `options.library` a node reference is resolved against the tree: an exposed runtime property to its runtime
+ * path (`^orders.current` gives `$.runtime.nodes.app.…orders.current`), a stored property to the node's state path
+ * (`^notes.value`); a node that does not exist, or whose shape has no such property (or it is content, or a runtime
+ * property it does not expose), is `SUI-LINK-MISSING`. A resolved reference carries `allowMissing`, and an exposed one
+ * `exposed`, since the component creates the property after links are applied (see `applyLinks`). Inside a row template relative references resolve
  * against the node that owns the template. Without a library node references are returned as written. `$row` targets are returned
  * as written: `resolveRowLinks` points them at the slot. Pure; never throws on a bad tree
  */

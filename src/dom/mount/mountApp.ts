@@ -197,6 +197,18 @@ function stepError(name: string): BuildError {
     return buildError('SUI-RUN-BINDING', { component: name, path: '$', statePath: '$' });
 }
 
+/** The properties each component of the library declares, as `layInstance` asks for them */
+function declaredProperties(library: ComponentLibrary): (component: string) => ReadonlySet<string> | undefined {
+    const known = new Map<string, ReadonlySet<string> | undefined>();
+    return (component) => {
+        if (!known.has(component)) {
+            const shape = Object.hasOwn(library, component) ? entryShape(library[component]) : undefined;
+            known.set(component, shape === undefined ? undefined : new Set(Object.keys(shape.properties)));
+        }
+        return known.get(component);
+    };
+}
+
 /**
  * The single way to start an application. It validates the document against the library (a `ComponentLibrary`; the
  * component modules must be registered already, for example with the build's `registerAll`), resolves `composed`,
@@ -277,7 +289,8 @@ export function mountApp(
         const laid = layInstance(
             { app: state.app as unknown as JsonObject, ...(screenTrees === undefined ? {} : { screens: screenTrees as unknown as Record<string, JsonObject> }), data: state.data },
             options.instance,
-            document
+            document,
+            declaredProperties(library)
         );
         state.app = laid.app as unknown as Node;
         if (laid.screens !== undefined) state.screens = laid.screens as unknown as Record<string, Node>;

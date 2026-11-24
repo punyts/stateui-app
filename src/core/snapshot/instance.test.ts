@@ -94,6 +94,33 @@ describe('layInstance', () => {
         expect(laid.warnings).toEqual([]);
     });
 
+    it('should lay new keys inside a property value, and a declared property the definition leaves unset', () => {
+        // Arrange
+        const base = deepFreeze({
+            ...BASE,
+            screens: {
+                home: { component: 'panel', children: { found: { component: 'list', items: {} }, rows: { component: 'list' } } },
+                product: BASE.screens?.['product']
+            }
+        }) as unknown as InstanceBase;
+        const instance: AppInstance = {
+            app: {},
+            screens: { home: { children: { found: { items: { r1: { name: 'Ana' } } }, rows: { items: [{ name: 'Bo' }], stale: 1 }, gone: { items: [] } } } }
+        };
+        const declared = (component: string): ReadonlySet<string> | undefined => (component === 'list' ? new Set(['items', 'total']) : undefined);
+
+        // Act
+        const laid = layInstance(base, instance, DOCUMENT, declared);
+        const without = layInstance(base, instance, DOCUMENT);
+
+        // Assert
+        expect(laid.screens?.['home']).toEqual({
+            component: 'panel',
+            children: { found: { component: 'list', items: { r1: { name: 'Ana' } } }, rows: { component: 'list', items: [{ name: 'Bo' }] } }
+        });
+        expect(without.screens?.['home']?.['children']).toEqual({ found: { component: 'list', items: { r1: { name: 'Ana' } } }, rows: { component: 'list' } });
+    });
+
     it('should fall back to the start screen with a warning when the instance names a screen the app no longer has', () => {
         // Arrange
         const instance: AppInstance = { ...EMPTY, route: { screen: 'cart', params: {} } };

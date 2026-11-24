@@ -1,6 +1,20 @@
 # Changelog
 
 ## Unreleased
+- **A list keeps the rows a `query` wrote after a reload** (docs/design/magnetic-starter-apps.md). Fix: `layInstance`
+  took only keys the definition has, so a list whose `items` the definition left unset or empty lost them on load.
+  A node now also takes a property its component declares (`mountApp` passes the library's, `DeclaredProperties`),
+  and inside a property's value new keys are laid. Test: `core/snapshot/instance.test.ts`.
+- **A screen name with a dash reads whole in an expression.** Fix: `$.screens.new-order.total` was read as a
+  subtraction; `compileExpression` now writes the name in bracket form (`withScreenNames`). Test:
+  `core/logic/logic.test.ts` ("a screen whose name has a dash").
+- **`query` into `$.data` writes a list.** Fix: its position keys were refused there (`SUI-DOC-ORDER`); into a
+  `$.data` path the records are a list in result order, and elsewhere still keyed by position. Test:
+  `core/logic/logic.test.ts` ("a query into $.data").
+- **A link can reach another node's stored property.** `^notes.value` links to the node's state path, so a preview
+  can follow a text area, or a node another screen's value; before, only exposed runtime properties could be reached
+  (`SUI-LINK-MISSING`). Content and runtime properties a component does not expose stay refused. Tests:
+  `core/links/references.test.ts`, `core/validate/validate.test.ts`.
 - **A data binding's scope is `person`.** A binding that gives each person their own records of a model is
   `{ model, scope: "person" }`; `scope: "persona"` is refused with `SUI-BLUEPRINT-SHAPE` at `$.uses.data.{binding}.scope`.
   The type is `PersonBinding` (was `PersonaBinding`). Comments and the README speak of the person's instance. Breaking.

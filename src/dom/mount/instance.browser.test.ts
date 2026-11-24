@@ -84,7 +84,7 @@ function find(root: ParentNode, tag: string): Element | undefined {
     return undefined;
 }
 
-describe('a person's instance in mountApp', () => {
+describe("a person's instance in mountApp", () => {
     const apps: MountedApp[] = [];
     let errorSpy: ReturnType<typeof vi.spyOn>;
 

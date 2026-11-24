@@ -126,13 +126,25 @@ export const LOGIC_FUNCTIONS: Readonly<Record<string, (...args: unknown[]) => un
 const compiled = new Map<string, CompiledExpression>();
 const MAX_CACHED = 512;
 
-/** Compiles an expression once; throws `LogicError` when it does not compile */
+/** A screen name with a dash right after `$.screens.`, which the expression grammar would read as a subtraction */
+const DASHED_SCREEN = /\$\.screens\.([a-z0-9]+(?:-[a-z0-9]+)+)/g;
+
+/**
+ * Writes each dashed screen name of an expression's paths in bracket form, so `$.screens.new-order.total` reads the
+ * screen `new-order` (`$.screens['new-order'].total`) rather than subtracting `order.total`. A screen's root is an
+ * object, which nothing subtracts from
+ */
+export function withScreenNames(text: string): string {
+    return text.includes('$.screens.') ? text.replace(DASHED_SCREEN, "$.screens['$1']") : text;
+}
+
+/** Compiles an expression once, screen names with a dash read whole (`withScreenNames`); throws `LogicError` when it does not compile */
 export function compileExpression(text: string): CompiledExpression {
     const cached = compiled.get(text);
     if (cached) return cached;
     let expression: CompiledExpression;
     try {
-        expression = Expression(text);
+        expression = Expression(withScreenNames(text));
     } catch (error) {
         throw new LogicError(error instanceof Error ? error.message : String(error));
     }

@@ -421,7 +421,8 @@ describe('validateDocument', () => {
         expect(codes(document)).toEqual([]);
     });
 
-    it('should report SUI-LINK-MISSING for a node reference to a property that is not exposed', () => {
+    it('should report SUI-LINK-MISSING for a node reference to a missing property or a runtime one that is not exposed, and accept a stored one', () => {
+        // Arrange
         const document = doc({
             component: 'panel',
             children: {
@@ -432,12 +433,13 @@ describe('validateDocument', () => {
             }
         });
 
+        // Act
         const errors = validateDocument(document, LIBRARY).errors;
 
+        // Assert
         expect(errors.map((error) => [error.code, error.statePath])).toEqual([
             ['SUI-LINK-MISSING', '$.app.children.b'],
-            ['SUI-LINK-MISSING', '$.app.children.c'],
-            ['SUI-LINK-MISSING', '$.app.children.d']
+            ['SUI-LINK-MISSING', '$.app.children.c']
         ]);
     });
 

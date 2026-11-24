@@ -4,6 +4,7 @@ import type { JsonObject, JsonValue } from '../types.js';
 import { queryRecords } from './query.js';
 import { LogicError, resolvePath, resolveValue } from './values.js';
 import type { Scope } from './values.js';
+import { covers } from './working.js';
 import type { WorkingCopy } from './working.js';
 import type { LogicCommand, LogicHost, LogicResult, LogicWrite } from './types.js';
 
@@ -191,10 +192,10 @@ const RUNNERS: Record<LogicCommand['command'], Runner> = {
         );
         const field = context.copy.get(`${into}.key`);
         const keyField = typeof field === 'string' ? field : 'id';
-        const records: JsonObject = {};
-        found.rows.forEach(([key, record], index) => {
-            records[String(found.first + index)] = isObject(record) ? { ...record, [keyField]: key } : record;
-        });
+        const rows = found.rows.map(([key, record]) => (isObject(record) ? { ...record, [keyField]: key } : record));
+        // A record view takes the rows by their position in the whole result; data keeps no integer-like keys, so a
+        // query into $.data writes them as a list in result order
+        const records: JsonValue = covers('$.data', into) ? rows : Object.fromEntries(rows.map((row, index) => [String(found.first + index), row]));
         context.copy.set(`${into}.${context.host.records?.(into) ?? 'records'}`, records);
         context.copy.set(`${into}.total`, found.total);
     },

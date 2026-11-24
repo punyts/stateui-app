@@ -110,6 +110,33 @@ describe('extractLinks with node references', () => {
         expect(result.links[0]?.target).toBe('$.runtime.nodes.app.current.name');
     });
 
+    it("should link a stored property of another node to that node's state path, both ways", () => {
+        // Arrange
+        const result = extract({
+            component: 'panel',
+            children: {
+                notes: { component: 'records', title: 'Draft' },
+                preview: { component: 'descriptionList', '<-value': '^notes.title' }
+            }
+        });
+        const store = createStore<unknown>({ app: result.tree, data: {}, runtime: { nodes: {} } });
+
+        // Act
+        const errors = applyLinks(store, result.links);
+        const before = store.get('$.app.children.preview.value');
+        store.set('$.app.children.notes.title', 'Groceries');
+        const followed = store.get('$.app.children.preview.value');
+        store.set('$.app.children.preview.value', 'Errands');
+
+        // Assert
+        expect(result.errors).toEqual([]);
+        expect(errors).toEqual([]);
+        expect(result.links).toEqual([{ statePath: '$.app.children.preview', key: 'value', target: '$.app.children.notes.title', allowMissing: true }]);
+        expect(before).toBe('Draft');
+        expect(followed).toBe('Groceries');
+        expect(store.get('$.app.children.notes.title')).toBe('Errands');
+    });
+
     it('should report SUI-LINK-MISSING for a property that is not exposed, one that does not exist and a missing node', () => {
         const result = extract({
             component: 'records',

@@ -197,7 +197,7 @@ store alias (`store.link`) of its target, so reads, writes and change events fol
 - **`extractLinks(resolvedTree, { path? })`** returns `{ tree, links, linkedPaths, errors }`. `links` holds
   `{ statePath, key, target }` for every `<-key` (in nodes and in nested objects such as map items; `on` entries are
   skipped), `tree` is a copy without them. A target must start with `$.data` or `$row`, be the sync status (`$.runtime.sync`, `.mode`,
-  `.status` or `.waiting`), be the requests (`$.runtime.requests`), or be a node reference (`^name.path`, `.path`) to an exposed runtime property; `$.server` or a path below it is `SUI-LINK-SERVER`
+  `.status` or `.waiting`), be the requests (`$.runtime.requests`), or be a node reference (`^name.path`, `.path`) to a stored property (a field's `value`) or an exposed runtime property; `$.server` or a path below it is `SUI-LINK-SERVER`
   (server-only), anything else is `SUI-LINK-TARGET`, an empty key is `SUI-NODE-NAME`. `linkedPaths` lists every linked property path (`statePath.key`); locale overlays and state snapshots exclude
   them.
 - **Node references.** `^name.path` (nearest ancestor, the node itself included, named `name` or an instance of composed
@@ -294,8 +294,9 @@ Order of checks:
 5. The `app` tree, each screen's `root` (at `$.screens.{screen}`, no `.root` segment) and each document `composed`
    tree: every component resolves, composed cycles, reserved names, each
    merged node against its shape (`validateNode`), and `<-` links. A `$.data` target must exist, a node reference must
-   reach a property its component declares, and a node reference must reach an exposed runtime property (`SUI-LINK-MISSING`). Exposed properties are runtime
-   branches no link can have as its own key, so links cannot loop through node references.
+   reach a property its component declares that is neither content nor a runtime property it does not expose
+   (`SUI-LINK-MISSING`). A stored property links to the node's own state path (`^notes.value` to
+   `$.screens.home.…notes.value`), an exposed one to its runtime branch; a loop of links is refused when they are applied.
 6. The registered plug-in validators, whose errors are merged.
 
 `registerDocumentValidator(name, (context) => BuildError[])` returns a function that removes it. `context` holds the
@@ -507,13 +508,15 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
 - **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
   `save-data` (a record into a data map, with a new key or `key`), `delete-data`, `pull-data` (a record into a form),
   `query` (sort, filter and window a data map into a list's records, keyed by position (the key is the position in the sorted, filtered result, so a window
-  starting at 20 has the keys `20`, `21`, ...; the record's own key goes in its key field), and its `total`), `notify` (app
+  starting at 20 has the keys `20`, `21`, ...; the record's own key goes in its key field), and its `total`; into a
+  `$.data` path, which keeps no integer-like keys, the records are a list in result order), `notify` (app
   event `notify.<name>`), `emit` (to the server), `call` (a server procedure `target` with `value`; machines only and
   Full mode only, `SUI-DOC-SERVER` elsewhere; the answer comes back as the result `as`, with `$result.value` or
   `$result.reason`), `navigate` (moves `$.route` to the screen `target`, with `value` as the params; see the route
   below) and `reject`. A rule whose only command is `reject` is a **guard**:
   it refuses the change. Trigger and command paths may be under `$.app`, `$.data`, `$.server`, `$.screens` and `$.route`.
-- **Values.** `{{ expression }}` templates; `$.path`, `^node.path` (a node key or composed name, unique in the current
+- **Values.** `{{ expression }}` templates; `$.path` (a screen name with a dash is read whole, so
+  `$.screens.new-order.total` is that screen's, `withScreenNames`), `^node.path` (a node key or composed name, unique in the current
   screen, else in the app node; while validating, in the app node, else among the screens), `$trigger`,
   `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
   `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
@@ -709,7 +712,7 @@ const { store, errors, dispose } = mountApp(host, document, library, { onEmit })
    holds everything found with state paths, and nothing is added to `host`.
 2. `composed` is resolved against the library and `app` and each screen's `root` are resolved node by node (a screen at
    `$.screens.{name}`, where a node reference resolves within that screen, as the validator checks it). `<-` properties are removed from the
-   tree, node references are resolved to the exposed runtime properties they reach, and the links become store aliases
+   tree, node references are resolved to the state paths or exposed runtime properties they reach, and the links become store aliases
    (`applyLinks`) once the store exists. A link that cannot be resolved or applied stops the run.
    A `$row` link inside a row template is the exception: it has no target until a record view (or a component such as
    `descriptionList`) makes a runtime copy of the template, so it is not applied; the `<-key` stays in the tree as
@@ -808,8 +811,9 @@ message.
 - **Person instances** (`instance.ts`). An `AppInstance` is `{ app, screens, route?, theme?: { active }, data? }`:
   what one person did in an app, shaped like a `StateSnapshot` plus each screen's articulation by name.
   `MountOptions.instance` lays it over the definition before the store exists (`layInstance`), and the document is
-  never written. In `app` and `screens` only keys the definition has are laid (an object recurses, any other value
-  replaces); content, `<-` links and node structure never are, and values of nodes or screens the app no longer has
+  never written. In `app` and `screens` a node takes only keys the definition has or its component declares (a list's
+  `items` that a `query` filled), and inside a property's value new keys are laid too (an object recurses, any other
+  value replaces); content, `<-` links and node structure never are, and values of nodes or screens the app no longer has
   are dropped silently. `data` is laid the same way but takes new keys (the person's records). A route to a screen the
   app no longer has, or whose params no longer fit, opens the start screen, and an active overlay name or kind the app
   no longer has keeps the document's; each is a `SUI-INSTANCE-STALE` warning in `MountedApp.errors`. The theme step

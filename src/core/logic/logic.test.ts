@@ -223,6 +223,22 @@ describe('values', () => {
         expect(evaluate('$.data.missing.x', scope)).toBeUndefined();
     });
 
+    it('should read a screen whose name has a dash whole, not as a subtraction', () => {
+        // Arrange
+        const state = { screens: { 'new-order': { children: { qty: { value: 3 } } }, home: { n: 2 } } } as JsonObject;
+        const scope = { read: (path: string) => walk(state, path), captures: {} };
+
+        // Act
+        const dashed = evaluate('$.screens.new-order.children.qty.value * 2', scope);
+        const bracketed = evaluate("$.screens['new-order'].children.qty.value", scope);
+        const plain = evaluate('$.screens.home.n - 1', scope);
+
+        // Assert
+        expect(dashed).toBe(6);
+        expect(bracketed).toBe(3);
+        expect(plain).toBe(1);
+    });
+
     it('should resolve references, templates and sources', () => {
         const state = { data: { c1: { name: 'Ana' } } } as JsonObject;
         const host: LogicHost = { get: (path) => walk(state, path), commit: () => undefined };
@@ -688,6 +704,21 @@ describe('createLogicEngine', () => {
         // Assert
         expect(memory.get('$.app.children.contacts.records')).toEqual({ 1: { name: 'Bo', id: 'b' }, 2: { name: 'Ana', id: 'a' } });
         expect(memory.get('$.app.children.contacts.total')).toBe(3);
+    });
+
+    it('should write a query into $.data as a list in result order, with no integer-like keys', () => {
+        // Arrange
+        const logic: LogicDocument = {
+            rules: { find: { when: { path: '$.data.term' }, do: [{ command: 'query', from: '$.data.contacts', sort: 'name', filter: 'includes($record.name, $trigger)', into: '$.data.found' }] } }
+        };
+        const memory = memoryHost({ ...BASE, data: { contacts: { b: { name: 'Bo' }, a: { name: 'Abo' }, c: { name: 'Cy' } }, found: {} } });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        userChange(memory, engine, '$.data.term', 'o');
+
+        // Assert
+        expect(memory.get('$.data.found')).toEqual({ records: [{ name: 'Abo', id: 'a' }, { name: 'Bo', id: 'b' }], total: 2 });
     });
 
     it('should write the records into the property the host names, such as the items of a list', () => {

@@ -44,19 +44,45 @@ export interface LaidInstance {
 /** The keys of a node that belong to the definition, never to an instance */
 const STRUCTURE: readonly string[] = [RESERVED_KEYS.component, RESERVED_KEYS.layout, RESERVED_KEYS.placement, RESERVED_KEYS.theme, RESERVED_KEYS.on];
 
+/** The properties a component declares, by its name; undefined for a name it does not know */
+export type DeclaredProperties = (component: string) => ReadonlySet<string> | undefined;
+
+function isNodeValue(value: unknown): value is JsonObject {
+    return isObject(value) && typeof value[RESERVED_KEYS.component] === 'string';
+}
+
+/** True for a value that holds nodes (a node, or a map of them such as `children`), whose keys the definition owns */
+function holdsNodes(value: JsonObject): boolean {
+    return isNodeValue(value) || Object.values(value).some(isNodeValue);
+}
+
 /**
- * Lays an articulation overlay on a copy of a node tree: an object recurses, any other value replaces. Only keys the
- * definition has are laid, so a value of a node or property the app no longer has is dropped; content (`_` keys),
- * links (`<-` keys) and the node structure (`component`, `on`, `layout`, `placement`, `theme`) are never laid
+ * Lays an articulation overlay on a copy of a node tree: an object recurses, any other value replaces. On a node, only
+ * keys the definition has or the node's component declares are laid, so a value of a node or property the app no
+ * longer has is dropped; inside a property's value (a list's `items`, a record), new keys are laid too, as the person's
+ * own values. Content (`_` keys), links (`<-` keys) and the node structure (`component`, `on`, `layout`,
+ * `placement`, `theme`) are never laid
  */
-function layTree(base: JsonObject, overlay: JsonObject): JsonObject {
+function layTree(base: JsonObject, overlay: JsonObject, declared: DeclaredProperties | undefined, open = false): JsonObject {
     const result = cloneJson(base) as JsonObject;
-    const isNode = typeof base[RESERVED_KEYS.component] === 'string';
+    const component = base[RESERVED_KEYS.component];
+    const isNode = typeof component === 'string';
+    const own = isNode && declared !== undefined ? declared(component) : undefined;
     for (const [key, value] of Object.entries(overlay)) {
-        if (!Object.hasOwn(base, key) || key.startsWith(PREFIXES.content) || key.startsWith(PREFIXES.link)) continue;
+        if (key.startsWith(PREFIXES.content) || key.startsWith(PREFIXES.link)) continue;
         if (isNode && STRUCTURE.includes(key)) continue;
-        const own = base[key] as JsonValue;
-        result[key] = isObject(own) && isObject(value) ? layTree(own, value) : cloneJson(value);
+        if (!Object.hasOwn(base, key)) {
+            const known = isNode ? own?.has(key) === true && key !== RESERVED_KEYS.children : open;
+            if (known) result[key] = cloneJson(value);
+            continue;
+        }
+        const current = base[key] as JsonValue;
+        if (!(isObject(current) && isObject(value))) {
+            result[key] = cloneJson(value);
+            continue;
+        }
+        const nested = !(isNode && key === RESERVED_KEYS.children) && !holdsNodes(current);
+        result[key] = layTree(current, value, declared, nested);
     }
     return result;
 }
@@ -81,15 +107,17 @@ function stale(target: string, path: string, reason: string): BuildError {
  * did with a part that is gone. A route to a screen the app no longer has (or whose params no longer fit) falls back to
  * the start route, a theme (`theme.active.theme`) the app no longer lists falls back to its first, and an active overlay
  * name the theme the app opens with does not have falls back to the document's; each is a
- * `SUI-INSTANCE-STALE` warning
+ * `SUI-INSTANCE-STALE` warning. With `declared`, a node also takes a value of a property its component declares that
+ * the definition leaves unset (a list filled by a `query`)
  */
 export function layInstance(
     base: InstanceBase,
     instance: AppInstance,
-    document: Pick<AppDocument, 'screens' | 'start' | 'theme' | 'themes' | 'appThemes'>
+    document: Pick<AppDocument, 'screens' | 'start' | 'theme' | 'themes' | 'appThemes'>,
+    declared?: DeclaredProperties
 ): LaidInstance {
     const warnings: BuildError[] = [];
-    const app = isObject(instance.app) ? layTree(base.app, instance.app) : (cloneJson(base.app) as JsonObject);
+    const app = isObject(instance.app) ? layTree(base.app, instance.app, declared) : (cloneJson(base.app) as JsonObject);
 
     let screens: Record<string, JsonObject> | undefined;
     if (base.screens !== undefined) {
@@ -97,7 +125,7 @@ export function layInstance(
         const given = isObject(instance.screens) ? instance.screens : {};
         for (const [name, root] of Object.entries(base.screens)) {
             const overlay = given[name];
-            screens[name] = isObject(overlay) ? layTree(root, overlay) : (cloneJson(root) as JsonObject);
+            screens[name] = isObject(overlay) ? layTree(root, overlay, declared) : (cloneJson(root) as JsonObject);
         }
     }
 
