@@ -47,7 +47,7 @@ export interface EmbeddedApp {
 export interface OpenedApp {
     readonly document: AppDocument;
     readonly library: ComponentLibrary;
-    /** How the app keeps its state, its persona's instance, its function catalogs and its own app host */
+    /** How the app keeps its state, the person's instance, its function catalogs and its own app host */
     readonly options?: Pick<MountOptions, 'mode' | 'instance' | 'functions' | 'apps'>;
     /** The app's own hooks: its files, its 3D chunk, its emits */
     readonly hooks?: DispatchHooks;

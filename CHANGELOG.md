@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **A data binding's scope is `person`.** A binding that gives each person their own records of a model is
+  `{ model, scope: "person" }`; `scope: "persona"` is refused with `SUI-BLUEPRINT-SHAPE` at `$.uses.data.{binding}.scope`.
+  The type is `PersonBinding` (was `PersonaBinding`). Comments and the README speak of the person's instance. Breaking.
+  Tests: `src/core/blueprint/blueprint.test.ts`, `src/core/assemble/assemble.test.ts`.
 - **A host can take Ctrl+Shift+= and Ctrl+Shift+-.** With Shift held, the runtime names `+` as `shift+=` and `_` as
   `shift+-`, the keys they are on, and puts `shift+` before `=` and `-` as it does before a letter or a digit, so the
   chords `mod+shift+=` and `mod+shift+-` reach the host. Before, Shift made `+` and `_`, which no chord can name.

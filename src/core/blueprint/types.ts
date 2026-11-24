@@ -44,13 +44,13 @@ export interface DatasetBinding {
     dataset: string;
 }
 
-/** An app name holds each persona's own records of a model */
-export interface PersonaBinding {
+/** An app name holds each person's own records of a model */
+export interface PersonBinding {
     model: string;
-    scope: 'persona';
+    scope: 'person';
 }
 
-export type DataBinding = DatasetBinding | PersonaBinding;
+export type DataBinding = DatasetBinding | PersonBinding;
 
 /** One owner logic module an app uses, with the values of its params */
 export interface ModuleUse {
@@ -61,7 +61,7 @@ export interface ModuleUse {
 export interface BlueprintUses {
     /** The themes the app offers; the first is the default */
     themes?: string[];
-    /** Binding name (`$.data.{name}`) to dataset or persona model */
+    /** Binding name (`$.data.{name}`) to dataset or person model */
     data?: Record<string, DataBinding>;
     /** Module name to its param values */
     logic?: Record<string, ModuleUse>;

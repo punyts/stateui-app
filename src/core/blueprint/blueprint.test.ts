@@ -17,7 +17,7 @@ const STORE: JsonObject = deepFreeze({
         themes: ['halo'],
         data: {
             products: { dataset: 'catalog' },
-            bag: { model: 'bag-line', scope: 'persona' }
+            bag: { model: 'bag-line', scope: 'person' }
         },
         logic: { cart: { params: { taxRate: 0.0825, currency: 'USD' } } }
     },
@@ -101,7 +101,7 @@ describe('readBlueprint', () => {
 
         expect(result.errors).toEqual([]);
         expect(result.blueprint?.start).toBe('home');
-        expect(result.blueprint?.uses?.data?.['bag']).toEqual({ model: 'bag-line', scope: 'persona' });
+        expect(result.blueprint?.uses?.data?.['bag']).toEqual({ model: 'bag-line', scope: 'person' });
     });
 
     it('should accept a blueprint with only start, app and screens', () => {
@@ -131,12 +131,13 @@ describe('readBlueprint', () => {
         expect(errorsOf(storeWith('uses.logic.cart.extra', 1))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.logic.cart.extra']);
     });
 
-    it('should refuse a data binding that is neither a dataset nor a persona model', () => {
+    it('should refuse a data binding that is neither a dataset nor a person model', () => {
         expect(errorsOf(storeWith('uses.data.products', { name: 'catalog' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.products']);
         expect(errorsOf(storeWith('uses.data.products', { dataset: 'Catalog' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.products.dataset']);
-        expect(errorsOf(storeWith('uses.data.products', { dataset: 'catalog', scope: 'persona' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.products.scope']);
+        expect(errorsOf(storeWith('uses.data.products', { dataset: 'catalog', scope: 'person' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.products.scope']);
         expect(errorsOf(storeWith('uses.data.bag', { model: 'bag-line' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.bag.scope']);
-        expect(errorsOf(storeWith('uses.data.my-bag', { model: 'bag-line', scope: 'persona' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.my-bag']);
+        expect(errorsOf(storeWith('uses.data.bag', { model: 'bag-line', scope: 'persona' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.bag.scope']);
+        expect(errorsOf(storeWith('uses.data.my-bag', { model: 'bag-line', scope: 'person' }))).toEqual(['SUI-BLUEPRINT-SHAPE $.uses.data.my-bag']);
     });
 
     it('should refuse a screen without root and a root or app that is not a node', () => {

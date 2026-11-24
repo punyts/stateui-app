@@ -162,10 +162,10 @@ function bindModules(blueprint: AppBlueprint, parts: PartSource, assembler: Asse
  * Builds the document the runtime mounts from a blueprint and the owner's parts. The first theme of `uses.themes`
  * gives `theme.tokens` and `themes` (its overlays), and `appThemes` carries every listed theme by name (tokens and
  * overlays) for switching at run time; every listed theme must exist. Each `uses.data` binding becomes
- * `data.{binding}`: the dataset's records, or an empty map for a persona binding. Owner components named by a node of
+ * `data.{binding}`: the dataset's records, or an empty map for a person binding. Owner components named by a node of
  * the app node, a screen or another used owner component go into `composed` as their trees with `exposes`, without the
  * search keys; an owner component wins over a library component of the same name, as `composed` does. `app` is the
- * app node. A persona binding starts as the model's defaults over an empty map (`applyDefaults(model, {})`), so a model
+ * app node. A person binding starts as the model's defaults over an empty map (`applyDefaults(model, {})`), so a model
  * without defaults gives `{}`. `logic` is the app's own units followed by each module of `uses.logic`, instantiated
  * with its params (`instantiateModule`, units named `{module}:{unit}`); `icons` is the app's own icons, when it has any; a module whose needs are not bound under their
  * names to data of their models (`SUI-USES-NEEDS`, `SUI-USES-MODEL`) or whose params do not fit (`SUI-MODULE-PARAM`)

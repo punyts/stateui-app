@@ -9,8 +9,8 @@ import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { AppDocument, JsonObject, JsonValue } from '../types.js';
 
 /**
- * What one persona did in an app: the articulation of the app node (`app`) and of each screen (`screens`, by name), the
- * route, the active overlay names and the persona's data. Shaped like a `StateSnapshot`; every part is sparse
+ * What one person did in an app: the articulation of the app node (`app`) and of each screen (`screens`, by name), the
+ * route, the active overlay names and the person's data. Shaped like a `StateSnapshot`; every part is sparse
  */
 export interface AppInstance {
     app: JsonObject;
@@ -76,7 +76,7 @@ function stale(target: string, path: string, reason: string): BuildError {
 }
 
 /**
- * The definition's starting values with a persona's instance laid over them. The base and the instance are never
+ * The definition's starting values with the person's instance laid over them. The base and the instance are never
  * changed. Values of nodes and screens the definition no longer has are dropped without a word: they are what a person
  * did with a part that is gone. A route to a screen the app no longer has (or whose params no longer fit) falls back to
  * the start route, a theme (`theme.active.theme`) the app no longer lists falls back to its first, and an active overlay

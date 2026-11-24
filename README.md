@@ -584,7 +584,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   `-2`, `-3`, … while the name is taken.
 - **Reader.** `readBlueprint(json)` returns `{ blueprint, errors }`, with `blueprint` only when there are no errors. Each
   problem is a `SUI-BLUEPRINT-SHAPE` naming its path: an unknown key, `uses` of the wrong shape (theme names that are not
-  part names or listed twice, a binding that is neither `{ dataset }` nor `{ model, scope: "persona" }`, a binding name that
+  part names or listed twice, a binding that is neither `{ dataset }` nor `{ model, scope: "person" }`, a binding name that
   is not a key name, a module name that is not a part name), an app node or screen root that is not a node, a screen without
   `root`, no `screens` map, a screen name that is not a part name, a `start` that names no screen or is missing while there are screens (an app with `screens: {}` has no `start`), and params that are not typed
   declarations. `declarationProblems(value, path)` checks one typed declaration for the blueprint, models and modules: its
@@ -595,13 +595,13 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
 - **Assembling.** `assembleApp(blueprint, parts, { library? })` takes a `PartSource` (plain maps of `themes`, `modules`,
   `models`, `datasets` and `components` by name; no IO) and returns `{ document, errors, uses }`. The document is today's
   `AppDocument` plus `screens`: `app` is the app node, `theme.tokens` and `themes` (the overlays) come from the first of
-  `uses.themes` (`appThemes` holds every listed theme by name), `data.{binding}` holds the bound dataset's records (for a persona binding, the model's defaults over an
+  `uses.themes` (`appThemes` holds every listed theme by name), `data.{binding}` holds the bound dataset's records (for a person binding, the model's defaults over an
   empty map: `applyDefaults(model, {})`), `composed` holds
   the owner components that a node of the app node, a screen or another used component names (their trees with `exposes`,
   without the search keys; an owner component wins over a library component of the same name), and `locales` are the
   app's own. `logic` is the app's own units followed by each module of `uses.logic`, instantiated with its params
   (`instantiateModule`, units named `{module}:{unit}`). Each need of a module must be bound under its own name
-  (`SUI-USES-NEEDS`) to data of the model it names: a dataset's `model` or a persona binding's (`SUI-USES-MODEL`, also
+  (`SUI-USES-NEEDS`) to data of the model it names: a dataset's `model` or a person binding's (`SUI-USES-MODEL`, also
   for a dataset with no model). Two modules that need one name must name one model (`SUI-USES-MODEL`, naming both) and
   then share the binding. A param that does not fit is `SUI-MODULE-PARAM` at `$.uses.logic.{module}.params.{name}`. A
   module with any of these errors adds no units, and its errors carry `part` (the module). A part named in `uses` that the owner does not have is `SUI-USES-MISSING` with up to
@@ -617,7 +617,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   `SUI-USES-MISSING` is not reported again as `SUI-NODE-UNKNOWN`. The assembled document carries `start`. With
   `mode: "persisted"` each binding to a shared dataset is `SUI-SYNC-SHARED` at `$.uses.data.{binding}`
   (`checkSharedData(blueprint, mode)`): only the app server keeps a shared dataset in step across apps, so it needs
-  Full mode; persona bindings are allowed in every mode.
+  Full mode; person bindings are allowed in every mode.
 - **Converting** (`src/core/convert/`). `splitDocument({ name, document, snapshot?, taken? })` turns one stored app of
   the old single-document form into owner parts: `{ app?: { name, blueprint }, themes, models, datasets, components,
   renamed, report }`. Pure, so each adapter runs it over its own storage.
@@ -805,12 +805,12 @@ message.
   removed. Password-type fields are the caller's to name (E7.1).
 - The function returns what the store holds now; it does not know which values the user changed. The host loads the
   result over the document, so values equal to the document's are harmless.
-- **Persona instances** (`instance.ts`). An `AppInstance` is `{ app, screens, route?, theme?: { active }, data? }`:
-  what one persona did in an app, shaped like a `StateSnapshot` plus each screen's articulation by name.
+- **Person instances** (`instance.ts`). An `AppInstance` is `{ app, screens, route?, theme?: { active }, data? }`:
+  what one person did in an app, shaped like a `StateSnapshot` plus each screen's articulation by name.
   `MountOptions.instance` lays it over the definition before the store exists (`layInstance`), and the document is
   never written. In `app` and `screens` only keys the definition has are laid (an object recurses, any other value
   replaces); content, `<-` links and node structure never are, and values of nodes or screens the app no longer has
-  are dropped silently. `data` is laid the same way but takes new keys (a persona's records). A route to a screen the
+  are dropped silently. `data` is laid the same way but takes new keys (the person's records). A route to a screen the
   app no longer has, or whose params no longer fit, opens the start screen, and an active overlay name or kind the app
   no longer has keeps the document's; each is a `SUI-INSTANCE-STALE` warning in `MountedApp.errors`. The theme step
   lays the kept names over the document's (`MountContext.instanceActive`).
@@ -1056,7 +1056,7 @@ Code is in `src/core/theme/overlays/` (exported from `./core`) and `src/dom/them
   `motion`, then the shipped `default` brand (`activeAfterSwitch`). A name the app does not list is
   `SUI-STATE-INVALID` (through `hooks.onError`, naming the app's themes) and the store is set back. The document
   validator checks each entry of `appThemes` at `$.appThemes.{name}` and `theme.active.theme` against the list. The
-  persona's choice is part of the instance (`MountOptions.instance.theme.active.theme`); a name no longer listed falls
+  person's choice is part of the instance (`MountOptions.instance.theme.active.theme`); a name no longer listed falls
   back to the first theme with `SUI-INSTANCE-STALE`. The preview runtime's `theme` message still applies overlays of
   the first theme.
 - **Environment.** `src/dom/theme/system.ts` is the only module that reads `matchMedia` (a test scans the source). `mountApp`'s `hooks`

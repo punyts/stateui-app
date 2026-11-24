@@ -26,7 +26,7 @@ export type {
     PatternParamType,
     PatternPart,
     PatternSlot,
-    PersonaBinding,
+    PersonBinding,
     ThemePart,
     ThemePartOverlay
 } from './types.js';

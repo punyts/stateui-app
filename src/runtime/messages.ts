@@ -115,7 +115,7 @@ export interface RuntimeChunks {
 
 /**
  * Mounts the application: the document, the state to load over it, the icons it uses beyond the core set and the
- * mode (`standalone` when absent). `instance` is a persona's instance, laid over the definition as `mountApp` lays
+ * mode (`standalone` when absent). `instance` is the person's instance, laid over the definition as `mountApp` lays
  * `MountOptions.instance` (the app node, the screens, the data and the route), and `chunks` names the chunk scripts the
  * host serves beside the runtime page. `active` (theme overlays by kind, as `theme` messages name them), `locale` and
  * `open` (a screen to navigate to) are applied in the same task as the mount, so the first frame painted already shows
@@ -378,7 +378,7 @@ export type FileReleasedMessage = Envelope<'fileReleased'> &
  * A grid asks for its records as a CSV file the user saves (`exportFile`). `source` is the resolved state path of its
  * records (under `$.data` or `$.external`), `name` the file name and `request` the visible columns, filters and sort
  * (`RecordExportRequest` of `@punyts/stateui-app/core`); never rows. The host has the authority build the file from the
- * persona's own instance, saves it, and answers with `fileExported`
+ * person's own instance, saves it, and answers with `fileExported`
  */
 export interface FileExportMessage extends Envelope<'fileExport'> {
     requestId: number;

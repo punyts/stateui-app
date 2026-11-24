@@ -16,7 +16,7 @@ const EXTERNAL_PATH = /^\$\.(data|screens|app|route)(\.[^.\s]+)*$/;
 const SCREEN_KEYS = ['title', 'params', 'root', 'locales'];
 const MODULE_USE_KEYS = ['params'];
 const LOGIC_KEYS = ['machines', 'rules', 'tables', 'computes', 'effects'];
-const PERSONA_SCOPE = 'persona';
+const PERSON_SCOPE = 'person';
 
 export interface ReadBlueprintResult {
     /** Absent when there are errors */
@@ -139,10 +139,10 @@ class Reader {
         if (Object.hasOwn(value, 'model')) {
             if (!this.knownKeys(value, ['model', 'scope'], path)) return;
             if (!isPartName(value['model'])) this.shape(`${path}.model`, 'must be a model part name');
-            if (value['scope'] !== PERSONA_SCOPE) this.shape(`${path}.scope`, `a model binding must have scope "${PERSONA_SCOPE}"`);
+            if (value['scope'] !== PERSON_SCOPE) this.shape(`${path}.scope`, `a model binding must have scope "${PERSON_SCOPE}"`);
             return;
         }
-        this.shape(path, `a binding is { "dataset" } or { "model", "scope": "${PERSONA_SCOPE}" }`);
+        this.shape(path, `a binding is { "dataset" } or { "model", "scope": "${PERSON_SCOPE}" }`);
     }
 
     moduleUses(value: JsonValue, path: string): void {

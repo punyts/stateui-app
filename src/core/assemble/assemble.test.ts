@@ -108,9 +108,9 @@ describe('assembleApp', () => {
         ]);
     });
 
-    it('should start a persona binding as an empty map plus the model defaults and list its model', () => {
+    it('should start a person binding as an empty map plus the model defaults and list its model', () => {
         const blueprint = copy(STORE_APP);
-        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, draft: { model: 'product', scope: 'persona' } } };
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, draft: { model: 'product', scope: 'person' } } };
 
         const { document, uses, errors } = assembleApp(blueprint, STORE_PARTS);
 
@@ -174,7 +174,7 @@ describe('assembleApp', () => {
 
     it('should report two modules that need one name with different models, naming both', () => {
         const blueprint = copy(STORE_APP);
-        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, wishes: { model: 'product', scope: 'persona' } }, logic: { ...blueprint.uses?.logic, wishlist: {} } };
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, wishes: { model: 'product', scope: 'person' } }, logic: { ...blueprint.uses?.logic, wishlist: {} } };
         const parts = copy(STORE_PARTS);
         (parts.modules as Record<string, unknown>)['wishlist'] = { needs: { bag: { model: 'product' } }, params: {} };
 
@@ -253,9 +253,9 @@ describe('assembleApp', () => {
         expect(assembleApp(blueprint, STORE_PARTS).errors).toEqual([]);
     });
 
-    it('should report a missing module and a missing persona model', () => {
+    it('should report a missing module and a missing person model', () => {
         const blueprint = copy(STORE_APP);
-        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, draft: { model: 'draft-line', scope: 'persona' } }, logic: { coupons: {} } };
+        blueprint.uses = { ...blueprint.uses, data: { ...blueprint.uses?.data, draft: { model: 'draft-line', scope: 'person' } }, logic: { coupons: {} } };
 
         const { errors } = assembleApp(blueprint, STORE_PARTS);
 
@@ -303,7 +303,7 @@ describe('validateApp', () => {
         expect(result.valid).toBe(true);
     });
 
-    it('should refuse a shared dataset binding of a Persisted app and allow persona bindings', () => {
+    it('should refuse a shared dataset binding of a Persisted app and allow person bindings', () => {
         // Act
         const persisted = validateApp(STORE_APP, STORE_PARTS, STORE_LIBRARY, { name: 'store', mode: 'persisted' });
 
@@ -369,7 +369,7 @@ describe('validateApp', () => {
 
     it('should name the logic module as the part of its binding and param errors', () => {
         const blueprint = copy(STORE_APP);
-        blueprint.uses = { ...blueprint.uses, data: { products: { dataset: 'catalog' }, bag: { model: 'product', scope: 'persona' } }, logic: { cart: { params: { taxRate: -1 } } } };
+        blueprint.uses = { ...blueprint.uses, data: { products: { dataset: 'catalog' }, bag: { model: 'product', scope: 'person' } }, logic: { cart: { params: { taxRate: -1 } } } };
 
         const result = validateApp(blueprint, STORE_PARTS, STORE_LIBRARY, { name: 'store' });
 

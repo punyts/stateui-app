@@ -26,15 +26,15 @@ export const STORE_LIBRARY: ComponentLibrary = deepFreeze({
     banner: { tier: 'composed', tree: { component: 'panel', title: 'Library banner' } }
 }) as ComponentLibrary;
 
-/** A store: an app node, a home screen with a header, a home and a product screen, one theme, a catalog dataset, a persona bag and the cart module */
+/** A store: an app node, a home screen with a header, a home and a product screen, one theme, a catalog dataset, a person's bag and the cart module */
 export const STORE_APP: AppBlueprint = deepFreeze({
     title: 'Store',
     uses: {
         themes: ['store'],
         data: {
             products: { dataset: 'catalog' },
-            bag: { model: 'bag-line', scope: 'persona' },
-            totals: { model: 'cart-totals', scope: 'persona' }
+            bag: { model: 'bag-line', scope: 'person' },
+            totals: { model: 'cart-totals', scope: 'person' }
         },
         logic: { cart: { params: { taxRate: 0.2, currency: 'EUR' } } }
     },

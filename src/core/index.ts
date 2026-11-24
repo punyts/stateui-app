@@ -354,7 +354,7 @@ export type {
     PatternParamType,
     PatternPart,
     PatternSlot,
-    PersonaBinding,
+    PersonBinding,
     ReadBlueprintResult,
     ThemePart,
     ThemePartOverlay
