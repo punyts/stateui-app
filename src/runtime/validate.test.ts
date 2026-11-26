@@ -3,6 +3,20 @@ import { MAX_FILE_BYTES, MAX_WRITES, MESSAGE_BYTE_LIMITS, MESSAGE_TYPES, PROTOCO
 
 const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTOCOL_VERSION, nonce: 'n', type, ...fields });
 
+describe('a write by a node\u2019s id', () => {
+    const write = (path: string, more: Record<string, unknown> = {}) => validateMessage({ v: PROTOCOL_VERSION, nonce: 'n', type: 'write', writes: [{ path, value: 1, ...more }] });
+
+    it('should take #id.path and an optional one, and refuse an id alone, another separator, a forbidden step and optional: false', () => {
+        // Act
+        const taken = [write('#save.hidden'), write('#orders.filter.status'), write('#save.hidden', { optional: true })];
+        const refused = [write('#save'), write('#save/hidden'), write('#save hidden'), write('#save.a$b'), write('#save.__proto__'), write('#save.hidden', { optional: false })];
+
+        // Assert
+        expect(taken.map((result) => result.ok)).toEqual([true, true, true]);
+        expect(refused.map((result) => result.ok)).toEqual([false, false, false, false, false, false]);
+    });
+});
+
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(

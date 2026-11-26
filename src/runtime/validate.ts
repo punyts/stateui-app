@@ -123,7 +123,7 @@ function isRuntimeChange(value: unknown): boolean {
 }
 
 /** A node's state named by the node's id: `#save.hidden`, `#orders.filter.status` */
-const NODE_WRITE = /^#[A-Za-z0-9_-]+(.[A-Za-z0-9_-]+)+$/;
+const NODE_WRITE = /^#[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/;
 
 function isPathWrite(value: unknown): boolean {
     if (!isRecord(value) || !(isWritablePath(value['path']) || isSafePath(value['path'], NODE_WRITE))) return false;

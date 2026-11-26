@@ -3,7 +3,7 @@ import { SYNC_ORIGIN, captureChanges } from '@punyts/state-sync';
 import { LOGIC_ORIGIN } from '../core/logic/index.js';
 import type { Capture, Change } from '@punyts/state-sync';
 import { buildError } from '../core/errors/index.js';
-import { nodeId, pathsOfId } from '../core/on/resolveTarget.js';
+import { pathsOfId } from '../core/on/resolveTarget.js';
 import { appIconNames } from '../core/icons/appIcons.js';
 import type { BuildError } from '../core/errors/index.js';
 import { entryShape } from '../core/resolve/index.js';
@@ -501,35 +501,32 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
         post({ type: 'ready' });
     }
 
-    /** Where each id a host wrote by was last found, checked before it is used again */
-    const idPaths = new Map<string, string>();
-
     /**
-     * The state path a write by id reaches: `#save.hidden` is `hidden` of the one node of the app node or a screen
-     * whose id (its `@id`, otherwise its key) is `save`. Undefined when no node or more than one has the id
+     * The state path a write by id reaches: `#save.hidden` is `hidden` of the one node whose id (its `@id`, otherwise
+     * its key) is `save`, looked for as logic looks: in the screen that shows, then the app node, then the other
+     * screens, taking the first place that has the id. Undefined when no node has it, or the place has it twice. A
+     * node of a row template counts, so an id used only there writes the template
      */
     function pathOfReference(store: NonNullable<MountedApp['store']>, reference: string): string | undefined {
         const dot = reference.indexOf('.');
+        if (dot < 2) return undefined;
         const id = reference.slice(1, dot);
         const rest = reference.slice(dot);
-        const kept = idPaths.get(id);
-        if (kept !== undefined) {
-            const node: unknown = store.get(kept as never);
-            if (isNodeValue(node as never) && nodeId(node as never, kept.slice(kept.lastIndexOf('.') + 1)) === id) return kept + rest;
-            idPaths.delete(id);
-        }
-        const found: string[] = [];
-        const app: unknown = store.get('$.app' as never);
-        if (isNodeValue(app as never)) found.push(...pathsOfId(app as never, '$.app', id));
+        const current: unknown = store.get('$.route.screen' as never);
         const screens: unknown = store.get('$.screens' as never);
-        if (typeof screens === 'object' && screens !== null) {
-            for (const [name, root] of Object.entries(screens)) {
-                if (isNodeValue(root as never)) found.push(...pathsOfId(root as never, `$.screens.${name}`, id));
-            }
-        }
-        if (found.length !== 1) return undefined;
-        idPaths.set(id, found[0] as string);
-        return found[0] + rest;
+        const inScreen = (name: string): string[] => {
+            const root: unknown = typeof screens === 'object' && screens !== null ? (screens as Record<string, unknown>)[name] : undefined;
+            return isNodeValue(root as never) ? pathsOfId(root as never, `$.screens.${name}`, id) : [];
+        };
+        const app: unknown = store.get('$.app' as never);
+        const others = typeof screens === 'object' && screens !== null ? Object.keys(screens).filter((name) => name !== current) : [];
+        const places: string[][] = [
+            typeof current === 'string' ? inScreen(current) : [],
+            isNodeValue(app as never) ? pathsOfId(app as never, '$.app', id) : [],
+            others.flatMap(inScreen)
+        ];
+        const found = places.find((place) => place.length > 0);
+        return found?.length === 1 ? (found[0] as string) + rest : undefined;
     }
 
     /**

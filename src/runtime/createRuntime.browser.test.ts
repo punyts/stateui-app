@@ -126,6 +126,26 @@ describe('createRuntime in a page (inPage)', () => {
         expect(runtime.app()?.store?.get('$.app.children.second.text' as never)).toBe('two');
     });
 
+    it('should refuse a write by an id once a second node carries it, and find the id again in a new document', () => {
+        // Arrange
+        const { runtime, posted } = inPage();
+        const one: AppDocument = { app: { component: 'panel', children: { first: { component: 'badge', text: 'one', '@id': 'status' } } } as AppDocument['app'] };
+        const moved: AppDocument = { app: { component: 'panel', children: { group: { component: 'panel', children: { inner: { component: 'badge', text: 'in', '@id': 'status' } } } } } as AppDocument['app'] };
+        runtime.handle(message('load', { document: one }));
+        runtime.handle(message('write', { writes: [{ path: '#status.text', value: 'first' }] }));
+
+        // Act
+        runtime.handle(message('write', { writes: [{ path: '$.app.children.twin', value: { component: 'badge', text: 'twin', '@id': 'status' } }] }));
+        runtime.handle(message('write', { writes: [{ path: '#status.text', value: 'second' }] }));
+        const refused = posted.filter((item) => item.type === 'error').flatMap((item) => item['errors'] as { code: string; statePath: string }[]);
+        runtime.handle(message('load', { document: moved }));
+        runtime.handle(message('write', { writes: [{ path: '#status.text', value: 'third' }] }));
+
+        // Assert
+        expect(refused.map((error) => [error.code, error.statePath])).toContainEqual(['SUI-RUN-WRITE', '#status.text']);
+        expect(runtime.app()?.store?.get('$.app.children.group.children.inner.text' as never)).toBe('third');
+    });
+
     it('should answer inspect in the pixels of its element when the page draws it at half its size', () => {
         // Arrange
         const { host, runtime, posted } = inPage(0.5);

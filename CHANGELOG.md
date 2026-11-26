@@ -3,7 +3,8 @@
 ## Unreleased
 - **A host writes a node's state by its id** (docs/design/state-definitions-and-instances.md). A `write` path may be
   `#<id>.<path>` (`#save.hidden`): the runtime finds the one node of the app node or a screen whose id (its `@id`,
-  otherwise its key) it is, and writes there; no node or two nodes with the id is `SUI-RUN-WRITE`, or nothing when the
+  otherwise its key) it is, looking as logic does (the screen that shows, the app node, then the other screens), and
+  writes there; no node or two nodes with the id is `SUI-RUN-WRITE`, or nothing when the
   write is `optional: true` (a copy of a page that dropped the node). `pathsOfId`
   (`core/on`) lists the paths of an id. Test: `runtime/createRuntime.browser.test.ts` ("should write the state of a
   node by its id …").
