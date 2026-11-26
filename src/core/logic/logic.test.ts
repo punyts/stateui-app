@@ -89,7 +89,7 @@ const ADD_CONTACT: LogicDocument = Object.freeze({
                     when: { path: '$.app.children.addContact.saved', is: true },
                     do: [
                         { command: 'set', target: '$.app.children.addContact.saved', value: false },
-                        { command: 'save-data', into: '$.data.contacts', value: { form: '^addContact.body' }, as: 'save' }
+                        { command: 'save-data', into: '$.data.contacts', value: { form: '#addContact.body' }, as: 'save' }
                     ],
                     to: 'saving'
                 },
@@ -97,8 +97,8 @@ const ADD_CONTACT: LogicDocument = Object.freeze({
                     from: 'saving',
                     when: { result: 'save', is: 'accepted' },
                     do: [
-                        { command: 'reset', target: '^addContact.body' },
-                        { command: 'set', target: '^addContact.open', value: false },
+                        { command: 'reset', target: '#addContact.body' },
+                        { command: 'set', target: '#addContact.open', value: false },
                         { command: 'notify', target: 'toast', value: { text: 'Added {{ $result.key }}' } }
                     ],
                     to: 'editing'
@@ -106,7 +106,7 @@ const ADD_CONTACT: LogicDocument = Object.freeze({
                 {
                     from: 'saving',
                     when: { result: 'save', is: 'rejected' },
-                    do: [{ command: 'set', target: '^addContact.error', value: '{{ $result.reason }}' }],
+                    do: [{ command: 'set', target: '#addContact.error', value: '{{ $result.reason }}' }],
                     to: 'editing'
                 }
             ]
@@ -319,10 +319,10 @@ describe('createLogicIndex', () => {
     });
 
     it('should resolve a unique node name and the steps below it', () => {
-        expect(index.resolve('^addContact')).toBe('$.app.children.addContact');
-        expect(index.resolve('^addContact.body.children.name.value')).toBe('$.app.children.addContact.body.children.name.value');
-        expect(index.resolve('^addContact.open')).toBe('$.app.children.addContact.open');
-        expect(index.resolve('^nobody')).toBeUndefined();
+        expect(index.resolve('#addContact')).toBe('$.app.children.addContact');
+        expect(index.resolve('#addContact.body.children.name.value')).toBe('$.app.children.addContact.body.children.name.value');
+        expect(index.resolve('#addContact.open')).toBe('$.app.children.addContact.open');
+        expect(index.resolve('#nobody')).toBeUndefined();
     });
 
     it('should list the fields of a form by child key', () => {
@@ -673,7 +673,7 @@ describe('createLogicEngine', () => {
 
     it('should pull a record into a form', () => {
         const logic: LogicDocument = {
-            rules: { edit: { when: { path: '$.data.editing' }, do: [{ command: 'pull-data', from: '$.data.contacts.{{ $trigger }}', target: '^addContact.body' }] } }
+            rules: { edit: { when: { path: '$.data.editing' }, do: [{ command: 'pull-data', from: '$.data.contacts.{{ $trigger }}', target: '#addContact.body' }] } }
         };
         const memory = memoryHost({ ...BASE, data: { contacts: { c1: { name: 'Ana', vip: true } } } });
         const engine = createLogicEngine(logic, memory.host);
@@ -690,7 +690,7 @@ describe('createLogicEngine', () => {
             rules: {
                 window: {
                     when: { path: '$.app.children.contacts.window' },
-                    do: [{ command: 'query', from: '$.data.contacts', sort: '-name', filter: "$record.name != 'Cy'", window: '$trigger', into: '^contacts' }]
+                    do: [{ command: 'query', from: '$.data.contacts', sort: '-name', filter: "$record.name != 'Cy'", window: '$trigger', into: '#contacts' }]
                 }
             }
         };
@@ -723,7 +723,7 @@ describe('createLogicEngine', () => {
 
     it('should write the records into the property the host names, such as the items of a list', () => {
         const logic: LogicDocument = {
-            rules: { window: { when: { path: '$.app.children.contacts.window' }, do: [{ command: 'query', from: '$.data.contacts', window: '$trigger', into: '^contacts' }] } }
+            rules: { window: { when: { path: '$.app.children.contacts.window' }, do: [{ command: 'query', from: '$.data.contacts', window: '$trigger', into: '#contacts' }] } }
         };
         const memory = memoryHost({ ...BASE, data: { contacts: { a: { name: 'Ana' } } } }, { records: () => 'items' });
         const engine = createLogicEngine(logic, memory.host);
@@ -772,7 +772,7 @@ describe('readLogic', () => {
             },
             rules: {
                 r: { when: { path: '$.data.{id}' }, do: [{ command: 'set', target: '$.data.{other}', extra: 1 }] },
-                g: { when: { path: '$.data.x' }, do: [{ command: 'set', target: '^ghost.x', value: 1 }, { command: 'reject' }] }
+                g: { when: { path: '$.data.x' }, do: [{ command: 'set', target: '#ghost.x', value: 1 }, { command: 'reject' }] }
             },
             other: {}
         };
@@ -817,7 +817,7 @@ describe('validateDocument with logic', () => {
     it('should accept a document with logic and report its errors', () => {
         // Arrange
         const valid = { app: APP, data: { contacts: {} }, logic: ADD_CONTACT };
-        const invalid = { app: APP, logic: { rules: { r: { when: { path: '$.data.x' }, do: [{ command: 'set', target: '^ghost' }] } } } };
+        const invalid = { app: APP, logic: { rules: { r: { when: { path: '$.data.x' }, do: [{ command: 'set', target: '#ghost' }] } } } };
 
         // Act
         const ok = validateDocument(valid, LIBRARY);
@@ -1985,7 +1985,7 @@ describe('createLogicEngine: changes, removals and the trace', () => {
         const index = createLogicIndex(tree, LIBRARY);
 
         // Act
-        const errors = readLogic({ rules: { r: { when: { path: '$.data.go' }, do: [{ command: 'set', target: '^name.value', value: 'x' }] } } }, { resolve: index.resolve, explain: index.explain }).errors;
+        const errors = readLogic({ rules: { r: { when: { path: '$.data.go' }, do: [{ command: 'set', target: '#name.value', value: 'x' }] } } }, { resolve: index.resolve, explain: index.explain }).errors;
 
         // Assert
         expect(errors[0]?.message).toContain('2 nodes are named "name": $.app.children.a.children.name, $.app.children.b.children.name');

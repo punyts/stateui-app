@@ -1,7 +1,7 @@
 import { ARTICULATION_NAMES, isArticulationName } from '../articulation/index.js';
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
-import { PREFIXES, RESERVED_KEYS } from '../types.js';
+import { META_KEYS, META_KEY_NAMES, PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue, Node } from '../types.js';
 import { fitsAnyType, fitsProperty, fitsType, typesOf } from './fit.js';
 import { MAX_PATTERN_INPUT } from './types.js';
@@ -31,7 +31,34 @@ export interface ValidateContext {
     insideRow?: boolean;
 }
 
-type StateCode = 'SUI-STATE-INVALID' | 'SUI-STATE-UNKNOWN' | 'SUI-STATE-REQUIRED' | 'SUI-STATE-RUNTIME' | 'SUI-NODE-NAME';
+type StateCode = 'SUI-STATE-INVALID' | 'SUI-STATE-UNKNOWN' | 'SUI-STATE-REQUIRED' | 'SUI-STATE-RUNTIME' | 'SUI-NODE-NAME' | 'SUI-NODE-META';
+
+/** An `@id`: a name a `#name` reference can carry */
+const NODE_ID = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+/**
+ * Checks one metadata key of a node: `@id` is a name; `@local`, `@secret` and `@transient` are `true` or a list of
+ * properties the component declares, and no property is in two of them. An unknown `@` key is `SUI-NODE-NAME`
+ */
+function checkMeta(shape: Shape, node: Node, key: string, path: string, walk: Walk): void {
+    if (!META_KEY_NAMES.includes(key)) {
+        report(walk, 'SUI-NODE-NAME', key, path);
+        return;
+    }
+    const value = node[key] as JsonValue;
+    if (key === META_KEYS.id) {
+        if (typeof value !== 'string' || !NODE_ID.test(value)) report(walk, 'SUI-NODE-META', key, path);
+        return;
+    }
+    if (value === true) return;
+    if (!Array.isArray(value) || value.length === 0) {
+        report(walk, 'SUI-NODE-META', key, path);
+        return;
+    }
+    for (const name of value) {
+        if (typeof name !== 'string' || !Object.hasOwn(shape.properties, name)) report(walk, 'SUI-NODE-META', key, path);
+    }
+}
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -267,6 +294,10 @@ export function validateNode(shape: Shape, node: Node, statePath: string, contex
 
         if (key.startsWith('$') || key.startsWith(PREFIXES.reserved)) {
             report(walk, 'SUI-NODE-NAME', key, path);
+            continue;
+        }
+        if (key.startsWith(PREFIXES.meta)) {
+            checkMeta(shape, node, key, path, walk);
             continue;
         }
         if (key.startsWith(PREFIXES.link)) {

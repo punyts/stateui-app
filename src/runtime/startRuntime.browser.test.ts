@@ -703,7 +703,7 @@ describe('startRuntime in Chromium', () => {
             await load();
 
             // Act
-            await write([{ path: '$.app.children.stat', value: { component: 'badge', '<-text': '^source.current' } }]);
+            await write([{ path: '$.app.children.stat', value: { component: 'badge', '<-text': '#source.current' } }]);
 
             // Assert
             expect(JSON.stringify(ofType('error'))).toBe('[]');

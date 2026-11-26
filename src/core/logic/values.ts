@@ -226,6 +226,8 @@ export function evaluate(text: string, scope: Scope): unknown {
 
 const TEMPLATE = /\{\{([\s\S]+?)\}\}/g;
 const WHOLE_TEMPLATE = /^\{\{([\s\S]+?)\}\}$/;
+/** A hex colour (`#fff`, `#3366ff`, with or without alpha): a literal value, never a node reference */
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 const NAME_REFERENCE = /^\$([A-Za-z_][A-Za-z0-9_]*)((?:\.[^.\s]+)*)$/;
 
 /** The expressions inside `{{ … }}` of a text */
@@ -282,7 +284,7 @@ function named(name: string, steps: readonly string[], scope: Scope): JsonValue 
 export function resolvePath(text: string, scope: Scope, host: LogicHost): string {
     const filled = fillCaptures(text, scope.captures);
     const expanded = filled.includes('{{') ? String(template(filled, scope)) : filled;
-    if (expanded.startsWith('^')) {
+    if (expanded.startsWith('#')) {
         const path = host.resolve?.(expanded);
         if (path === undefined) throw new LogicError(`${expanded} does not resolve`);
         return path;
@@ -303,7 +305,7 @@ function formValues(reference: string, scope: Scope, host: LogicHost): JsonValue
 
 /**
  * The value of a command:
- * - a string `$.path` or `^node.path` is read when the command runs; `$trigger`, `$previous`, `$result`, `$key`,
+ * - a string `$.path` or `#node.path` is read when the command runs (a hex colour such as `#3366ff` stays a literal); `$trigger`, `$previous`, `$result`, `$key`,
  *   captures (`$task`) and a table's inputs are names, with steps below them (`$trigger.name`);
  * - a string with `{{ … }}` is evaluated;
  * - `{ "form": ref }`, `{ "record": path }` and `{ "pick": { … } }` are sources;
@@ -312,7 +314,7 @@ function formValues(reference: string, scope: Scope, host: LogicHost): JsonValue
 export function resolveValue(value: JsonValue, scope: Scope, host: LogicHost): JsonValue {
     if (typeof value === 'string') {
         if (value.includes('{{')) return template(value, scope);
-        if (value.startsWith('$.') || value.startsWith('^')) return cloneJson(scope.read(resolvePath(value, scope, host)) ?? null);
+        if (value.startsWith('$.') || (value.startsWith('#') && !HEX_COLOR.test(value))) return cloneJson(scope.read(resolvePath(value, scope, host)) ?? null);
         const reference = NAME_REFERENCE.exec(value);
         if (reference) {
             const steps = (reference[2] as string) === '' ? [] : (reference[2] as string).slice(1).split('.');

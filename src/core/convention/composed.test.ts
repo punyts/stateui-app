@@ -52,8 +52,8 @@ function confirmDialog(): Record<string, unknown> {
             component: 'toolbar',
             align: 'end',
             children: {
-                cancel: { component: 'button', variant: 'ghost', _title: 'Cancel', on: { press: { command: 'close', target: '^confirmDialog' } } },
-                confirm: { component: 'button', tone: 'danger', _title: 'Delete', on: { press: [{ command: 'close', target: '^confirmDialog' }] } }
+                cancel: { component: 'button', variant: 'ghost', _title: 'Cancel', on: { press: { command: 'close', target: '#confirmDialog' } } },
+                confirm: { component: 'button', tone: 'danger', _title: 'Delete', on: { press: [{ command: 'close', target: '#confirmDialog' }] } }
             }
         },
         exposes: {

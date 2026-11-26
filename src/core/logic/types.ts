@@ -342,7 +342,7 @@ export interface LogicHost {
     get(path: string): JsonValue | undefined;
     /** Applies the writes of one transition, all or none; throws when they cannot be applied */
     commit(writes: readonly LogicWrite[]): void;
-    /** A node reference (`^addContact.body.saved`) as a state path; undefined when it does not resolve */
+    /** A node reference (`#addContact.body.saved`) as a state path; undefined when it does not resolve */
     resolve?(reference: string): string | undefined;
     /** The document's value at a path, shape defaults included, which `reset` writes back */
     initial?(path: string): JsonValue | undefined;

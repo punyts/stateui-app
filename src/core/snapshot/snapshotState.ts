@@ -41,8 +41,8 @@ function copyData(value: unknown, path: string, exclude: Exclude): JsonValue | u
 }
 
 /**
- * Copies the articulation values below `value`: content (`_` keys) and the node's own keys (`component`, `on`,
- * `layout`, `placement`, `theme`) stay in the document. Containers that lose everything are dropped
+ * Copies the articulation values below `value`: content (`_` keys), metadata (`@` keys) and the node's own keys
+ * (`component`, `on`, `layout`, `placement`, `theme`) stay in the document. Containers that lose everything are dropped
  */
 function copyArticulation(value: unknown, path: string, exclude: Exclude): JsonValue | undefined {
     if (exclude(path)) return undefined;
@@ -58,7 +58,7 @@ function copyArticulation(value: unknown, path: string, exclude: Exclude): JsonV
         const isNode = typeof value[RESERVED_KEYS.component] === 'string';
         const copy: JsonObject = {};
         for (const [key, item] of Object.entries(value)) {
-            if (key.startsWith(PREFIXES.content) || (isNode && NOT_ARTICULATION.includes(key))) continue;
+            if (key.startsWith(PREFIXES.content) || (isNode && (NOT_ARTICULATION.includes(key) || key.startsWith(PREFIXES.meta)))) continue;
             const itemCopy = copyArticulation(item, `${path}.${key}`, exclude);
             if (itemCopy !== undefined) copy[key] = itemCopy;
         }

@@ -173,7 +173,7 @@ function unitCommands(unit: { transitions: readonly LogicTransition[] }): LogicC
 
 /**
  * The state paths a unit can write, as written (`$.data.bag.{id}.total`): its commands' targets, its machine's state
- * path, a table's outputs. Node references (`^name`) resolve at run time and are left out
+ * path, a table's outputs. Node references (`#name`) resolve at run time and are left out
  */
 function writePaths(unit: { machine?: LogicMachine; transitions: readonly LogicTransition[]; declared?: DeclaredPlan }): string[] {
     const paths = unitCommands(unit).flatMap((command) => {
@@ -227,7 +227,7 @@ function chainOrder<T extends { id: string; machine?: LogicMachine; declared?: D
 function declaredPlan(unit: { table: LogicTable } | { compute: LogicCompute }, resolve?: (reference: string) => string | undefined): { plan: DeclaredPlan; patterns: (PathPattern | undefined)[] } {
     const table = 'table' in unit ? unit.table : undefined;
     const declared = 'table' in unit ? unit.table : unit.compute;
-    const statePath = (path: string): string | undefined => (path.startsWith('^') ? resolve?.(path) : path);
+    const statePath = (path: string): string | undefined => (path.startsWith('#') ? resolve?.(path) : path);
     const inputs: TableInputPlan[] = [];
     const patterns: (PathPattern | undefined)[] = [];
     const captures: string[] = [];
@@ -555,7 +555,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
         plan.stale = false;
         if (!plan.table) return;
         const table = plan.table;
-        const read = (path: string): JsonValue | undefined => host.get(path.startsWith('^') ? (host.resolve?.(path) ?? path) : path);
+        const read = (path: string): JsonValue | undefined => host.get(path.startsWith('#') ? (host.resolve?.(path) ?? path) : path);
         const keys = (name: string): JsonValue[] | undefined => {
             const values = plan.inputs.find((input) => input.name === name)?.input.values;
             if (!isObject(values as JsonValue)) return undefined;
@@ -591,7 +591,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     const inputValue = (input: TableInputPlan, scope: Scope): JsonValue | undefined => {
         if (input.input.value !== undefined) return resolveValue(input.input.value, scope, host);
         if (input.input.path === undefined) return undefined;
-        const path = input.input.path.startsWith('^') ? host.resolve?.(fillCaptures(input.input.path, scope.captures)) : fillCaptures(input.input.path, scope.captures);
+        const path = input.input.path.startsWith('#') ? host.resolve?.(fillCaptures(input.input.path, scope.captures)) : fillCaptures(input.input.path, scope.captures);
         return path === undefined ? undefined : host.get(path);
     };
 

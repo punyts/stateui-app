@@ -60,6 +60,10 @@ export const ERROR_CATALOG = {
     'SUI-NODE-MISSING': { template: 'No node at {path}' },
     'SUI-NODE-CHILD': { template: 'Component "{component}" at {path} is not accepted by its parent slot; it takes {other}' },
     'SUI-NODE-NAME': { template: 'Property name "{name}" at {path} is not allowed' },
+    'SUI-NODE-META': {
+        template: 'Metadata "{name}" at {path} does not fit: @id is a name, @local, @secret and @transient are true or a list of the properties of "{component}"'
+    },
+    'SUI-NODE-ID-TWICE': { template: 'The id "{name}" at {path} is the @id of another node of the tree too, at {other}' },
     'SUI-STATE-INVALID': { template: 'Property "{name}" at {path} does not fit the shape of "{component}"' },
     'SUI-STATE-UNKNOWN': { template: 'Property "{name}" at {path} is not in the shape of "{component}"' },
     'SUI-STATE-SHARED': {
@@ -93,7 +97,7 @@ export const ERROR_CATALOG = {
         template: 'Link target {target} at {path} does not exist, or is content or a runtime property its component does not expose'
     },
     'SUI-LINK-TARGET': {
-        template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, be $.runtime.sync or $.runtime.requests, or be a node reference (^name.path or .path)'
+        template: 'Link "{key}" at {path} has target {target}; it must start with $.data or $row, be $.runtime.sync or $.runtime.requests, or be a node reference (#name.path or .path)'
     },
     'SUI-LINK-SERVER': {
         template: 'Link "{key}" at {path} has target {target}; $.server is server-only and never reaches the browser'

@@ -9,7 +9,7 @@ export type { AppIcon, AppIconPath, AppIconProblem } from './icons/appIcons.js';
 export { FUNCTION_KINDS, FUNCTION_PATH, FunctionTable, HOST_GROUP, catalogOf, functionPaths, hostCatalog, isFunctionPath } from './functions/index.js';
 export type { FunctionCatalog, FunctionCode, FunctionEntry, FunctionKind, FunctionPointer, HostFunction, LoadedFunction } from './functions/index.js';
 export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';
-export { APP_EVENTS, DOCUMENT_KEYS, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, SYNC_NOTICES, isAppEvent } from './types.js';
+export { APP_EVENTS, DOCUMENT_KEYS, META_KEYS, META_KEY_NAMES, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, SYNC_NOTICES, isAppEvent } from './types.js';
 export type { AppDocument, AppEventName, AppTheme, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {
     COMPONENT_CATEGORIES,

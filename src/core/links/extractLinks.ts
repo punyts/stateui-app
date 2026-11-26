@@ -19,11 +19,11 @@ const SYNC_TARGET = /^\$\.runtime\.sync(\.(mode|status|waiting))?$/;
 /** The requests that wait for the owner, which the host writes (`$.runtime.requests`): an app lists them */
 const REQUESTS_TARGET = /^\$\.runtime\.requests$/;
 const ROW_TARGET = new RegExp(`^\\$row(\\.${SEGMENT})*$`);
-const NODE_REFERENCE = new RegExp(`^(\\^${SEGMENT}|)(\\.${SEGMENT})+$`);
+const NODE_REFERENCE = new RegExp(`^(#${SEGMENT}|)(\\.${SEGMENT})+$`);
 /** `$.server` and the paths below it: server-only, so never a link target */
 const SERVER_TARGET = /^\$\.server(\.|$)/;
 
-/** True for a target a link may have: `$.data`, `$row`, `$.runtime.sync`, `$.runtime.requests`, or a node reference (`^name.path`, `.path`) */
+/** True for a target a link may have: `$.data`, `$row`, `$.runtime.sync`, `$.runtime.requests`, or a node reference (`#name.path`, `.path`) */
 function isLinkTarget(target: string): boolean {
     return DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target) || REQUESTS_TARGET.test(target) || NODE_REFERENCE.test(target);
 }
@@ -87,8 +87,8 @@ class Extractor {
     }
 
     /**
-     * A node reference as a state path. An exposed runtime property gives its runtime path (`^orders.current.customer`
-     * gives `$.runtime.nodes.app.…orders.current.customer`); a stored property its node's state path (`^notes.value`
+     * A node reference as a state path. An exposed runtime property gives its runtime path (`#orders.current.customer`
+     * gives `$.runtime.nodes.app.…orders.current.customer`); a stored property its node's state path (`#notes.value`
      * gives `$.screens.home.…notes.value`). Relative references resolve against the owner of the row template they sit
      * in, not the slot. Undefined when the node does not exist or its shape has no such property, or the property is
      * content or a runtime property it does not expose. Without a library the reference stays as written
@@ -148,12 +148,12 @@ class Extractor {
 
 /**
  * Collects every `<-key` property of a resolved tree and returns the tree without them. A target must start
- * with `$.data` or `$row`, or be a node reference (`^name.path`, `.path`) to an exposed runtime property;
+ * with `$.data` or `$row`, or be a node reference (`#name.path`, `.path`) to an exposed runtime property;
  * anything else (`..x`, `$.app…`) is `SUI-LINK-TARGET`.
  *
  * With `options.library` a node reference is resolved against the tree: an exposed runtime property to its runtime
- * path (`^orders.current` gives `$.runtime.nodes.app.…orders.current`), a stored property to the node's state path
- * (`^notes.value`); a node that does not exist, or whose shape has no such property (or it is content, or a runtime
+ * path (`#orders.current` gives `$.runtime.nodes.app.…orders.current`), a stored property to the node's state path
+ * (`#notes.value`); a node that does not exist, or whose shape has no such property (or it is content, or a runtime
  * property it does not expose), is `SUI-LINK-MISSING`. A resolved reference carries `allowMissing`, and an exposed one
  * `exposed`, since the component creates the property after links are applied (see `applyLinks`). Inside a row template relative references resolve
  * against the node that owns the template. Without a library node references are returned as written. `$row` targets are returned

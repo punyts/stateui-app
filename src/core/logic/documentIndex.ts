@@ -15,7 +15,7 @@ const FIELD = /Field$/;
 
 /** What hosts need from the document to run logic: node references, form fields and the values `reset` writes */
 export interface LogicIndex {
-    /** `^name.path` as a state path: the one node whose key or composed name is `name`, then the steps below it */
+    /** `#name.path` as a state path: the one node whose key or composed name is `name`, then the steps below it */
     resolve(reference: string): string | undefined;
     /** Why a reference does not resolve: no node has the name, or several do (with their paths) */
     explain(reference: string): string | undefined;
@@ -124,7 +124,7 @@ export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, 
     return {
         explain(reference) {
             const parsed = parseTarget(reference);
-            if (parsed?.form !== 'named') return 'it is not a node reference (^name or ^name.path)';
+            if (parsed?.form !== 'named') return 'it is not a node reference (#name or #name.path)';
             const named = namedFrames(parsed.name);
             if (named.length === 0) return `no node is named "${parsed.name}"`;
             if (named.length > 1) {

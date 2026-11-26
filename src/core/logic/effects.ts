@@ -82,7 +82,7 @@ const PRIMARY_KEY = (value: JsonValue | undefined): string | undefined =>
 export function createEffectRunner(effects: Readonly<Record<string, LogicEffect>>, deps: EffectDeps): EffectRunner {
     const { host } = deps;
     const states: EffectState[] = Object.entries(effects).map(([name, effect]) => ({ name, effect, seen: false, cache: new Map() }));
-    const at = (path: string): string => (path.startsWith('^') ? (host.resolve?.(path) ?? path) : path);
+    const at = (path: string): string => (path.startsWith('#') ? (host.resolve?.(path) ?? path) : path);
     const status = (state: EffectState, value: Omit<LogicEffectStatus, 'at'>): LogicWrite => ({ path: at(state.effect.status), value: { ...value, at: deps.now() } as unknown as JsonValue });
 
     /** The record view's records property and key field */

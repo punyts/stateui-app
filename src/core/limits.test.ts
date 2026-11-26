@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';
-import { PREFIXES, RESERVED_KEYS } from './types.js';
+import { META_KEYS, PREFIXES, RESERVED_KEYS } from './types.js';
 import type { AppDocument, JsonObject, Node } from './types.js';
 
 function flatApp(count: number): Node {
@@ -113,6 +113,7 @@ describe('closed limits', () => {
 describe('reserved vocabulary', () => {
     it('names the reserved keys and prefixes', () => {
         expect(Object.values(RESERVED_KEYS)).toEqual(['component', 'children', 'layout', 'placement', 'theme', 'on']);
-        expect(PREFIXES).toEqual({ content: '_', link: '<-', reserved: '__' });
+        expect(PREFIXES).toEqual({ content: '_', link: '<-', meta: '@', reserved: '__' });
+        expect(Object.values(META_KEYS)).toEqual(['@id', '@local', '@secret', '@transient']);
     });
 });

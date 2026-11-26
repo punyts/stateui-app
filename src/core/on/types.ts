@@ -33,7 +33,7 @@ export const COMMAND_KEYS = ['command', 'target', 'value', 'from'] as const;
  * For `navigate`, `target` is the screen name and `value` the params, where a `$row` or `$row.path` value is read
  * from the record the slot shows.
  * When `value` is absent, `emit` sends the event's own payload. `from` takes the place of `value`: a path in any target
- * form (`$.data.x`, `^name.path`, `.path`, `$row.path`) whose current value is the argument, so `set` copies a value
+ * form (`$.data.x`, `#name.path`, `.path`, `$row.path`) whose current value is the argument, so `set` copies a value
  */
 export interface OnCommand {
     command: string;

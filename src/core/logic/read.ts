@@ -78,7 +78,7 @@ const REQUIRED: Record<LogicCommand['command'], readonly ('target' | 'from' | 'i
 const PATH_KEYS = ['target', 'from', 'into'] as const;
 
 export interface ReadLogicOptions {
-    /** Resolves a node reference (`^name.path`) to a state path; without it references are not checked */
+    /** Resolves a node reference (`#name.path`) to a state path; without it references are not checked */
     resolve?(reference: string): string | undefined;
     /** Why a reference does not resolve (no node or several have its name), for the error */
     explain?(reference: string): string | undefined;
@@ -159,7 +159,7 @@ class Reader {
 
     /** A value string that looks like a path with a template in it reads nothing: it is text */
     textPath(value: JsonValue | undefined, path: string): void {
-        if (typeof value === 'string' && (value.startsWith('$.') || value.startsWith('^')) && value.includes('{{')) {
+        if (typeof value === 'string' && (value.startsWith('$.') || value.startsWith('#')) && value.includes('{{')) {
             this.warnings.push(buildError('SUI-LOGIC-TEXT-PATH', { target: value, path, statePath: path }));
         } else if (Array.isArray(value)) {
             value.forEach((item, index) => this.textPath(item, `${path}.${index}`));
@@ -184,7 +184,7 @@ class Reader {
         const bad = (): void => {
             this.errors.push(buildError('SUI-LOGIC-PATH', { target: text, path, statePath: path }));
         };
-        if (text.startsWith('^')) {
+        if (text.startsWith('#')) {
             if (this.options.resolve && !text.includes('{') && this.options.resolve(text) === undefined) {
                 const why = this.options.explain?.(text);
                 this.errors.push(buildError('SUI-LOGIC-PATH', { target: why === undefined ? text : `${text} (${why})`, path, statePath: path }));
@@ -426,8 +426,8 @@ class Reader {
 
     /** A path a table reads or writes: a state path (with the table's captures) or a node reference */
     private tablePath(text: JsonValue | undefined, at: string, captures: readonly string[]): text is string {
-        if (typeof text !== 'string' || text === '' || !(text.startsWith('$.') || text.startsWith('^'))) {
-            this.shape(at, 'a path must be a state path ("$.data.x") or a node reference ("^name.x")');
+        if (typeof text !== 'string' || text === '' || !(text.startsWith('$.') || text.startsWith('#'))) {
+            this.shape(at, 'a path must be a state path ("$.data.x") or a node reference ("#name.x")');
             return false;
         }
         this.statePath(text, at, captures);

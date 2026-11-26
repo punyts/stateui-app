@@ -197,13 +197,13 @@ store alias (`store.link`) of its target, so reads, writes and change events fol
 - **`extractLinks(resolvedTree, { path? })`** returns `{ tree, links, linkedPaths, errors }`. `links` holds
   `{ statePath, key, target }` for every `<-key` (in nodes and in nested objects such as map items; `on` entries are
   skipped), `tree` is a copy without them. A target must start with `$.data` or `$row`, be the sync status (`$.runtime.sync`, `.mode`,
-  `.status` or `.waiting`), be the requests (`$.runtime.requests`), or be a node reference (`^name.path`, `.path`) to a stored property (a field's `value`) or an exposed runtime property; `$.server` or a path below it is `SUI-LINK-SERVER`
+  `.status` or `.waiting`), be the requests (`$.runtime.requests`), or be a node reference (`#name.path`, `.path`) to a stored property (a field's `value`) or an exposed runtime property; `$.server` or a path below it is `SUI-LINK-SERVER`
   (server-only), anything else is `SUI-LINK-TARGET`, an empty key is `SUI-NODE-NAME`. `linkedPaths` lists every linked property path (`statePath.key`); locale overlays and state snapshots exclude
   them.
-- **Node references.** `^name.path` (nearest ancestor, the node itself included, named `name` or an instance of composed
-  component `name`) and `.path` (own subtree) may be a link target when the property they reach is `exposed` in that
-  node's shape: `"<-value": "^orders.current.customer"`. With `options.library` (and `instances`, the `resolveNode`
-  result) `extractLinks` resolves the reference to the runtime path, `^orders.current` giving
+- **Node references.** `#name.path` (nearest ancestor, the node itself included, whose id is `name`, or an instance of
+  composed component `name`; a node's id is its `@id`, otherwise its key) and `.path` (own subtree) may be a link target when the property they reach is `exposed` in that
+  node's shape: `"<-value": "#orders.current.customer"`. With `options.library` (and `instances`, the `resolveNode`
+  result) `extractLinks` resolves the reference to the runtime path, `#orders.current` giving
   `$.runtime.nodes.app.…orders.current`. A node that does not exist, or whose shape has no such exposed property (not
   exposed, or not there at all), is `SUI-LINK-MISSING` with the state path of the link. `..x`, absolute `$.app` targets
   and any other form are `SUI-LINK-TARGET`. Without a library references are returned as written. Inside a row
@@ -241,7 +241,7 @@ A command object is `{ command, target?, value? }`. `value` is the command's arg
 | `request.reject` | none | the id, or `{ id, note }` |
 | a component command | a node; absent means the node itself | the argument |
 
-Targets: `^name.path` (nearest node, starting with the node itself, whose key is `name` or that is an instance of
+Targets: `#name.path` (nearest node, starting with the node itself, whose id (`@id`, otherwise its key) is `name` or that is an instance of
 composed component `name`, then the path below it), `.path` (own subtree), `$parent` (nearest ancestor whose component
 declares the command), `$row` / `$row.path` (the record a row template's slot shows) and `$.app…` (absolute; in a
 screen, `$.screens.{name}…` paths of that screen name nodes too, while in the app node's `on` they are plain state paths). Dot
@@ -252,7 +252,7 @@ climbing (`..x`) is rejected.
 "$.data.selected", "value": "$row.id" }` writes the id of the record the slot shows and `{ "command": "delete", "target":
 "$row" }` is a component command handled by the node that owns the template (the nearest node of its chain whose shape
 declares the command). Outside a row template `$row` is `SUI-ON-TARGET` (and `SUI-LINK-ROW` from `validateNode`). Other
-relative targets (`^name.path`, `.path`) inside a row template resolve against the owning node's `$.app` path, never
+relative targets (`#name.path`, `.path`) inside a row template resolve against the owning node's `$.app` path, never
 against the slot's runtime path. `resolveTarget(target, chain, rootPath, rowPath?)` takes the row alias path (any marker
 when validating) and `findRowProvider` picks the owner for a command aimed at `$row`.
 
@@ -295,7 +295,7 @@ Order of checks:
    tree: every component resolves, composed cycles, reserved names, each
    merged node against its shape (`validateNode`), and `<-` links. A `$.data` target must exist, a node reference must
    reach a property its component declares that is neither content nor a runtime property it does not expose
-   (`SUI-LINK-MISSING`). A stored property links to the node's own state path (`^notes.value` to
+   (`SUI-LINK-MISSING`). A stored property links to the node's own state path (`#notes.value` to
    `$.screens.home.…notes.value`), an exposed one to its runtime branch; a loop of links is refused when they are applied.
 6. The registered plug-in validators, whose errors are merged.
 
@@ -394,7 +394,7 @@ The node is the one at the element's state path. An event the node's `on` does n
 `detail.shape` naming the shape's state path (`detail` is `{ shape, key, x, y }`, the position in drawing units). The
 dispatcher listens for the events of root and shape components alike. When `detail.shape` is below the state path of the
 element that raised the event, the `on` entry of that shape node runs, with the frames from the root down to it, so
-`^name` and `.path` resolve as for any node; a `shape` outside that subtree (or the element's own path) runs nothing and
+`#name` and `.path` resolve as for any node; a `shape` outside that subtree (or the element's own path) runs nothing and
 is reported as `SUI-RUN-DRAW` with the element's path. A copy of a `drawRepeat` (`<repeat>.rows.<key>`, or a shape inside
 one) is not a node: the entry of the matching node of the repeat's row template runs (`<repeat>.row…`), with `$row` at the
 record (`<repeat>.records` resolved, plus the record's key in the set as `recordKeys` gives it) and relative targets
@@ -450,9 +450,9 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
       "transitions": [
         { "from": "editing", "when": { "path": "$.data.flags.saved", "is": true }, "to": "saving",
           "do": [ { "command": "set", "target": "$.data.flags.saved", "value": false },
-                  { "command": "save-data", "into": "$.data.contacts", "value": { "form": "^entry" }, "as": "save" } ] },
+                  { "command": "save-data", "into": "$.data.contacts", "value": { "form": "#entry" }, "as": "save" } ] },
         { "from": "saving", "when": { "result": "save", "is": "accepted" }, "to": "editing",
-          "do": [ { "command": "reset", "target": "^entry" }, { "command": "notify", "target": "toast", "value": { "text": "Added" } } ] },
+          "do": [ { "command": "reset", "target": "#entry" }, { "command": "notify", "target": "toast", "value": { "text": "Added" } } ] },
         { "from": "saving", "when": { "result": "save", "is": "rejected" }, "to": "editing" }
       ]
     }
@@ -460,7 +460,7 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   "rules": {
     "count": { "when": { "path": "$.data.contacts" }, "do": [ { "command": "set", "target": "$.data.stats.count", "value": "{{ size($.data.contacts) }}" } ] },
     "noDrafts": { "when": { "path": "$.data.contacts.{id}", "if": "$trigger.name == 'draft'" }, "do": [ { "command": "reject", "reason": "Draft is not a name" } ] },
-    "window": { "when": { "path": "$.screens.main.children.contacts.window" }, "do": [ { "command": "query", "from": "$.data.contacts", "sort": "name", "window": "$trigger", "into": "^contacts" } ] }
+    "window": { "when": { "path": "$.screens.main.children.contacts.window" }, "do": [ { "command": "query", "from": "$.data.contacts", "sort": "name", "window": "$trigger", "into": "#contacts" } ] }
   }
 }
 ```
@@ -504,7 +504,7 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   after a chain settles, never inside one, and `engine.effects()` reports each one's token, running call and cache size.
   ```json
   "fetchOrders": { "request": "$.data.orders.request", "run": "$.functions.host.ordersFetch", "status": "$.data.orders.status",
-    "records": { "into": "$.data.orders.records", "key": "id" }, "window": "^orderList", "cache": 20 }
+    "records": { "into": "$.data.orders.records", "key": "id" }, "window": "#orderList", "cache": 20 }
   ```
 - **Commands.** `set`, `merge`, `copy`, `toggle`, `increment`, `reset` (the document values with shape defaults),
   `save-data` (a record into a data map, with a new key or `key`), `delete-data`, `pull-data` (a record into a form),
@@ -517,9 +517,9 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   below) and `reject`. A rule whose only command is `reject` is a **guard**:
   it refuses the change. Trigger and command paths may be under `$.app`, `$.data`, `$.server`, `$.screens` and `$.route`.
 - **Values.** `{{ expression }}` templates; `$.path` (a screen name with a dash is read whole, so
-  `$.screens.new-order.total` is that screen's, `withScreenNames`), `^node.path` (a node key or composed name, unique in the current
+  `$.screens.new-order.total` is that screen's, `withScreenNames`), `#node.path` (a node key or composed name, unique in the current
   screen, else in the app node; while validating, in the app node, else among the screens), `$trigger`,
-  `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "^node" }`, `{ "record": "$.data…" }` and
+  `$previous`, the table inputs, `$result`, `$key`, `$record` and the captures; the sources `{ "form": "#node" }`, `{ "record": "$.data…" }` and
   `{ "pick": … }`. Functions: `size`, `keys`, `values`, `sum`, `min`, `max`, `count`, `includes`, `first`,
   `last`, `empty`, `coalesce`, `lower`, `upper`, `trim`, `join`, `round`, `floor`, `ceil`, `abs`, `number`,
   `string`, `slice`, `random`, `now`, `today`. `slice(value, start, end?)` cuts a string, or the items of an array or
@@ -662,7 +662,7 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
 - **Logic modules** (`src/core/logic/modules.ts`). A module is `{ needs, params, machines?, rules?, tables? }`: logic
   over data, with the data it needs by binding name (`{ "bag": { "model": "bag-line" } }`) and typed params.
   `readModule(json)` reads the units as `readLogic` does (`ReadLogicOptions.root` `$`, so paths are the module's
-  own) and the needs and param declarations as `SUI-LOGIC-SHAPE`. A module names no node: a `^name` reference, a
+  own) and the needs and param declarations as `SUI-LOGIC-SHAPE`. A module names no node: a `#name` reference, a
   `$.app` or `$.screens` path and `navigate` are `SUI-MODULE-NODE`. A `$.data` path whose first segment is not a
   need (or is a capture, `*` or missing) is `SUI-MODULE-NEEDS`; `$params.{name}` of an undeclared param is
   `SUI-MODULE-PARAM`. `increment` and `save-data` without `key` are `SUI-MODULE-ONCE` warnings, because a module
@@ -857,7 +857,7 @@ Code is in `src/runtime/`. `protocol` holds the closed set of messages and the v
 
 **`startRuntime(window, parent, nonce, library, { host?, componentOverlays?, route?, functions? })`** listens for `message` events and acts only when `event.source === parent` (pass `window.parent`), the message validates and carries the nonce. Everything else is dropped and counted in `handle.stats().dropped` (`invalid`, `unknown`, `oversized`, `unhandled`, `foreign`). `host` defaults to `window.document.body`. `route` (false by default) is `MountOptions.route` for the apps it mounts: the runtime runs in a frame, where a history entry would also move the host page's back button, and the frame's fragment holds the nonce. `functions` are the catalogs it installs (`MountOptions.functions`).
 - `load` calls `mountApp` in the message's `mode` (default `standalone`; a running app is disposed first), which sets `$.runtime.sync` to `{ mode, status, waiting: 0 }` (status `standalone`, or `connecting` until the host writes it). The `state` is applied (its `data` replaces `$.data` whole, as it is a copy of it; its `app` articulation is laid over the document) and `icons` written to `$.runtime.icons` before the first render; articulation values for nodes that no longer exist and for runtime properties are skipped, and a declared property the document leaves unset (the `items` and `total` logic fills into a list) is set. In the same task, before anything paints, it applies `active` (theme overlays by kind, as a `theme` message would, but not reported as changes) and `locale`, and then navigates to `open` (`{ screen, params? }`), a route change it reports. Then it posts `ready`. A document that does not mount posts `error` with the errors and no `ready`.
-- `write` sets or removes the paths and merges `icons`. A value that is a whole node (an object with a `component`) below `$.app` is mounted as a load would mount it (`MountedApp.writeNode`): component defaults and composed components resolved, its `<-` links applied with `^name` references resolved against the whole app, and the links of the node it replaces removed; removing a node removes its links (`removeNode`). To swap a component or change a link, write the node whole: a `component` or `<-` key written on its own is a plain store write. Writes are sync writes (`SYNC_ORIGIN` of `@punyts/state-sync`): they post no `change`. A write the store refuses posts `SUI-RUN-WRITE`. The host's sync client writes the server's changes and the sync status this way.
+- `write` sets or removes the paths and merges `icons`. A value that is a whole node (an object with a `component`) below `$.app` is mounted as a load would mount it (`MountedApp.writeNode`): component defaults and composed components resolved, its `<-` links applied with `#name` references resolved against the whole app, and the links of the node it replaces removed; removing a node removes its links (`removeNode`). To swap a component or change a link, write the node whole: a `component` or `<-` key written on its own is a plain store write. Writes are sync writes (`SYNC_ORIGIN` of `@punyts/state-sync`): they post no `change`. A write the store refuses posts `SUI-RUN-WRITE`. The host's sync client writes the server's changes and the sync status this way.
 - `event` raises an app event (`sync.rejected`, from the sync client's `onRejected`, or `sync.requested`, from its `onRequests`) with `MountedApp.raise`: the root node's `on` entry for it runs with the payload as `context.payload`, so `{ command: 'emit', target: 'rejected' }` passes `{ path, reason, code }` on; with no entry for `sync.rejected` the app's `toasts` show the `SYNC_NOTICES` message of its code. `validateOn` accepts the app events on the root node only.
 - `ping` is answered with `pong`.
 - `command` (`target`, `command`, `value?`) runs a component command with the command runner the dispatcher uses for `on`. `target` is the state path of a node (`$.app…`, or `$.screens.{name}…` for a node of a screen); its component must declare `command` and its element must handle it (`element.commands`). An unknown target posts `SUI-RUN-ON-TARGET`, an undeclared or unhandled command `SUI-RUN-ON-COMMAND`, and nothing changes. `navigate` takes a screen name as `target` and the params as `value` and runs `MountedApp.navigate`; a refusal posts `SUI-RUN-ON-COMMAND` with the reason. The other system commands (`set`, `toggle`, `emit` and the `request.*` commands) are refused with `SUI-RUN-ON-COMMAND`: a write goes through `write`, `emit` would send the minion's own event back to it, and the minion does not decide requests. `$.route` and `$.screens` are not synced branches yet: their changes are posted but the host drops them, and `write` cannot reach them.

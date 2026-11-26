@@ -87,7 +87,7 @@ export function isRouteRefusal(value: RouteState | { reason: string }): value is
 
 /** True when a param value is only known when the command runs: a template, a reference or a `$` value */
 function isDynamic(value: JsonValue): boolean {
-    return typeof value === 'string' && (value.startsWith('$') || value.startsWith('^') || value.includes('{{'));
+    return typeof value === 'string' && (value.startsWith('$') || value.startsWith('#') || value.includes('{{'));
 }
 
 /** What a document check finds wrong with a `navigate` command: the code and the reason */

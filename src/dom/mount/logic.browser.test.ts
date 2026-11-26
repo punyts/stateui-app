@@ -58,7 +58,7 @@ const COUNT = {
             when: { path: '$.data.items' },
             do: [
                 { command: 'set', target: '$.data.stats.count', value: '{{ size($.data.items) }}' },
-                { command: 'set', target: '^count.text', value: '{{ size($.data.items) }} items' }
+                { command: 'set', target: '#count.text', value: '{{ size($.data.items) }} items' }
             ]
         }
     }
@@ -103,7 +103,7 @@ describe('browser logic', () => {
         host = document_().body.appendChild(document_().createElement('div'));
         const logic = {
             computes: { double: { inputs: { qty: '$.data.qty' }, run: '$.functions.host.double', outputs: { out: '$.data.stats.count' } } },
-            rules: { label: { when: { path: '$.data.stats.count' }, do: [{ command: 'set', target: '^count.text', value: '{{ $.functions.host.stars($.data.stats.count) }}' }] } }
+            rules: { label: { when: { path: '$.data.stats.count' }, do: [{ command: 'set', target: '#count.text', value: '{{ $.functions.host.stars($.data.stats.count) }}' }] } }
         };
         app = mountApp(host, documentWith(logic), library, {}, {
             functions: [catalogOf('host', [
@@ -211,7 +211,7 @@ describe('browser logic', () => {
             rules: {
                 local: { runs: 'browser', when: { path: '$.data.items' }, do: [{ command: 'set', target: '$.data.stats.count', value: '{{ size($.data.items) }}' }] },
                 remote: { runs: 'server', when: { path: '$.data.items' }, do: [{ command: 'set', target: '$.data.qty', value: 9 }] },
-                plain: { when: { path: '$.data.items' }, do: [{ command: 'set', target: '^count.text', value: 'server' }] }
+                plain: { when: { path: '$.data.items' }, do: [{ command: 'set', target: '#count.text', value: 'server' }] }
             }
         };
         const mounted = mount(documentWith(logic), 'full');

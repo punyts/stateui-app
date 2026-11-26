@@ -1,4 +1,5 @@
 import { isNodeValue, isObject } from '../resolve/merge.js';
+import { META_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 import type { Frame, Located, ParsedTarget, TreeNode } from './types.js';
 
@@ -36,9 +37,15 @@ function walk(start: TreeNode, startPath: string, segments: readonly string[]): 
     return isNodeValue(current) ? { kind: 'node', path, node } : undefined;
 }
 
-/** Every node below `node` (itself included) whose key is `name`: slot properties and `children` entries */
+/** A node's id: its `@id` when it has one, otherwise its key */
+export function nodeId(node: TreeNode, key: string): string {
+    const id = (node as Record<string, unknown>)[META_KEYS.id];
+    return typeof id === 'string' ? id : key;
+}
+
+/** Every node below `node` (itself included) whose id is `name`: slot properties and `children` entries */
 function nodesNamed(node: TreeNode, path: string, key: string, name: string, found: { node: TreeNode; path: string }[]): void {
-    if (key === name) found.push({ node, path });
+    if (nodeId(node, key) === name) found.push({ node, path });
     for (const [property, value] of Object.entries(node)) {
         if (isNodeValue(value)) nodesNamed(value, `${path}.${property}`, property, name, found);
         else if (property === 'children' && isObject(value)) {
@@ -53,8 +60,8 @@ function nodesNamed(node: TreeNode, path: string, key: string, name: string, fou
  * Resolves a parsed target against the resolved tree. `chain` runs from the root of the validated tree down to the
  * node that holds the `on` entry (which is its last frame); `rootPath` is the state path of the first frame.
  *
- * - Named node: the nearest frame, the node itself included, whose key is `name` or whose `instances` list
- *   `name`; when no ancestor has the name, the one node of the tree with that key (a sibling's form, a drawer
+ * - Named node (`#name`): the nearest frame, the node itself included, whose id (its `@id`, otherwise its key) is
+ *   `name` or whose `instances` list `name`; when no ancestor has the name, the one node of the tree with that id (a sibling's form, a drawer
  *   elsewhere). Then the steps below it.
  * - Own subtree: the steps below the node itself.
  * - Absolute: `$.app...` is walked from the root; any other `$.` path is `state` and not checked.
@@ -85,7 +92,7 @@ export function resolveTarget(
     if (target.form === 'named') {
         for (let index = chain.length - 1; index >= 0; index -= 1) {
             const frame = chain[index] as Frame;
-            if (frame.key === target.name || frame.instances.includes(target.name)) {
+            if (nodeId(frame.node, frame.key) === target.name || frame.instances.includes(target.name)) {
                 return walk(frame.node, frame.path, target.segments);
             }
         }

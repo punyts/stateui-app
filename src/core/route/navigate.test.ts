@@ -237,7 +237,7 @@ describe('the document check of navigate', () => {
     });
 });
 
-describe('^key in a logic index with screens', () => {
+describe('#key in a logic index with screens', () => {
     const app = DOCUMENT as unknown as AppDocument;
     // An app node that holds nodes, to show the order the index looks in
     const shell = resolveNode({ component: 'panel', children: { title: { component: 'text' }, banner: { component: 'text' } } } as Node, LIBRARY, {});
@@ -247,16 +247,16 @@ describe('^key in a logic index with screens', () => {
     it('should find the node of the current screen before the app node, and a key only in the app node there', () => {
         const index = createLogicIndex(shell, LIBRARY, undefined, { trees, current: () => 'home' });
 
-        expect(index.resolve('^title')).toBe('$.screens.home.children.title');
-        expect(index.resolve('^banner')).toBe('$.app.children.banner');
+        expect(index.resolve('#title')).toBe('$.screens.home.children.title');
+        expect(index.resolve('#banner')).toBe('$.app.children.banner');
     });
 
     it('should prefer the app node without a current screen, and find a key only in a screen there', () => {
         const index = createLogicIndex(shell, LIBRARY, undefined, { trees });
         const elsewhere = createLogicIndex(shell, LIBRARY, undefined, { trees, current: () => 'product' });
 
-        expect(index.resolve('^title')).toBe('$.app.children.title');
-        expect(index.resolve('^go')).toBe('$.screens.home.children.go');
-        expect(elsewhere.resolve('^title')).toBe('$.app.children.title');
+        expect(index.resolve('#title')).toBe('$.app.children.title');
+        expect(index.resolve('#go')).toBe('$.screens.home.children.go');
+        expect(elsewhere.resolve('#title')).toBe('$.app.children.title');
     });
 });

@@ -68,7 +68,7 @@ const LIBRARY: ComponentLibrary = {
             footer: {
                 component: 'panel',
                 children: {
-                    save: { component: 'button', on: { press: { command: 'submit', target: '^orderEditor.body.children.form' } } },
+                    save: { component: 'button', on: { press: { command: 'submit', target: '#orderEditor.body.children.form' } } },
                     cancel: { component: 'button', on: { press: { command: 'close', target: '$parent' } } }
                 }
             }
@@ -402,7 +402,7 @@ describe('validateDocument', () => {
     });
 
     it('should report SUI-LINK-MISSING for a node reference that does not resolve', () => {
-        const document = doc({ component: 'panel', children: { a: { component: 'text', '<-label': '^nobody.label' } } });
+        const document = doc({ component: 'panel', children: { a: { component: 'text', '<-label': '#nobody.label' } } });
 
         const errors = validateDocument(document, LIBRARY).errors;
 
@@ -414,7 +414,7 @@ describe('validateDocument', () => {
             component: 'panel',
             children: {
                 orders: { component: 'records' },
-                detail: { component: 'text', '<-label': '^app.children.orders.current.customer' }
+                detail: { component: 'text', '<-label': '#app.children.orders.current.customer' }
             }
         });
 
@@ -427,9 +427,9 @@ describe('validateDocument', () => {
             component: 'panel',
             children: {
                 a: { component: 'records' },
-                b: { component: 'text', '<-label': '^app.children.a.nope' },
-                c: { component: 'text', '<-label': '^app.children.a.concealed' },
-                d: { component: 'text', '<-label': '^app.children.a.title' }
+                b: { component: 'text', '<-label': '#app.children.a.nope' },
+                c: { component: 'text', '<-label': '#app.children.a.concealed' },
+                d: { component: 'text', '<-label': '#app.children.a.title' }
             }
         });
 
@@ -468,7 +468,7 @@ describe('validateDocument', () => {
                     component: 'records',
                     columns: {
                         status: {
-                            cell: { component: 'text', '<-label': '$row.status', '<-_value': '^orders.current.status' }
+                            cell: { component: 'text', '<-label': '$row.status', '<-_value': '#orders.current.status' }
                         },
                         bad: { cell: { component: 'text', nope: 1 } }
                     }

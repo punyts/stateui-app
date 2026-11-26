@@ -9,7 +9,7 @@ const TREE: Node = {
     '<-value': '$.data.order.customer',
     children: {
         total: { component: 'text', '<-_text': '$.data.order.total', on: { press: [{ command: 'set', target: '$row.x' }] } },
-        detail: { component: 'field', '<-value': '^orders.current.customer' },
+        detail: { component: 'field', '<-value': '#orders.current.customer' },
         local: { component: 'field', '<-value': '.sibling.value' }
     }
 };
@@ -30,7 +30,7 @@ describe('extractLinks', () => {
         expect(result.links).toEqual([
             { statePath: '$.app', key: 'value', target: '$.data.order.customer' },
             { statePath: '$.app.children.total', key: '_text', target: '$.data.order.total' },
-            { statePath: '$.app.children.detail', key: 'value', target: '^orders.current.customer' },
+            { statePath: '$.app.children.detail', key: 'value', target: '#orders.current.customer' },
             { statePath: '$.app.children.local', key: 'value', target: '.sibling.value' }
         ]);
         expect(JSON.stringify(result.tree)).not.toContain('<-');
@@ -148,7 +148,7 @@ describe('applyLinks', () => {
     });
 
     it('reports an unresolved node reference as missing', () => {
-        const errors = applyLinks(makeStore(), [{ statePath: '$.app', key: 'value', target: '^orders.current.x' }]);
+        const errors = applyLinks(makeStore(), [{ statePath: '$.app', key: 'value', target: '#orders.current.x' }]);
 
         expect(errors[0]?.code).toBe('SUI-LINK-MISSING');
     });

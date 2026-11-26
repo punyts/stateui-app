@@ -37,7 +37,7 @@ function extract(app: Node) {
 const ORDERS = '$.runtime.nodes.app.children.orders';
 
 describe('extractLinks with node references', () => {
-    it('should resolve ^name.path to the runtime path of an exposed property', () => {
+    it('should resolve #name.path to the runtime path of an exposed property', () => {
         // Arrange
         const app: Node = {
             component: 'panel',
@@ -48,7 +48,7 @@ describe('extractLinks with node references', () => {
         };
         (app.children as Record<string, Node>).orders = {
             component: 'records',
-            children: { detail: { component: 'descriptionList', '<-value': '^orders.current.customer' } }
+            children: { detail: { component: 'descriptionList', '<-value': '#orders.current.customer' } }
         } as Node;
 
         // Act
@@ -75,7 +75,7 @@ describe('extractLinks with node references', () => {
                 orders: {
                     component: 'records',
                     children: {
-                        detail: { component: 'descriptionList', '<-value': '^orders.current.customer', '<-other': '^orders.current' }
+                        detail: { component: 'descriptionList', '<-value': '#orders.current.customer', '<-other': '#orders.current' }
                     }
                 } as Node
             }
@@ -116,7 +116,7 @@ describe('extractLinks with node references', () => {
             component: 'panel',
             children: {
                 notes: { component: 'records', title: 'Draft' },
-                preview: { component: 'descriptionList', '<-value': '^notes.title' }
+                preview: { component: 'descriptionList', '<-value': '#notes.title' }
             }
         });
         const store = createStore<unknown>({ app: result.tree, data: {}, runtime: { nodes: {} } });
@@ -142,8 +142,8 @@ describe('extractLinks with node references', () => {
             component: 'records',
             '<-title': '.concealed',
             children: {
-                a: { component: 'descriptionList', '<-value': '^records.title', '<-other': '^nobody.current' },
-                b: { component: 'descriptionList', '<-value': '^app.nope' }
+                a: { component: 'descriptionList', '<-value': '#records.title', '<-other': '#nobody.current' },
+                b: { component: 'descriptionList', '<-value': '#app.nope' }
             }
         });
 
@@ -170,9 +170,9 @@ describe('extractLinks with node references', () => {
     });
 
     it('should return node references as written without a library', () => {
-        const { links } = extractLinks({ component: 'x', '<-a': '^orders.current' });
+        const { links } = extractLinks({ component: 'x', '<-a': '#orders.current' });
 
-        expect(links[0]?.target).toBe('^orders.current');
+        expect(links[0]?.target).toBe('#orders.current');
     });
 
     it('should resolve relative references in a row template against the owner', () => {
@@ -202,7 +202,7 @@ describe('extractLinks with node references', () => {
             { path: '$.app', key: 'app', node: resolved.node as never, instances: [] },
             { path: '$.app.children.orders', key: 'orders', node: (resolved.node.children as never as Record<string, never>).orders, instances: [] }
         ];
-        const slot: Node = { component: 'descriptionList', '<-value': '^orders.current.id', '<-other': '$row.name' };
+        const slot: Node = { component: 'descriptionList', '<-value': '#orders.current.id', '<-other': '$row.name' };
 
         // Act
         const result = resolveRowLinks(slot, `${ORDERS}.slots.3.row`, {
@@ -223,7 +223,7 @@ describe('a link by node reference', () => {
         const app: Node = {
             component: 'panel',
             children: {
-                orders: { component: 'records', children: { detail: { component: 'descriptionList', '<-value': '^orders.current.customer' } } }
+                orders: { component: 'records', children: { detail: { component: 'descriptionList', '<-value': '#orders.current.customer' } } }
             }
         };
         const { links } = extract(app);

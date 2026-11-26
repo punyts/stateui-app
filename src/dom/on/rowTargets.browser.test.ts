@@ -237,7 +237,7 @@ describe('$row and relative targets in a row template in Chromium', () => {
         const { store, button, onError } = mountRows({
             press: [
                 { command: 'set', target: '.picked', value: 'own' },
-                { command: 'set', target: '^orders.picked', value: 'named' }
+                { command: 'set', target: '#orders.picked', value: 'named' }
             ]
         });
 

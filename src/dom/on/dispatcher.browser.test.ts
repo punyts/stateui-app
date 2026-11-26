@@ -235,7 +235,7 @@ describe('on dispatch in Chromium', () => {
                     component: 'button',
                     on: {
                         press: [
-                            { command: 'set', target: '^nobody.enabled', value: false },
+                            { command: 'set', target: '#nobody.enabled', value: false },
                             { command: 'set', target: '$.data.step', value: 'ran' }
                         ]
                     }
@@ -817,14 +817,14 @@ describe('shape events from a drawing in Chromium', () => {
         expect(fixture.store.get('$.data.picked')).toBe('S');
     });
 
-    it("should run the entry of a shape inside a copy's group, with $row and a ^name target resolving through the repeat's frames", () => {
+    it("should run the entry of a shape inside a copy's group, with $row and a #name target resolving through the repeat's frames", () => {
         // Arrange
         const dot = {
             component: 'dot',
             on: {
                 press: [
                     { command: 'set', target: '$.data.picked', value: '$row.label' },
-                    { command: 'set', target: '^map.title', from: '$row.label' }
+                    { command: 'set', target: '#map.title', from: '$row.label' }
                 ]
             }
         };

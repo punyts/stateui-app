@@ -23,7 +23,7 @@ export class CommandFailure extends Error {
 export interface CommandContext {
     chain: readonly Frame[];
     /**
-     * The frames `^name.path` and `.path` resolve against: the chain itself, or inside a row template only the
+     * The frames `#name.path` and `.path` resolve against: the chain itself, or inside a row template only the
      * frames down to the node that owns the template (the slot's own nodes live in the runtime branch)
      */
     relative: readonly Frame[];

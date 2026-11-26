@@ -120,7 +120,7 @@ describe('validateOn inside and outside a row template', () => {
             row: press({
                 press: [
                     { command: 'set', target: '.picked', value: 'x' },
-                    { command: 'set', target: '^orders.picked', value: 'x' }
+                    { command: 'set', target: '#orders.picked', value: 'x' }
                 ]
             })
         });

@@ -9,7 +9,7 @@ export interface Link {
     statePath: string;
     /** The property name without the `<-` prefix */
     key: string;
-    /** `$.data...`, `$row...`, a node reference (`^name.path`, `.path`) or a runtime path (`$.runtime...`) */
+    /** `$.data...`, `$row...`, a node reference (`#name.path`, `.path`) or a runtime path (`$.runtime...`) */
     target: string;
     /** Set on the `$row.x` links of a slot: a missing field reads as `undefined` instead of failing the link */
     allowMissing?: boolean;
@@ -37,7 +37,7 @@ export interface ExtractResult {
 export interface ReferenceOptions {
     /** The components of the document. Without it node references are returned as written and not checked */
     library?: ComponentLibrary;
-    /** `ResolveResult.instances`: where composed components were expanded, for `^name` references; empty when absent */
+    /** `ResolveResult.instances`: where composed components were expanded, for `#name` references; empty when absent */
     instances?: Readonly<Record<string, string[]>>;
     /**
      * The chain of the node that owns the extracted tree, the owner last. Set for a row template, whose relative
@@ -52,7 +52,7 @@ export interface ExtractOptions extends ReferenceOptions {
     /**
      * The resolved nodes from `$.app` down to the nearest node above the tree, outermost first, when the tree is one
      * node of a larger app (a node written after mount). Node references then reach outside the tree as they would
-     * in the whole app; the first ancestor's node should hold the tree at `path`, so a `^name` search finds it there
+     * in the whole app; the first ancestor's node should hold the tree at `path`, so a `#name` search finds it there
      */
     ancestors?: readonly { node: Node; path: string }[];
 }

@@ -30,7 +30,7 @@ const LIBRARY: ComponentLibrary = {
                 component: 'toolbar',
                 children: {
                     cancel: { component: 'button', _title: 'Cancel' },
-                    confirm: { component: 'button', _title: 'Delete', on: { press: [{ command: 'close', target: '^confirmDialog' }] } }
+                    confirm: { component: 'button', _title: 'Delete', on: { press: [{ command: 'close', target: '#confirmDialog' }] } }
                 }
             },
             exposes: { _title: 'Dialog title' }
@@ -85,7 +85,7 @@ describe('resolveNode', () => {
         expect(node.body).toEqual({ component: 'text', _text: 'Delete order 5?', mood: 'plain' });
         expect(node.footer.children.confirm._title).toBe('Remove');
         expect(node.footer.children.confirm.look).toBe('solid');
-        expect(node.footer.children.confirm.on).toEqual({ press: [{ command: 'close', target: '^confirmDialog' }] });
+        expect(node.footer.children.confirm.on).toEqual({ press: [{ command: 'close', target: '#confirmDialog' }] });
         expect(node.footer.children.cancel._title).toBe('Cancel');
     });
 

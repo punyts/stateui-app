@@ -24,7 +24,7 @@ const WHOLE_PARAM = /^\$params\.([A-Za-z_][A-Za-z0-9_]*)$/;
 const NODE_PATH = /\$\.(app|screens)(?![A-Za-z0-9_])/;
 /** A `$.data` path and its first segment: a name, a `{capture}`, `*`, or nothing for `$.data` itself */
 const DATA_PATH = /\$\.data(?![A-Za-z0-9_])(?:\.(\{[A-Za-z_][A-Za-z0-9_]*\}|\*|[A-Za-z0-9_-]+))?/g;
-/** The keys of a command whose text is a path, where a `^name` node reference may stand */
+/** The keys of a command whose text is a path, where a `#name` node reference may stand */
 const PATH_KEYS = ['target', 'from', 'into'];
 /** The keys whose whole string is an expression without `{{ }}` */
 const EXPRESSION_KEYS = ['if', 'filter'];
@@ -98,7 +98,7 @@ function checkUnits(units: JsonObject, needs: readonly string[], params: readonl
     eachString(units, '$', '', (text, path, key) => {
         const node = NODE_PATH.exec(text);
         if (node) errors.push(buildError('SUI-MODULE-NODE', { path, target: `$.${node[1] as string}`, statePath: path }));
-        else if (text.startsWith('^') && (PATH_KEYS.includes(key) || isUnitPath(path))) {
+        else if (text.startsWith('#') && (PATH_KEYS.includes(key) || isUnitPath(path))) {
             errors.push(buildError('SUI-MODULE-NODE', { path, target: text, statePath: path }));
         }
         for (const match of text.matchAll(DATA_PATH)) {

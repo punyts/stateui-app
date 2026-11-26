@@ -163,7 +163,7 @@ export interface DispatcherOptions {
     host: Element;
     store: Store<unknown>;
     library: ComponentLibrary;
-    /** `ResolveResult.instances`: where composed components were expanded, for `^name` targets; empty when absent */
+    /** `ResolveResult.instances`: where composed components were expanded, for `#name` targets; empty when absent */
     instances?: Readonly<Record<string, string[]>>;
     /** The state path of the root node; `$.app` when absent */
     rootPath?: string;

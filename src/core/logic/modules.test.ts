@@ -134,7 +134,7 @@ describe('readModule', () => {
             rules: {
                 shell: { when: { path: '$.data.bag' }, do: [{ command: 'set', target: '$.app.children.total.value', value: 1 }] },
                 screen: { when: { path: '$.data.bag' }, do: [{ command: 'set', target: '$.data.totals.x', value: '{{ $.screens.cart.root.title }}' }] },
-                reference: { when: { path: '$.data.bag' }, do: [{ command: 'set', target: '^total.value', value: 1 }] },
+                reference: { when: { path: '$.data.bag' }, do: [{ command: 'set', target: '#total.value', value: 1 }] },
                 away: { when: { path: '$.data.bag' }, do: [{ command: 'navigate', target: 'home' }] }
             }
         };

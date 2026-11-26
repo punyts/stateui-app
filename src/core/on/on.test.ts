@@ -38,7 +38,7 @@ const LIBRARY: ComponentLibrary = {
             footer: {
                 component: 'toolbar',
                 children: {
-                    save: { component: 'button', on: { press: { command: 'submit', target: '^orderEditor.body.children.form' } } },
+                    save: { component: 'button', on: { press: { command: 'submit', target: '#orderEditor.body.children.form' } } },
                     cancel: { component: 'button', on: { press: { command: 'close', target: '$parent' } } }
                 }
             }
@@ -124,7 +124,7 @@ describe('validateOn', () => {
                     children: {
                         box: {
                             component: 'toolbar',
-                            children: { f: { component: 'form' }, b: { component: 'button', on: { press: { command: 'submit', target: '^box.children.f' } } } }
+                            children: { f: { component: 'form' }, b: { component: 'button', on: { press: { command: 'submit', target: '#box.children.f' } } } }
                         }
                     }
                 }
@@ -142,7 +142,7 @@ describe('validateOn', () => {
                     component: 'toolbar',
                     children: {
                         f: { component: 'form' },
-                        box: { component: 'toolbar', children: { b: { component: 'button', on: { press: { command: 'submit', target: '^box.children.f' } } } } }
+                        box: { component: 'toolbar', children: { b: { component: 'button', on: { press: { command: 'submit', target: '#box.children.f' } } } } }
                     }
                 }
             }
@@ -154,7 +154,7 @@ describe('validateOn', () => {
     });
 
     it('should report an unknown ancestor key as SUI-ON-TARGET with the entry path', () => {
-        const errors = check(button({ press: { command: 'submit', target: '^nobody.f' } }));
+        const errors = check(button({ press: { command: 'submit', target: '#nobody.f' } }));
 
         expect(errors).toHaveLength(1);
         expect(errors[0]).toMatchObject({ code: 'SUI-ON-TARGET', statePath: '$.app.children.b.on.press' });
@@ -318,15 +318,15 @@ describe('validateOn', () => {
 
 describe('parseTarget and readEntry', () => {
     it('should read the four target forms', () => {
-        expect(parseTarget('^a.b.c')).toEqual({ form: 'named', name: 'a', segments: ['b', 'c'] });
-        expect(parseTarget('^a')).toEqual({ form: 'named', name: 'a', segments: [] });
+        expect(parseTarget('#a.b.c')).toEqual({ form: 'named', name: 'a', segments: ['b', 'c'] });
+        expect(parseTarget('#a')).toEqual({ form: 'named', name: 'a', segments: [] });
         expect(parseTarget('.a.b')).toEqual({ form: 'own', segments: ['a', 'b'] });
         expect(parseTarget('$parent')).toEqual({ form: 'parent' });
         expect(parseTarget('$.app.x')).toEqual({ form: 'absolute', segments: ['app', 'x'] });
     });
 
     it('should refuse climbing and odd forms', () => {
-        for (const text of ['..x', '...x', '.', '$.', '$.a..b', 'x', '$row.', '$row..x', '^', '^a..b']) {
+        for (const text of ['..x', '...x', '.', '$.', '$.a..b', 'x', '$row.', '$row..x', '^', '#a..b']) {
             expect(parseTarget(text)).toBeUndefined();
         }
     });

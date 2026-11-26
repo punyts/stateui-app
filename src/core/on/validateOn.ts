@@ -52,7 +52,7 @@ function ownLinks(node: TreeNode): [key: string, target: string][] {
 /** What stands for the slot's `row` alias while validating: the alias only exists at run time */
 const ROW_MARKER = '$row';
 
-/** The frames `^name.path` and `.path` resolve against: the whole chain, or only up to the owner inside a row template */
+/** The frames `#name.path` and `.path` resolve against: the whole chain, or only up to the owner inside a row template */
 function relativeChain(scope: Scope): readonly Frame[] {
     return scope.owner === undefined ? scope.chain : scope.chain.slice(0, scope.owner + 1);
 }
@@ -318,7 +318,7 @@ class OnValidator {
  *   path or `$row.path`
  *
  * Target rules: a component command without a target acts on the node itself; `set` and `toggle` target a property
- * (`$.data.name`, `.value`, `^form.children.name.value`); `emit` uses `target` as the event name and is not resolved.
+ * (`$.data.name`, `.value`, `#form.children.name.value`); `emit` uses `target` as the event name and is not resolved.
  * A node of an unknown component is skipped for event, command and property checks. Pure; never throws.
  * `tree` is the result of `resolveNode`
  */

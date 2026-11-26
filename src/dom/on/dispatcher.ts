@@ -264,7 +264,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
      * raised the event (`raisedPath`; `path` is the same node as the dispatcher reads it, its runtime twin for one shown
      * through an alias); one outside it is refused and reported as `SUI-RUN-DRAW`. A shape node runs with the frames
      * down to it. A copy of a repeat (`<repeat>.rows.<key>`) is not a node: the entry of the repeat's row template runs,
-     * with `$row` pointing at the copy's record and `^name` and `.path` resolving against the frames down to the repeat,
+     * with `$row` pointing at the copy's record and `#name` and `.path` resolving against the frames down to the repeat,
      * as the document check reads a row template
      */
     function runShape(type: string, payload: unknown, raisedPath: string, path: string, shape: string): void {

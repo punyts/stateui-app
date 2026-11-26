@@ -3,7 +3,7 @@ import type { JsonValue } from '../types.js';
 import { COMMAND_KEYS, SYSTEM_COMMANDS } from './types.js';
 import type { OnCommand, ParsedTarget, SystemCommand } from './types.js';
 
-const NAMED = /^\^([^.^$\s]+)((?:\.[^.\s]+)*)$/;
+const NAMED = /^#([^.#$\s]+)((?:\.[^.\s]+)*)$/;
 const STEP = /^[^.\s]+$/;
 
 /** True when `command` is one of `SYSTEM_COMMANDS`: `set`, `toggle`, `emit`, `navigate` and the `request.*` commands */
@@ -51,7 +51,7 @@ export function readEntry(value: unknown): OnCommand[] | undefined {
 }
 
 /**
- * Reads a target text: `^name.path` (named ancestor), `.path` (own subtree), `$parent`, `$row` and `$row.path` (the
+ * Reads a target text: `#name.path` (named ancestor), `.path` (own subtree), `$parent`, `$row` and `$row.path` (the
  * record of a row template) and `$.path` (absolute).
  * Dot climbing (`..x`), empty steps and any other form return undefined
  */
@@ -68,7 +68,7 @@ export function parseTarget(text: string): ParsedTarget | undefined {
         return segments.every((step) => STEP.test(step)) ? { form: 'absolute', segments } : undefined;
     }
 
-    if (text.startsWith('^')) {
+    if (text.startsWith('#')) {
         const match = NAMED.exec(text);
         if (!match) return undefined;
         const name = match[1] as string;

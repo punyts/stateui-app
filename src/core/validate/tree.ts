@@ -5,6 +5,7 @@ import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { nodeChildren, validateNode } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
+import { META_KEYS } from '../types.js';
 import type { JsonValue, Node } from '../types.js';
 import { dataPathExists } from './document.js';
 import type { ValidateDocumentOptions } from './types.js';
@@ -75,6 +76,8 @@ function withoutRuntimeDefaults(shape: Shape, node: Node): Node {
 
 class TreeChecker {
     readonly errors: BuildError[] = [];
+    /** The path of each `@id` found so far: an id names one node of the tree */
+    private readonly ids = new Map<string, string>();
     constructor(
         private readonly library: ComponentLibrary,
         private readonly instances: Readonly<Record<string, string[]>>,
@@ -99,6 +102,12 @@ class TreeChecker {
     /** Checks every node against its shape; `insideRow` is true inside a `row: true` slot, where `$row` is legal */
     visit(node: Node, path: string, insideRow: boolean): void {
         const shape = shapeOf(this.library, node.component);
+        const id = (node as Record<string, JsonValue>)[META_KEYS.id];
+        if (typeof id === 'string') {
+            const other = this.ids.get(id);
+            if (other === undefined) this.ids.set(id, path);
+            else this.errors.push(buildError('SUI-NODE-ID-TWICE', { name: id, path, other, statePath: path }));
+        }
         if (shape) this.addNodeErrors(validateNode(shape, withoutRuntimeDefaults(shape, node), path, { ...this.options, insideRow }));
         for (const child of nodeChildren(node, path, shape)) {
             const refused = childRefusal(this.library, child.node.component, child.accepts);

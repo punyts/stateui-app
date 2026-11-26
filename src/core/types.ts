@@ -103,12 +103,29 @@ export const RESERVED_KEYS = {
     on: 'on'
 } as const;
 
-/** Property name prefixes: content, links, and `__` kept for future instructions (an error today) */
+/** Property name prefixes: content, links, metadata, and `__` kept for future instructions (an error today) */
 export const PREFIXES = {
     content: '_',
     link: '<-',
+    meta: '@',
     reserved: '__'
 } as const;
+
+/**
+ * The metadata keys a node of a definition may carry (docs/design/state-definitions-and-instances.md): `@id` names
+ * the node for `#name` references; `@local`, `@secret` and `@transient` mark the node's own properties (`true` for
+ * all of them, or a list of names) whose changes stay on the device, reach only the server's logic, or are synced but
+ * never stored. Metadata is read from the definition only: an instance never sets it, and it is never state
+ */
+export const META_KEYS = {
+    id: '@id',
+    local: '@local',
+    secret: '@secret',
+    transient: '@transient'
+} as const;
+
+/** The metadata key names as a list */
+export const META_KEY_NAMES: readonly string[] = Object.values(META_KEYS);
 
 /** The reserved key names as a list */
 export const RESERVED_KEY_NAMES: readonly string[] = Object.values(RESERVED_KEYS);
