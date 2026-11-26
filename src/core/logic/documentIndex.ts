@@ -111,14 +111,19 @@ export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, 
 
     const allNamed = (name: string): Frame[] => [...frames.values()].filter((frame) => nodeId(frame.node, frame.key) === name || frame.instances.includes(name));
 
-    /** The frames a name means: those of the first place (current screen, app node, all screens) that has any */
+    /** The frames a name means: those of the first place (the current screen, the app node, then the other screens) that has any */
     const namedFrames = (name: string): Frame[] => {
         const named = allNamed(name);
         const current = screens?.current?.();
         const places =
             current === undefined
                 ? [named.filter((frame) => screenOf(frame.path) === undefined), named.filter((frame) => screenOf(frame.path) !== undefined)]
-                : [named.filter((frame) => screenOf(frame.path) === current), named.filter((frame) => screenOf(frame.path) === undefined)];
+                : [
+                      named.filter((frame) => screenOf(frame.path) === current),
+                      named.filter((frame) => screenOf(frame.path) === undefined),
+                      // An id is one name in the app: logic that runs while another screen shows still finds the node
+                      named.filter((frame) => screenOf(frame.path) !== undefined && screenOf(frame.path) !== current)
+                  ];
         return places.find((place) => place.length > 0) ?? [];
     };
 

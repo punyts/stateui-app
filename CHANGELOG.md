@@ -7,6 +7,10 @@
   write is `optional: true` (a copy of a page that dropped the node). `pathsOfId`
   (`core/on`) lists the paths of an id. Test: `runtime/createRuntime.browser.test.ts` ("should write the state of a
   node by its id …").
+- **Fix: logic finds a node of a screen that is not showing.** `#name` in logic looked in the current screen and the
+  app node only, so a rule that writes a node of another screen (a figure on the home screen that follows the orders)
+  validated and then failed while a different screen showed. It now looks in the other screens last. Test:
+  `core/route/navigate.test.ts` ("should find a node of another screen …").
 - **Fix: logic finds a node by its `@id`.** `#name` in a rule, table, compute or effect matched the node's key only,
   so a node whose `@id` differs from its key validated and then failed when the logic ran (`logic.failed`, "does not
   resolve"). The logic index names a node as links and `on` targets do: by its `@id`, otherwise its key. Test:

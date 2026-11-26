@@ -259,4 +259,15 @@ describe('#key in a logic index with screens', () => {
         expect(index.resolve('#go')).toBe('$.screens.home.children.go');
         expect(elsewhere.resolve('#title')).toBe('$.app.children.title');
     });
+
+    it('should find a node of another screen while a different screen shows, after the current screen and the app node', () => {
+        // Arrange
+        const elsewhere = createLogicIndex(shell, LIBRARY, undefined, { trees, current: () => 'product' });
+
+        // Act
+        const found = elsewhere.resolve('#go');
+
+        // Assert
+        expect(found).toBe('$.screens.home.children.go');
+    });
 });
