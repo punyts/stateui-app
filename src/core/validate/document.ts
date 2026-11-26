@@ -71,6 +71,13 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
         }
     }
 
+    for (const key of ['local', 'secret'] as const) {
+        if (!Object.hasOwn(document, key)) continue;
+        for (const problem of ephemeralProblems(document[key] as JsonValue, `$.${key}`)) {
+            errors.push(buildError('SUI-DOC-MARKED', { path: problem.path, reason: problem.reason, statePath: problem.path }));
+        }
+    }
+
     if (Object.hasOwn(document, 'icons')) {
         for (const problem of appIconProblems(document['icons'], '$.icons')) {
             errors.push(buildError('SUI-DOC-ICON', { path: problem.path, reason: problem.reason, statePath: problem.path }));

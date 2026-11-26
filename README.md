@@ -845,6 +845,13 @@ A person who may only request changes sends ordinary changes that wait for the o
 The runtime posts `decide`. `$.server` is
 server-only: a link into it is `SUI-LINK-SERVER`, and outside `full` mode any mention of it is `SUI-DOC-SERVER`.
 
+A node marks how its own state syncs with metadata keys (docs/design/state-definitions-and-instances.md):
+`"@transient": true` is shared with everyone using the app and never stored, `"@local": ["collapsed"]` stays on the
+device and is never sent, `"@secret": ["value"]` goes to server logic only while online and is never stored, logged or
+relayed. `true` covers the node's whole branch, a list the named properties. `metadataPaths(document)` collects them,
+and assembly writes them into the document: the `@transient` paths join `ephemeral`, and `local` and `secret` are
+document keys the host hands to its sync client and authority.
+
 ## Preview runtime and message protocol
 
 Code is in `src/runtime/`. `protocol` holds the closed set of messages and the validator; `createRuntime` is the runtime apart from how its messages travel, and `startRuntime` runs it inside the preview iframe (E7.1).

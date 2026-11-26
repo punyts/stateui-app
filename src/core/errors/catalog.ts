@@ -46,6 +46,7 @@ export const ERROR_CATALOG = {
     'SUI-DOC-SCREEN': { template: 'Screen entry at {path} is not valid: {reason}' },
     'SUI-DOC-ICON': { template: 'App icon at {path} is not valid: {reason}' },
     'SUI-DOC-EPHEMERAL': { template: 'Ephemeral path at {path} is not valid: {reason}' },
+    'SUI-DOC-MARKED': { template: 'Marked path at {path} is not valid: {reason}' },
     'SUI-DOC-ORDER': { template: 'Key "{key}" at {path} is integer-like and would be reordered; use a prefixed key' },
     'SUI-DOC-LIMIT-NODES': { template: 'The document has {actual} nodes; the limit is {limit}' },
     'SUI-DOC-LIMIT-DEPTH': { template: 'Nodes nest {actual} levels deep at {path}; the limit is {limit}' },

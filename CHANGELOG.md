@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **Node metadata compiles into the document's path lists** (docs/design/state-definitions-and-instances.md).
+  `metadataPaths(document)` (`core/meta/metadataPaths.ts`) gives the paths the nodes of the app and screens mark with
+  `@local`, `@secret` and `@transient`: the node's branch for `true`, the named properties for a list. Assembly
+  merges the `@transient` paths into `ephemeral` and writes the new document keys `local` and `secret`, which the
+  validator checks like `ephemeral` (`SUI-DOC-MARKED`). Tests: `core/meta/metadataPaths.test.ts`,
+  `core/assemble/assemble.test.ts` ("should compile the metadata of the nodes into the local, secret and ephemeral
+  paths of the document").
 - **Node references are `#name`, and a node can carry an `@id`** (docs/design/state-definitions-and-instances.md).
   `#signIn.busy` replaces `^signIn.busy` in links, `on` targets and logic. A node's id is its `@id` when it has one,
   otherwise its key, so a node can move or be re-keyed and keep the name logic uses. Two nodes of one tree with the

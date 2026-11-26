@@ -63,6 +63,10 @@ export interface AppDocument {
     icons?: Record<string, AppIcon>;
     /** State paths whose changes reach everyone using the app but are never stored (a pointer, presence); `*` matches one segment */
     ephemeral?: string[];
+    /** The paths the nodes mark `@local` (`meta/metadataPaths.ts`), written by assembly: they stay on the device */
+    local?: string[];
+    /** The paths the nodes mark `@secret`, written by assembly: they go to server logic only, never stored or relayed */
+    secret?: string[];
     /** Alias to another app's state path, or another owner's shared dataset, it mirrors at `$.external.{alias}` (`uses.external`), read only */
     external?: Record<string, { app: string; path: string } | { owner: string; dataset: string }>;
 }
@@ -91,7 +95,7 @@ export function isAppEvent(name: unknown): name is string {
     return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
 }
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons', 'ephemeral', 'external'] as const;
+export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons', 'ephemeral', 'local', 'secret', 'external'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {

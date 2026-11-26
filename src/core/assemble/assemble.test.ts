@@ -85,6 +85,26 @@ describe('assembleApp', () => {
         expect(validateApp(app, STORE_PARTS, STORE_LIBRARY).errors).toEqual([]);
     });
 
+    it('should compile the metadata of the nodes into the local, secret and ephemeral paths of the document', () => {
+        // Arrange
+        const app = copy(STORE_APP) as unknown as { screens: { home: { root: JsonObject } }; ephemeral?: string[] };
+        app.ephemeral = ['$.data.cursor'];
+        app.screens.home.root['@local'] = ['title'];
+        const children = app.screens.home.root['children'] as JsonObject;
+        (children['intro'] as JsonObject)['@transient'] = true;
+        (children['header'] as JsonObject)['@secret'] = true;
+
+        // Act
+        const { document, errors } = assembleApp(app as unknown as AppBlueprint, STORE_PARTS);
+
+        // Assert
+        expect(errors).toEqual([]);
+        expect(document.local).toEqual(['$.screens.home.title']);
+        expect(document.secret).toEqual(['$.screens.home.children.header']);
+        expect(document.ephemeral).toEqual(['$.data.cursor', '$.screens.home.children.intro']);
+        expect(validateApp(app as unknown as AppBlueprint, STORE_PARTS, STORE_LIBRARY).errors).toEqual([]);
+    });
+
     it('should carry used owner components as bare trees with their exposes, and leave unused ones out', () => {
         const { document } = assembleApp(STORE_APP, STORE_PARTS);
 
