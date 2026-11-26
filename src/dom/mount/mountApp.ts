@@ -80,7 +80,13 @@ function baseOptions(library: ComponentLibrary, componentTokens: readonly Compon
     };
 }
 
-function initialState(document: AppDocument, app: Node, mode: AppMode, screens: Record<string, Node> | undefined, embedded: boolean): AppState {
+/** A random id for a mount whose host names no device: 16 hex digits */
+function randomDevice(): string {
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function initialState(document: AppDocument, app: Node, mode: AppMode, screens: Record<string, Node> | undefined, embedded: boolean, device: string): AppState {
     const route = initialRoute(document);
     return {
         ...(screens === undefined ? {} : { screens }),
@@ -95,6 +101,7 @@ function initialState(document: AppDocument, app: Node, mode: AppMode, screens: 
             // The document's own icons; the runtime adds the icon set's that the host sends
             icons: cloneJson((document.icons ?? {}) as unknown as JsonObject) as JsonObject,
             empty: {},
+            device,
             sync: { mode, status: mode === 'standalone' ? 'standalone' : 'connecting', waiting: 0 },
             requests: {},
             ...(embedded ? { embedded: true } : {})
@@ -283,7 +290,7 @@ export function mountApp(
         restoreRowLinks(links.tree, rows, path);
         screenTrees = { ...screenTrees, [name]: links.tree };
     }
-    const state = initialState(document, extracted.tree, mode, screenTrees, options.embedded === true);
+    const state = initialState(document, extracted.tree, mode, screenTrees, options.embedded === true, options.device ?? randomDevice());
     let instanceActive: Record<string, string> = {};
     if (options.instance !== undefined) {
         const laid = layInstance(

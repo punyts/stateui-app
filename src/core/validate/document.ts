@@ -4,7 +4,7 @@ import { isNodeValue, isObject } from '../resolve/merge.js';
 import { isPartName } from '../blueprint/names.js';
 import { FIELD_TYPES } from '../blueprint/types.js';
 import { appIconProblems } from '../icons/appIcons.js';
-import { ephemeralProblems } from '../ephemeral/ephemeral.js';
+import { ephemeralProblems, MAX_MARKED_PATHS } from '../ephemeral/ephemeral.js';
 import { DOCUMENT_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 
@@ -66,14 +66,14 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     errors.push(...checkScreens(document));
 
     if (Object.hasOwn(document, 'ephemeral')) {
-        for (const problem of ephemeralProblems(document['ephemeral'] as JsonValue, '$.ephemeral')) {
+        for (const problem of ephemeralProblems(document['ephemeral'] as JsonValue, '$.ephemeral', MAX_MARKED_PATHS)) {
             errors.push(buildError('SUI-DOC-EPHEMERAL', { path: problem.path, reason: problem.reason, statePath: problem.path }));
         }
     }
 
     for (const key of ['local', 'secret'] as const) {
         if (!Object.hasOwn(document, key)) continue;
-        for (const problem of ephemeralProblems(document[key] as JsonValue, `$.${key}`)) {
+        for (const problem of ephemeralProblems(document[key] as JsonValue, `$.${key}`, MAX_MARKED_PATHS)) {
             errors.push(buildError('SUI-DOC-MARKED', { path: problem.path, reason: problem.reason, statePath: problem.path }));
         }
     }

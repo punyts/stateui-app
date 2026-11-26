@@ -284,7 +284,7 @@ export interface LogicChange {
     previous?: JsonValue;
     /**
      * Written from outside the logic (a person's change, a tool's write): it fires the units whose trigger is its own
-     * path even when it set the value the path already held, as a press that sets `clicked` to true does every time.
+     * path even when it set the value the path already held, as a person setting the same value again does.
      * The logic's own writes are never explicit, so a unit that writes the value its trigger holds does not run again
      */
     explicit?: boolean;

@@ -849,9 +849,15 @@ server-only: a link into it is `SUI-LINK-SERVER`, and outside `full` mode any me
 A node marks how its own state syncs with metadata keys (docs/design/state-definitions-and-instances.md):
 `"@transient": true` is shared with everyone using the app and never stored, `"@local": ["collapsed"]` stays on the
 device and is never sent, `"@secret": ["value"]` goes to server logic only while online and is never stored, logged or
-relayed. `true` covers the node's whole branch, a list the named properties. `metadataPaths(document)` collects them,
-and assembly writes them into the document: the `@transient` paths join `ephemeral`, and `local` and `secret` are
-document keys the host hands to its sync client and authority.
+relayed. `true` covers the node's whole branch, a list the named properties. A component's `state.json` marks its own
+properties the same way (`"@transient": ["pressed"]` on the button), and every node of it marks them; the catalog
+carries them as `shape.marks`. `metadataPaths(document, library?)` collects both, and assembly (given `library`)
+writes them into the document: the `@transient` paths join `ephemeral`, and `local` and `secret` are document keys
+the host hands to its sync client and authority. An app declares at most `MAX_EPHEMERAL_PATHS` (50) ephemeral paths;
+the assembled lists hold at most `MAX_MARKED_PATHS` (2000).
+
+`$.runtime.device` names the device the app runs on (`MountOptions.device`, a random id when the host names none). A
+component that records an act writes it with the time, as a button's `pressed` does.
 
 ## Preview runtime and message protocol
 

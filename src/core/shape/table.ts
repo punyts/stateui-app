@@ -687,5 +687,22 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
             }
             shape.purposes = [...(value as string[])];
         }
-    }
+    },
+    // After `properties`, which the marks name
+    ...(['local', 'secret', 'transient'] as const).map(
+        (mark): KeyRule<Shape> => ({
+            name: `@${mark}`,
+            type: 'array',
+            required: false,
+            rule(value, shape, context) {
+                const names = value as JsonValue[];
+                const valid = names.length > 0 && names.every((name) => typeof name === 'string' && Object.hasOwn(shape.properties, name)) && new Set(names).size === names.length;
+                if (!valid) {
+                    context.errors.push(invalid(context, `@${mark}`));
+                    return;
+                }
+                shape.marks = { ...shape.marks, [mark]: [...(names as string[])] };
+            }
+        })
+    )
 ];

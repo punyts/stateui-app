@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **A component's definition marks its own properties** (docs/design/state-definitions-and-instances.md). A
+  `state.json` may list `@local`, `@secret` or `@transient` properties it declares (`Shape.marks`, carried in the
+  catalog); `metadataPaths(document, library)` adds them for every node of the component, and `assembleApp` passes
+  its `library`. The assembled `ephemeral`, `local` and `secret` lists hold up to `MAX_MARKED_PATHS` (2000); an
+  app's own `ephemeral` stays at 50. Tests: `src/core/shape/shape.test.ts`, `src/core/meta/metadataPaths.test.ts`.
+- **`$.runtime.device`**. `MountOptions.device` names the device the app runs on, a random 16-digit hex id when
+  absent; a button's press records it. Test: `src/dom/mount/mountApp.browser.test.ts`.
 - **`undo` and `redo` commands** (docs/design/state-definitions-and-instances.md, instances). The system commands
   `undo` and `redo` take no target or value (`HISTORY_COMMANDS`; validation refuses one that carries any as
   `SUI-ON-SHAPE`) and call the new `DispatchHooks.travel`; the runtime posts them as the outbound message

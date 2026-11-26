@@ -36,6 +36,11 @@ export interface AppState {
         icons: JsonObject;
         /** The shared empty record that record views and `current` point at; protected, so nothing writes into it */
         empty: JsonObject;
+        /**
+         * Which device the app runs on (`MountOptions.device`): a component that records an act writes it with the time,
+         * as a button's `pressed` does, so two devices pressing at once are two changes
+         */
+        device: string;
         /** The sync status the host writes: the mode, `standalone`, `connecting`, `online` or `offline`, and the changes waiting */
         sync: { mode: AppMode; status: string; waiting: number };
         /** The requests that wait for the owner, as the host's sync client knows them, by id (docs/design/statenet-requests.md) */
@@ -84,6 +89,11 @@ export interface MountStep {
 export interface MountOptions {
     /** How the app keeps its state; `standalone` when absent */
     mode?: AppMode;
+    /**
+     * The device the app runs on, written to `$.runtime.device` (a host with a sync client passes its client id); a
+     * random id made for the mount when absent
+     */
+    device?: string;
     /**
      * Whether an app with screens keeps `$.route` in the URL fragment of its window (`#/product?id=p42`): read on start,
      * pushed on navigation, followed on the back button and a hash change. True when absent; a host that embeds the app

@@ -1,7 +1,7 @@
 export { VERSION } from './version.js';
 export { ERROR_CATALOG, ERROR_PREFIXES, TEMPLATE_PLACEHOLDERS, buildError, isValid } from './errors/index.js';
 export type { BuildError, CatalogEntry, ErrorCode, ErrorDetails, Severity, TemplatePlaceholder } from './errors/index.js';
-export { ephemeralProblems, MAX_EPHEMERAL_PATHS } from './ephemeral/ephemeral.js';
+export { ephemeralProblems, MAX_EPHEMERAL_PATHS, MAX_MARKED_PATHS } from './ephemeral/ephemeral.js';
 export { metadataPaths } from './meta/metadataPaths.js';
 export type { MetadataPaths } from './meta/metadataPaths.js';
 export type { ExternalUse } from './blueprint/types.js';

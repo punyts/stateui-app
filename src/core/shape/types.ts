@@ -155,6 +155,18 @@ export interface Shape {
     category?: ComponentCategory;
     /** Three to eight one-line phrases of what the component is for, searched first; absent until curated */
     purposes?: string[];
+    /**
+     * The properties the component marks `@local`, `@secret` or `@transient` (docs/design/state-definitions-and-instances.md):
+     * every node of the component marks them, as if the node listed them itself. Absent when it marks none
+     */
+    marks?: ShapeMarks;
+}
+
+/** The properties a component's definition marks, by mark */
+export interface ShapeMarks {
+    local?: string[];
+    secret?: string[];
+    transient?: string[];
 }
 
 /** Longest allowed summary, in characters */

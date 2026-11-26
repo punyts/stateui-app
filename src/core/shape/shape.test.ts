@@ -38,6 +38,19 @@ const FULL = {
 };
 
 describe('parseShape', () => {
+    it('should read the properties a component marks @local, @secret or @transient, and refuse a mark of a property it lacks', () => {
+        // Arrange
+        const properties = { pressed: { type: 'object', default: {} }, value: { type: 'string', default: '' } };
+
+        // Act
+        const shape = shapeOf({ properties, '@transient': ['pressed'], '@secret': ['value'] });
+        const refused = [parseCodes({ summary: 'A test component', properties, '@local': ['missing'] }), parseCodes({ summary: 'A test component', properties, '@transient': [] })];
+
+        // Assert
+        expect(shape.marks).toEqual({ transient: ['pressed'], secret: ['value'] });
+        expect(refused).toEqual([['SUI-BUILD-SHAPE'], ['SUI-BUILD-SHAPE']]);
+    });
+
     it('should read the construct-style format when every key is used', () => {
         const result = parseShape(JSON.stringify(FULL), FILE);
 

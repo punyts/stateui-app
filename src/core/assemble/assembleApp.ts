@@ -229,7 +229,7 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     if (Object.keys(assembler.composed).length > 0) document.composed = assembler.composed;
     if (Object.keys(logic).length > 0) document.logic = logic as unknown as JsonObject;
     // The nodes' metadata compiles into the path lists the sync layer reads: @transient joins the ephemeral paths
-    const marked = metadataPaths(document);
+    const marked = metadataPaths(document, options.library);
     const ephemeral = [...new Set([...(blueprint.ephemeral ?? []), ...marked.transient])];
     if (ephemeral.length > 0) document.ephemeral = ephemeral;
     if (marked.local.length > 0) document.local = marked.local;

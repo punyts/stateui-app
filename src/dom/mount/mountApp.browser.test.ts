@@ -176,6 +176,21 @@ describe('mountApp in Chromium', () => {
         expect(store?.get('$.runtime.empty')).toEqual({});
     });
 
+    it('should write the device the host names to $.runtime.device, and a random one when it names none', () => {
+        // Arrange
+        const named = freshHost();
+        const unnamed = freshHost();
+
+        // Act
+        const app = mountApp(named, { app: panel({}) }, library, {}, { device: 'client-7' });
+        const other = start(unnamed, { app: panel({}) });
+
+        // Assert
+        expect(app.store?.get('$.runtime.device')).toBe('client-7');
+        expect(other.store?.get('$.runtime.device')).toMatch(/^[0-9a-f]{16}$/);
+        app.dispose();
+    });
+
     it("should start $.runtime.icons with the document's own icons", () => {
         // Arrange
         const host = freshHost();
