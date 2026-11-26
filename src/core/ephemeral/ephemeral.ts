@@ -9,8 +9,8 @@ export const MAX_EPHEMERAL_PATHS = 50;
  */
 export const MAX_MARKED_PATHS = 2000;
 
-/** A "$." state path below `$.app`, `$.screens`, `$.data` or `$.raised`, whose segments may be `*` (any one) */
-const EPHEMERAL_PATH = /^\$\.(app|screens|data|raised)(\.[^.\s*]+|\.\*)*$/;
+/** A "$." state path below `$.app`, `$.screens`, `$.data`, `$.raised` or `$.peers`, whose segments may be `*` (any one) */
+const EPHEMERAL_PATH = /^\$\.(app|screens|data|raised|peers)(\.[^.\s*]+|\.\*)*$/;
 
 /** One problem of an app's `ephemeral` list: where it is and why */
 export interface EphemeralProblem {

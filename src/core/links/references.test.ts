@@ -28,6 +28,26 @@ const LIBRARY: ComponentLibrary = {
     descriptionList: { tier: 'root', tag: 'ui-description-list', shape: shapeOf({ value: { type: 'any' }, other: { type: 'any' } }) }
 };
 
+describe('extractLinks with $peers', () => {
+    it("should read what the peers have at a node's stored property from $.peers, and refuse one that is not stored", () => {
+        // Arrange
+        const app: Node = {
+            component: 'panel',
+            children: {
+                board: { component: 'descriptionList', '@id': 'board', '<-other': '$peers.value' },
+                list: { component: 'records', '<-title': '$peers#board.missing' }
+            }
+        };
+
+        // Act
+        const result = extract(app);
+
+        // Assert
+        expect(result.links).toEqual([{ statePath: '$.app.children.board', key: 'other', target: '$.peers.app__children__board__value', allowMissing: true }]);
+        expect(result.errors.map((error) => error.code)).toEqual(['SUI-LINK-MISSING']);
+    });
+});
+
 function extract(app: Node) {
     const resolved = resolveNode(app, LIBRARY);
     expect(resolved.errors).toEqual([]);

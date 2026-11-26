@@ -2,6 +2,7 @@ import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { parseTarget, resolveTarget } from '../on/index.js';
 import type { Frame, TreeNode } from '../on/index.js';
+import { peersPath } from '../meta/metadataPaths.js';
 import { entryShape } from '../resolve/index.js';
 import { isNodeValue, isObject } from '../resolve/merge.js';
 import { nodeChildren } from '../shape/index.js';
@@ -20,12 +21,15 @@ const SYNC_TARGET = /^\$\.runtime\.sync(\.(mode|status|waiting))?$/;
 const REQUESTS_TARGET = /^\$\.runtime\.requests$/;
 const ROW_TARGET = new RegExp(`^\\$row(\\.${SEGMENT})*$`);
 const NODE_REFERENCE = new RegExp(`^(#${SEGMENT}|)(\\.${SEGMENT})+$`);
+/** `$peers` and a node reference: what the peers of a shared branch have there (`$peers.mousePosition`) */
+const PEERS_TARGET = new RegExp(`^\\$peers(#${SEGMENT}|)(\\.${SEGMENT})+$`);
+const PEERS_ROOT = '$peers';
 /** `$.server` and the paths below it: server-only, so never a link target */
 const SERVER_TARGET = /^\$\.server(\.|$)/;
 
-/** True for a target a link may have: `$.data`, `$row`, `$.runtime.sync`, `$.runtime.requests`, or a node reference (`#name.path`, `.path`) */
+/** True for a target a link may have: `$.data`, `$row`, `$.runtime.sync`, `$.runtime.requests`, a node reference (`#name.path`, `.path`) or `$peers` and one */
 function isLinkTarget(target: string): boolean {
-    return DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target) || REQUESTS_TARGET.test(target) || NODE_REFERENCE.test(target);
+    return PEERS_TARGET.test(target) || DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target) || REQUESTS_TARGET.test(target) || NODE_REFERENCE.test(target);
 }
 
 /** The shape of a root component, if the library has one */
@@ -111,6 +115,23 @@ class Extractor {
         return { target: [`${located.path}.${located.property}`, ...located.rest].join('.'), stored: true };
     }
 
+    /**
+     * A `$peers` link: the reference after `$peers` must reach a stored property, and the link reads the map of what
+     * its peers have there, `$.peers.<path>` (`peersPath`), which the host writes. Missing until it does
+     */
+    private peers(path: string, key: string, target: string): void {
+        if (this.options.library === undefined) {
+            this.links.push({ statePath: path, key, target });
+            return;
+        }
+        const resolved = this.reference(target.slice(PEERS_ROOT.length));
+        if (resolved?.stored !== true) {
+            this.errors.push(buildError('SUI-LINK-MISSING', { target, path, statePath: path }));
+            return;
+        }
+        this.links.push({ statePath: path, key, target: peersPath(resolved.target), allowMissing: true });
+    }
+
     private record(path: string, key: string, target: JsonValue): void {
         if (key === '') {
             this.errors.push(buildError('SUI-NODE-NAME', { name: PREFIXES.link, path, statePath: path }));
@@ -127,6 +148,10 @@ class Extractor {
         }
         if (DATA_TARGET.test(target) || ROW_TARGET.test(target) || SYNC_TARGET.test(target)) {
             this.links.push({ statePath: path, key, target });
+            return;
+        }
+        if (PEERS_TARGET.test(target)) {
+            this.peers(path, key, target);
             return;
         }
         const resolved = this.reference(target);

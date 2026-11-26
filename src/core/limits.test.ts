@@ -114,6 +114,6 @@ describe('reserved vocabulary', () => {
     it('names the reserved keys and prefixes', () => {
         expect(Object.values(RESERVED_KEYS)).toEqual(['component', 'children', 'layout', 'placement', 'theme', 'on']);
         expect(PREFIXES).toEqual({ content: '_', link: '<-', meta: '@', reserved: '__' });
-        expect(Object.values(META_KEYS)).toEqual(['@id', '@local', '@secret', '@transient']);
+        expect(Object.values(META_KEYS)).toEqual(['@id', '@local', '@secret', '@transient', '@share']);
     });
 });

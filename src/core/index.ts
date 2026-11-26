@@ -2,7 +2,7 @@ export { VERSION } from './version.js';
 export { ERROR_CATALOG, ERROR_PREFIXES, TEMPLATE_PLACEHOLDERS, buildError, isValid } from './errors/index.js';
 export type { BuildError, CatalogEntry, ErrorCode, ErrorDetails, Severity, TemplatePlaceholder } from './errors/index.js';
 export { ephemeralProblems, MAX_EPHEMERAL_PATHS, MAX_MARKED_PATHS } from './ephemeral/ephemeral.js';
-export { metadataPaths } from './meta/metadataPaths.js';
+export { metadataPaths, peersPath } from './meta/metadataPaths.js';
 export type { MetadataPaths } from './meta/metadataPaths.js';
 export type { ExternalUse } from './blueprint/types.js';
 export type { EphemeralProblem } from './ephemeral/ephemeral.js';
@@ -11,6 +11,7 @@ export type { AppIcon, AppIconPath, AppIconProblem } from './icons/appIcons.js';
 export { FUNCTION_KINDS, FUNCTION_PATH, FunctionTable, HOST_GROUP, catalogOf, functionPaths, hostCatalog, isFunctionPath } from './functions/index.js';
 export type { FunctionCatalog, FunctionCode, FunctionEntry, FunctionKind, FunctionPointer, HostFunction, LoadedFunction } from './functions/index.js';
 export { MAX_DATA_BYTES, MAX_DEPTH, MAX_DOCUMENT_BYTES, MAX_NODES, checkLimits } from './limits.js';
+export type { PeerShare } from './types.js';
 export { APP_EVENTS, DOCUMENT_KEYS, META_KEYS, META_KEY_NAMES, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, SYNC_NOTICES, isAppEvent } from './types.js';
 export type { AppDocument, AppEventName, AppTheme, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {

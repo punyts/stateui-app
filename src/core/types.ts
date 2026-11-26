@@ -67,6 +67,8 @@ export interface AppDocument {
     local?: string[];
     /** The paths the nodes mark `@secret`, written by assembly: they go to server logic only, never stored or relayed */
     secret?: string[];
+    /** The branches the nodes share with peers (`@share`), written by assembly: the host fills each instance's `$.peers` */
+    share?: PeerShare[];
     /** Alias to another app's state path, or another owner's shared dataset, it mirrors at `$.external.{alias}` (`uses.external`), read only */
     external?: Record<string, { app: string; path: string } | { owner: string; dataset: string }>;
 }
@@ -95,7 +97,7 @@ export function isAppEvent(name: unknown): name is string {
     return typeof name === 'string' && ((APP_EVENTS as readonly string[]).includes(name) || NOTIFY_EVENT.test(name));
 }
 
-export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons', 'ephemeral', 'local', 'secret', 'external'] as const;
+export const DOCUMENT_KEYS = ['theme', 'themes', 'appThemes', 'locale', 'data', 'app', 'screens', 'start', 'composed', 'locales', 'logic', 'icons', 'ephemeral', 'local', 'secret', 'share', 'external'] as const;
 
 /** The node keys that are not component state */
 export const RESERVED_KEYS = {
@@ -119,14 +121,26 @@ export const PREFIXES = {
  * The metadata keys a node of a definition may carry (docs/design/state-definitions-and-instances.md): `@id` names
  * the node for `#name` references; `@local`, `@secret` and `@transient` mark the node's own properties (`true` for
  * all of them, or a list of names) whose changes stay on the device, reach only the server's logic, or are synced but
- * never stored. Metadata is read from the definition only: an instance never sets it, and it is never state
+ * never stored. `@share` maps a property to `"peers of .<path>"`: the people whose instances hold the same value at the
+ * node's `<path>` see it, through a link to `$peers.<reference>`. Metadata is read from the definition only: an instance
+ * never sets it, and it is never state
  */
 export const META_KEYS = {
     id: '@id',
     local: '@local',
     secret: '@secret',
-    transient: '@transient'
+    transient: '@transient',
+    share: '@share'
 } as const;
+
+/**
+ * A branch shared with peers (`@share`, assembled into the document's `share` list): the value at `path` of each instance is
+ * seen by the people whose instances hold the same value at `by` (the board open), in their `$.peers` (`peersPath`)
+ */
+export interface PeerShare {
+    path: string;
+    by: string;
+}
 
 /** The metadata key names as a list */
 export const META_KEY_NAMES: readonly string[] = Object.values(META_KEYS);

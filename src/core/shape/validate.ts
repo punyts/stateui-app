@@ -33,6 +33,9 @@ export interface ValidateContext {
 
 type StateCode = 'SUI-STATE-INVALID' | 'SUI-STATE-UNKNOWN' | 'SUI-STATE-REQUIRED' | 'SUI-STATE-RUNTIME' | 'SUI-NODE-NAME' | 'SUI-NODE-META';
 
+/** An `@share` rule: the peers of a path of the node (`peers of .board`) */
+const PEERS_OF = /^peers of (\.[A-Za-z0-9_-]+)+$/;
+
 /** An `@id`: a name a `#name` reference can carry */
 const NODE_ID = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
@@ -48,6 +51,17 @@ function checkMeta(shape: Shape, node: Node, key: string, path: string, walk: Wa
     const value = node[key] as JsonValue;
     if (key === META_KEYS.id) {
         if (typeof value !== 'string' || !NODE_ID.test(value)) report(walk, 'SUI-NODE-META', key, path);
+        return;
+    }
+    if (key === META_KEYS.share) {
+        // a map of declared properties to the path whose value names the peers
+        if (!isObject(value) || Object.keys(value).length === 0) {
+            report(walk, 'SUI-NODE-META', key, path);
+            return;
+        }
+        for (const [name, rule] of Object.entries(value)) {
+            if (!Object.hasOwn(shape.properties, name) || typeof rule !== 'string' || !PEERS_OF.test(rule)) report(walk, 'SUI-NODE-META', key, path);
+        }
         return;
     }
     if (value === true) return;

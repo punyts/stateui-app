@@ -104,6 +104,25 @@ describe('ids and #name references', () => {
         expect(errors.map((error) => `${error.code} ${error.statePath}`)).toEqual(['SUI-NODE-META $.app.@local', 'SUI-NODE-NAME $.app.@other']);
     });
 
+    it('should accept an @share of declared properties to the peers of a path, and refuse any other', () => {
+        // Arrange
+        const shared: Node = { component: 'field', '@share': { value: 'peers of .label' } };
+        const wrong: Node[] = [
+            { component: 'field', '@share': { missing: 'peers of .label' } },
+            { component: 'field', '@share': { value: 'everyone' } },
+            { component: 'field', '@share': {} },
+            { component: 'field', '@share': true }
+        ];
+
+        // Act
+        const accepted = validateNode(FIELD, shared, '$.app');
+        const refused = wrong.map((node) => validateNode(FIELD, node, '$.app').map((error) => error.code));
+
+        // Assert
+        expect(accepted).toEqual([]);
+        expect(refused).toEqual([['SUI-NODE-META'], ['SUI-NODE-META'], ['SUI-NODE-META'], ['SUI-NODE-META']]);
+    });
+
     it('should refuse an @id that two nodes of one tree carry', () => {
         // Arrange
         const app: Node = {

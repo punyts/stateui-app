@@ -78,6 +78,21 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
         }
     }
 
+    if (Object.hasOwn(document, 'share')) {
+        const share = document['share'];
+        // a list of { path, by }, each a state path; several branches may share the peers of one path
+        const problems = !Array.isArray(share)
+            ? [{ path: '$.share', reason: 'must be a list of { path, by }' }]
+            : share.length > MAX_MARKED_PATHS
+              ? [{ path: '$.share', reason: `has more than ${MAX_MARKED_PATHS} entries` }]
+              : share.flatMap((entry, index) =>
+                    isObject(entry) && Object.keys(entry).length === 2
+                        ? ephemeralProblems([entry['path'] ?? null], `$.share.${index}.path`).concat(ephemeralProblems([entry['by'] ?? null], `$.share.${index}.by`))
+                        : [{ path: `$.share.${index}`, reason: 'must be { path, by }' }]
+                );
+        for (const problem of problems) errors.push(buildError('SUI-DOC-MARKED', { path: problem.path, reason: problem.reason, statePath: problem.path }));
+    }
+
     if (Object.hasOwn(document, 'icons')) {
         for (const problem of appIconProblems(document['icons'], '$.icons')) {
             errors.push(buildError('SUI-DOC-ICON', { path: problem.path, reason: problem.reason, statePath: problem.path }));

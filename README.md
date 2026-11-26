@@ -856,6 +856,13 @@ writes them into the document: the `@transient` paths join `ephemeral`, and `loc
 the host hands to its sync client and authority. An app declares at most `MAX_EPHEMERAL_PATHS` (50) ephemeral paths;
 the assembled lists hold at most `MAX_MARKED_PATHS` (2000).
 
+A node shares a property with the people on the same thing with `@share`: `{ "mousePosition": "peers of .board" }` shares
+it with every person whose instance holds the same value at the node's `board`. Assembly writes the document's
+`share` list (`{ path, by }`, `PeerShare`) and lists `$.peers` as ephemeral. A link to `$peers` and a node
+reference (`"<-cursors": "$peers.mousePosition"`, `$peers#name.property`) reads `$.peers.<path>` (`peersPath`: the
+path's segments after `$` joined by `__`), the map `{ <person>: <their value> }` the host writes; the reference must
+reach a stored property (`SUI-LINK-MISSING` otherwise).
+
 `$.runtime.device` names the device the app runs on (`MountOptions.device`, a random id when the host names none). A
 component that records an act writes it with the time, as a button's `pressed` does.
 

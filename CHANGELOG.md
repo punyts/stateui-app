@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **`@share` and `$peers`: what the people on the same thing have** (docs/design/state-definitions-and-instances.md,
+  "Seeing other people's app state"). A node's `@share` maps its declared properties to `"peers of .<path>"`
+  (`SUI-NODE-META` otherwise); `metadataPaths` lists them as `share` (`{ path, by }`), and assembly writes the
+  document's `share` (checked by document validation) and adds `$.peers` to `ephemeral`. A link target `$peers` with a
+  node reference resolves to `$.peers.<path>` (`peersPath`) with `allowMissing`. Tests: `src/core/on/ids.test.ts`,
+  `src/core/meta/metadataPaths.test.ts`, `src/core/links/references.test.ts` ("should read what the peers have …"),
+  `src/core/assemble/assemble.test.ts`.
 - **A component's definition marks its own properties** (docs/design/state-definitions-and-instances.md). A
   `state.json` may list `@local`, `@secret` or `@transient` properties it declares (`Shape.marks`, carried in the
   catalog); `metadataPaths(document, library)` adds them for every node of the component, and `assembleApp` passes

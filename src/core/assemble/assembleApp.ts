@@ -230,10 +230,12 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     if (Object.keys(logic).length > 0) document.logic = logic as unknown as JsonObject;
     // The nodes' metadata compiles into the path lists the sync layer reads: @transient joins the ephemeral paths
     const marked = metadataPaths(document, options.library);
-    const ephemeral = [...new Set([...(blueprint.ephemeral ?? []), ...marked.transient])];
+    // a shared branch's peers are written to `$.peers` by the host: what peers have now, never stored
+    const ephemeral = [...new Set([...(blueprint.ephemeral ?? []), ...marked.transient, ...(marked.share.length > 0 ? ['$.peers'] : [])])];
     if (ephemeral.length > 0) document.ephemeral = ephemeral;
     if (marked.local.length > 0) document.local = marked.local;
     if (marked.secret.length > 0) document.secret = marked.secret;
+    if (marked.share.length > 0) document.share = marked.share;
     if (blueprint.uses?.external !== undefined && Object.keys(blueprint.uses.external).length > 0) document.external = cloneJson(blueprint.uses.external as unknown as JsonValue) as unknown as AppDocument['external'];
     if (blueprint.icons !== undefined && Object.keys(blueprint.icons).length > 0) document.icons = cloneJson(blueprint.icons as unknown as JsonValue) as unknown as AppDocument['icons'];
     if (blueprint.locales !== undefined) document.locales = cloneJson(blueprint.locales as unknown as JsonValue) as AppDocument['locales'];

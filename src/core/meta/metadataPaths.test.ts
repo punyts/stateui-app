@@ -3,7 +3,7 @@ import type { ComponentLibrary } from '../resolve/index.js';
 import { parseShape } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
 import type { AppDocument } from '../types.js';
-import { metadataPaths } from './metadataPaths.js';
+import { metadataPaths, peersPath } from './metadataPaths.js';
 
 describe('metadataPaths', () => {
     it('should give the paths the nodes of the screens mark, a whole node for true and its properties for a list', () => {
@@ -31,7 +31,8 @@ describe('metadataPaths', () => {
         expect(paths).toEqual({
             local: ['$.screens.signIn.collapsed'],
             secret: ['$.screens.signIn.children.password.value'],
-            transient: ['$.screens.signIn.children.cursor']
+            transient: ['$.screens.signIn.children.cursor'],
+            share: []
         });
     });
 
@@ -48,6 +49,19 @@ describe('metadataPaths', () => {
         expect(paths.transient).toEqual(['$.app.children.save.pressed', '$.app.children.save.busy', '$.app.children.go.pressed']);
     });
 
+    it('should list each @share branch with the path whose value names its peers, and key its peers by the whole path', () => {
+        // Arrange
+        const document: AppDocument = { app: { component: 'page' }, screens: { diagram: { root: { component: 'drawing', '@share': { mousePosition: 'peers of .board' } } } } };
+
+        // Act
+        const paths = metadataPaths(document);
+        const key = peersPath('$.screens.diagram.mousePosition');
+
+        // Assert
+        expect(paths.share).toEqual([{ path: '$.screens.diagram.mousePosition', by: '$.screens.diagram.board' }]);
+        expect(key).toBe('$.peers.screens__diagram__mousePosition');
+    });
+
     it('should give nothing for a document without metadata', () => {
         // Arrange
         const document: AppDocument = { app: { component: 'page', children: { title: { component: 'text', _text: 'Hi' } } } };
@@ -56,6 +70,6 @@ describe('metadataPaths', () => {
         const paths = metadataPaths(document);
 
         // Assert
-        expect(paths).toEqual({ local: [], secret: [], transient: [] });
+        expect(paths).toEqual({ local: [], secret: [], transient: [], share: [] });
     });
 });
