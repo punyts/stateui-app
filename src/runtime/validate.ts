@@ -301,6 +301,7 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     key: (m) => hasOnlyKeys(m, ['key']) && isKeyChord(m['key']),
+    history: (m) => hasOnlyKeys(m, ['step']) && (m['step'] === 'undo' || m['step'] === 'redo'),
     decide: (m) =>
         hasOnlyKeys(m, ['action', 'id', 'note']) &&
         (m['action'] === 'approve' || m['action'] === 'reject' || m['action'] === 'withdraw') &&

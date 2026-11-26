@@ -353,7 +353,8 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             payload,
             emit: (name, payload) => hooks?.onEmit?.(name, payload),
             ...(options.navigate === undefined ? {} : { navigate: options.navigate }),
-            ...(hooks?.decide === undefined ? {} : { decide: hooks.decide })
+            ...(hooks?.decide === undefined ? {} : { decide: hooks.decide }),
+            ...(hooks?.travel === undefined ? {} : { travel: hooks.travel })
         };
         for (const command of commands) {
             try {

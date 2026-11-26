@@ -119,6 +119,7 @@ export const MESSAGE_BYTE_LIMITS = {
     pong: MAX_SMALL_BYTES,
     key: MAX_SMALL_BYTES,
     decide: MAX_SMALL_BYTES,
+    history: MAX_SMALL_BYTES,
     inspect: MAX_EVENT_BYTES,
     inspected: MAX_EVENT_BYTES,
     watch: MAX_EVENT_BYTES,

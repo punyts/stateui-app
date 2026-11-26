@@ -60,8 +60,8 @@ function holdsNodes(value: JsonObject): boolean {
  * Lays an articulation overlay on a copy of a node tree: an object recurses, any other value replaces. On a node, only
  * keys the definition has or the node's component declares are laid, so a value of a node or property the app no
  * longer has is dropped; inside a property's value (a list's `items`, a record), new keys are laid too, as the person's
- * own values. Content (`_` keys), links (`<-` keys), metadata (`@` keys) and the node structure (`component`, `on`,
- * `layout`, `placement`, `theme`) are never laid
+ * own values. Content (`_` keys, a label) is laid where the definition has it. Links (`<-` keys), metadata (`@` keys)
+ * and the node structure (`component`, `on`, `layout`, `placement`, `theme`) are never laid
  */
 function layTree(base: JsonObject, overlay: JsonObject, declared: DeclaredProperties | undefined, open = false): JsonObject {
     const result = cloneJson(base) as JsonObject;
@@ -69,7 +69,9 @@ function layTree(base: JsonObject, overlay: JsonObject, declared: DeclaredProper
     const isNode = typeof component === 'string';
     const own = isNode && declared !== undefined ? declared(component) : undefined;
     for (const [key, value] of Object.entries(overlay)) {
-        if (key.startsWith(PREFIXES.content) || key.startsWith(PREFIXES.link)) continue;
+        if (key.startsWith(PREFIXES.link)) continue;
+        // Content is laid only where the definition has it: a person may change a label, never add one
+        if (key.startsWith(PREFIXES.content) && !Object.hasOwn(base, key)) continue;
         if (isNode && (STRUCTURE.includes(key) || key.startsWith(PREFIXES.meta))) continue;
         if (!Object.hasOwn(base, key)) {
             const known = isNode ? own?.has(key) === true && key !== RESERVED_KEYS.children : open;

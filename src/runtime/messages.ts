@@ -12,7 +12,7 @@ export const PROTOCOL_VERSION = 1;
 export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'grant', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased', 'fileExported'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'fileExport', 'key', 'inspected', 'watched', 'decide'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'fileExport', 'key', 'inspected', 'watched', 'decide', 'history'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -296,6 +296,11 @@ export interface DecideMessage extends Envelope<'decide'> {
     note?: string;
 }
 
+/** An `undo` or `redo` command of an `on` entry, for the host's sync client (docs/design/state-definitions-and-instances.md) */
+export interface HistoryMessage extends Envelope<'history'> {
+    step: 'undo' | 'redo';
+}
+
 /** The person pressed a key chord the `load` named in `keys`; the app did not see it */
 export interface KeyMessage extends Envelope<'key'> {
     key: string;
@@ -412,6 +417,7 @@ export type OutboundMessage =
     | ChangeMessage
     | EmitMessage
     | DecideMessage
+    | HistoryMessage
     | ErrorMessage
     | PongMessage
     | FileMessage

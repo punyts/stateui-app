@@ -9,7 +9,7 @@ import { PREFIXES, RESERVED_KEYS, isAppEvent } from '../types.js';
 import type { JsonValue } from '../types.js';
 import { parseTarget, readCommand, readEntry } from './parse.js';
 import { findProvider, findRowProvider, resolveTarget } from './resolveTarget.js';
-import { REQUEST_COMMANDS } from './types.js';
+import { HISTORY_COMMANDS, REQUEST_COMMANDS } from './types.js';
 import type { Frame, Located, OnCommand, TreeNode } from './types.js';
 
 const ROOT_PATH = '$.app';
@@ -141,6 +141,11 @@ class OnValidator {
         if (command.from !== undefined) this.checkFrom(command.from, event, scope, statePath);
         if (command.command === 'emit' || command.command === 'navigate') {
             if (command.target === undefined) this.malformed(statePath);
+            return;
+        }
+        if ((HISTORY_COMMANDS as readonly string[]).includes(command.command)) {
+            // undo and redo take nothing
+            if (command.target !== undefined || 'value' in command || command.from !== undefined) this.malformed(statePath);
             return;
         }
         if ((REQUEST_COMMANDS as readonly string[]).includes(command.command)) {

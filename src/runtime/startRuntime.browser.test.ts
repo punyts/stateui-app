@@ -1096,6 +1096,21 @@ describe('startRuntime in Chromium', () => {
         expect(JSON.stringify(ofType('error'))).toContain('request.approve needs the id of a request');
     });
 
+    it('should post history for an undo or redo command', () => {
+        // Arrange
+        const document: AppDocument = { app: panel({ back: { component: 'button', on: { press: [{ command: 'undo' }, { command: 'redo' }] } } }) };
+        send(message('load', { document }));
+
+        // Act
+        find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+
+        // Assert
+        expect(ofType('history')).toEqual([
+            { v: PROTOCOL_VERSION, nonce: NONCE, type: 'history', step: 'undo' },
+            { v: PROTOCOL_VERSION, nonce: NONCE, type: 'history', step: 'redo' }
+        ]);
+    });
+
     it('should take the requests the host writes as a sync write, for a request command to read', async () => {
         // Arrange
         const document: AppDocument = { app: panel({ yes: { component: 'button', on: { press: { command: 'request.approve', from: '$.runtime.requests.rq.id' } } } }) };

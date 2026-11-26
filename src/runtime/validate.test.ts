@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'decide', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'grant', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
+            ['change', 'command', 'decide', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'grant', 'history', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
         );
     });
 
@@ -28,6 +28,8 @@ describe('runtime message validator', () => {
         base('decide', { action: 'approve', id: 'r-1' }),
         base('decide', { action: 'reject', id: 'r-1', note: 'Not this week' }),
         base('decide', { action: 'withdraw', id: 'r-1' }),
+        base('history', { step: 'undo' }),
+        base('history', { step: 'redo' }),
         base('command', { target: '$.app.children.x', command: 'open', value: 'a' }),
         base('locale', { locale: 'de-CH' }),
         base('theme', { kind: 'mode', name: 'dark' }),
@@ -117,6 +119,8 @@ describe('runtime message validator', () => {
         ['decide with a long id', base('decide', { action: 'approve', id: 'x'.repeat(65) })],
         ['decide approve with a note', base('decide', { action: 'approve', id: 'r-1', note: 'yes' })],
         ['decide reject with a long note', base('decide', { action: 'reject', id: 'r-1', note: 'x'.repeat(501) })],
+        ['history with another step', base('history', { step: 'back' })],
+        ['history with another key', base('history', { step: 'undo', value: 1 })],
         ['decide with another key', base('decide', { action: 'approve', id: 'r-1', value: 1 })],
         ['fileExport of a path outside data', base('fileExport', { requestId: 1, source: '$.server.keys', name: 'a.csv', request: { columns: [{ key: 'n', field: 'n', title: 'N' }] } })],
         ['fileExport with a name that is not a csv', base('fileExport', { requestId: 1, source: '$.data.a', name: 'a.exe', request: { columns: [{ key: 'n', field: 'n', title: 'N' }] } })],

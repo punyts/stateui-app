@@ -2,6 +2,7 @@ import { createStore } from '@punyts/state';
 import { describe, expect, it } from 'vitest';
 import type { JsonObject } from '../../core/types.js';
 import { switchLocale } from './index.js';
+import { LOCALE_ORIGIN } from './switchLocale.js';
 
 function makeStore() {
     return createStore<Record<string, unknown>>({
@@ -27,6 +28,19 @@ describe('switchLocale', () => {
         expect(errors).toEqual([]);
         expect(store.get('$.locale')).toBe('de');
         expect(store.get('$.app')).toEqual({ _title: 'Aufträge', children: { a: { _text: 'Name (de)', value: 'x' } } });
+    });
+
+    it('should tag the content it writes with the locale origin, so it is never sent as a change', () => {
+        // Arrange
+        const store = makeStore();
+        const origins = new Set<string | undefined>();
+        store.on(['$.app._title', '$.app.children.a._text'], (_path, _value, _old, _action, origin) => origins.add(origin));
+
+        // Act
+        switchLocale(store, 'de', { en: EN, de: DE });
+
+        // Assert
+        expect([...origins]).toEqual([LOCALE_ORIGIN]);
     });
 
     it('should put the base language back when the base overlay is applied', () => {

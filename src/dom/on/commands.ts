@@ -1,5 +1,5 @@
-import type { Frame, Located, OnCommand, RequestDecision, TreeNode } from '../../core/on/index.js';
-import { findProvider, findRowProvider, MAX_REQUEST_ID, MAX_REQUEST_NOTE, parseTarget, REQUEST_COMMANDS, resolveTarget } from '../../core/on/index.js';
+import type { Frame, HistoryStep, Located, OnCommand, RequestDecision, TreeNode } from '../../core/on/index.js';
+import { findProvider, findRowProvider, HISTORY_COMMANDS, MAX_REQUEST_ID, MAX_REQUEST_NOTE, parseTarget, REQUEST_COMMANDS, resolveTarget } from '../../core/on/index.js';
 import { cloneJson, entryShape } from '../../core/resolve/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { Shape } from '../../core/shape/index.js';
@@ -39,6 +39,8 @@ export interface CommandContext {
     navigate?(screen: string, params: JsonValue | undefined): string | undefined;
     /** Hands a request command's decision to the host. Absent when the app is mounted without a host that decides */
     decide?(decision: RequestDecision): void;
+    /** Hands `undo` or `redo` to the host. Absent when the app is mounted without a host that keeps a history */
+    travel?(step: HistoryStep): void;
 }
 
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
@@ -232,6 +234,9 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
         const decision = requestDecision(command.command, command.from !== undefined ? valueOf(command, context) : withRows(command.value, context));
         if (context.decide === undefined) throw new CommandFailure(`the app has no host that decides requests, so ${command.command} does nothing`);
         context.decide(decision);
+    } else if ((HISTORY_COMMANDS as readonly string[]).includes(command.command)) {
+        if (context.travel === undefined) throw new CommandFailure(`the app has no host that keeps a history, so ${command.command} does nothing`);
+        context.travel(command.command as HistoryStep);
     } else {
         runComponentCommand(command, context);
     }

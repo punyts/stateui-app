@@ -1,6 +1,6 @@
 import type { Store } from '@punyts/state';
 import type { BuildError } from '../../core/errors/index.js';
-import type { RequestDecision } from '../../core/on/index.js';
+import type { HistoryStep, RequestDecision } from '../../core/on/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { JsonValue } from '../../core/types.js';
 import type { FileData, ReadFile } from '../../runtime/fileRead.js';
@@ -124,6 +124,11 @@ export interface DispatchHooks {
      * (docs/design/statenet-requests.md). Set by the runtime; absent when the app is mounted without a host that decides
      */
     decide?(decision: RequestDecision): void;
+    /**
+     * Called by the system commands `undo` and `redo`: the host's sync client asks the authority to step the person's app
+     * instance through its history. Set by the runtime; absent when the app is mounted without a host that keeps one
+     */
+    travel?(step: HistoryStep): void;
     /**
      * Hands a file to the host and resolves with the reference of the stored file (E8.39). Set by the runtime inside
      * the preview frame; absent when the app is mounted without a host that takes files

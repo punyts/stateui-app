@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+- **`undo` and `redo` commands** (docs/design/state-definitions-and-instances.md, instances). The system commands
+  `undo` and `redo` take no target or value (`HISTORY_COMMANDS`; validation refuses one that carries any as
+  `SUI-ON-SHAPE`) and call the new `DispatchHooks.travel`; the runtime posts them as the outbound message
+  `history` `{ step }` for the host's sync client. Without a host that keeps a history they fail as `SUI-RUN`. Tests:
+  `src/core/on/on.test.ts`, `src/runtime/validate.test.ts`, `src/runtime/startRuntime.browser.test.ts`.
+- **A person may change a label, never add one** (instances). Laying an instance over its definition lays `_`
+  content only where the definition has that key, so a person's label override shows and a label the definition
+  lacks does not. Test: `src/core/snapshot/instance.test.ts`.
+- **Translated labels never reach a person's instance.** `switchLocale` writes the language's labels with the
+  origin `LOCALE_ORIGIN` (`locale`), which capture skips, so switching language writes nothing to the instance.
+  Test: `src/dom/locale/switchLocale.test.ts`.
 - **Node metadata compiles into the document's path lists** (docs/design/state-definitions-and-instances.md).
   `metadataPaths(document)` (`core/meta/metadataPaths.ts`) gives the paths the nodes of the app and screens mark with
   `@local`, `@secret` and `@transient`: the node's branch for `true`, the named properties for a list. Assembly

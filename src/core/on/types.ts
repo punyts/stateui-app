@@ -19,8 +19,16 @@ export interface RequestDecision {
     note?: string;
 }
 
+/**
+ * The commands that step a person's app instance back or forward through its history (docs/design/state-definitions-and-instances.md):
+ * they take no target or value, and the host's sync client asks the authority
+ */
+export const HISTORY_COMMANDS = ['undo', 'redo'] as const;
+
+export type HistoryStep = (typeof HISTORY_COMMANDS)[number];
+
 /** The commands the runtime provides itself; every other command belongs to a root component's shape */
-export const SYSTEM_COMMANDS = ['set', 'toggle', 'emit', 'navigate', ...REQUEST_COMMANDS] as const;
+export const SYSTEM_COMMANDS = ['set', 'toggle', 'emit', 'navigate', ...REQUEST_COMMANDS, ...HISTORY_COMMANDS] as const;
 
 export type SystemCommand = (typeof SYSTEM_COMMANDS)[number];
 

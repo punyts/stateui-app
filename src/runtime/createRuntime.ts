@@ -223,7 +223,7 @@ export interface RuntimeCore {
  * `$.server`, link aliases and the runtime properties of a node (`"runtime": true` in its shape) make none, and a
  * snapshot or a write does not set a runtime property. The value of an `inputType: "password"` field (and the data such a field is
  * linked to) never leaves the frame: such a change is not posted, and it is cut out of the value of a change above it.
- * It posts `emit` and `decide` (a `request.*` command) from the dispatcher hooks and `error` for validation and
+ * It posts `emit`, `decide` (a `request.*` command), `history` (`undo` or `redo`) from the dispatcher hooks and `error` for validation and
  * runtime errors.
  *
  * Files: the dispatcher's `transferFile` hook posts `file` (answered by `fileProgress` and `fileResult`), its
@@ -463,6 +463,9 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
                     },
                     decide(decision) {
                         post({ type: 'decide', ...decision });
+                    },
+                    travel(step) {
+                        post({ type: 'history', step });
                     },
                     onError(error) {
                         postErrors([error]);

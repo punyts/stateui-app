@@ -73,13 +73,25 @@ describe('layInstance', () => {
         expect(laid.active).toEqual({});
     });
 
-    it('should never lay content, links, node structure or values of nodes the app no longer has', () => {
+    it('should lay a label the person changed, where the definition has one', () => {
+        // Arrange
+        const instance: AppInstance = { app: { children: { search: { _label: 'Find', _hint: 'new' } } }, screens: {} };
+
+        // Act
+        const laid = layInstance(BASE, instance, DOCUMENT);
+
+        // Assert
+        const search = (laid.app['children'] as Record<string, Record<string, unknown>>)['search'];
+        expect(search).toEqual({ component: 'field', value: '', _label: 'Find' });
+    });
+
+    it('should never lay content the definition lacks, links, node structure or values of nodes the app no longer has', () => {
         // Arrange
         const instance: AppInstance = {
             app: {
                 component: 'list',
                 on: {},
-                children: { search: { _label: 'Find', '<-value': '$.data.q', component: 'text' }, gone: { value: 'x' } },
+                children: { search: { _placeholder: 'Find', '<-value': '$.data.q', component: 'text' }, gone: { value: 'x' } },
                 extra: 1
             },
             screens: { removed: { children: {} } }

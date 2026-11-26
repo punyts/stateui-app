@@ -7,9 +7,16 @@ import type { JsonObject } from '../../core/types.js';
 const APP_PATH = '$.app';
 const LOCALE_PATH = '$.locale';
 
+/**
+ * The origin of the writes a language switch makes to content: the host never sends them as changes, so a person's
+ * instance keeps only the labels they changed themselves, and logic never runs for them
+ */
+export const LOCALE_ORIGIN = 'locale';
+const LOCALE_WRITE = { origin: LOCALE_ORIGIN };
+
 /** The part of a store that switching language needs */
 export interface LocaleStore {
-    apply: (path: string, source: unknown) => void;
+    apply: (path: string, source: unknown, options?: { origin?: string }) => void;
     set: (path: string, value: string) => boolean;
 }
 
@@ -23,7 +30,8 @@ export type ScreenOverlays = Readonly<Record<string, Readonly<Record<string, Jso
  * switching back applies the base overlay; `screens` holds the same per screen (`MountedApp.screenBaseOverlays` for
  * the base language). A code that neither `overlays` nor any screen has returns a `SUI-LOCALE` error and changes
  * nothing. The overlays are copied, so the store never shares objects with them. `$.data` and `$.theme` are never
- * touched
+ * touched. The content writes carry `LOCALE_ORIGIN`, so they are never sent as changes; a label a person changed
+ * shows the language's label again after a switch
  */
 export function switchLocale(
     store: LocaleStore,
@@ -33,8 +41,8 @@ export function switchLocale(
 ): BuildError[] {
     const inScreens = Object.entries(screens).filter(([, byCode]) => Object.hasOwn(byCode, code));
     if (!Object.hasOwn(overlays, code) && inScreens.length === 0) return [unknownLanguage(code)];
-    if (Object.hasOwn(overlays, code)) store.apply(APP_PATH, cloneJson(overlays[code] as JsonObject));
-    for (const [name, byCode] of inScreens) store.apply(screenPath(name), cloneJson(byCode[code] as JsonObject));
+    if (Object.hasOwn(overlays, code)) store.apply(APP_PATH, cloneJson(overlays[code] as JsonObject), LOCALE_WRITE);
+    for (const [name, byCode] of inScreens) store.apply(screenPath(name), cloneJson(byCode[code] as JsonObject), LOCALE_WRITE);
     store.set(LOCALE_PATH, code);
     return [];
 }

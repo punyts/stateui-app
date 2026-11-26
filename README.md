@@ -239,6 +239,7 @@ A command object is `{ command, target?, value? }`. `value` is the command's arg
 | `navigate` | a screen name, such as `product` (not resolved) | the params, where `$row` and `$row.path` values are read at any depth |
 | `request.approve`, `request.withdraw` | none | the request's id, such as `"$row.id"` in a row over `$.runtime.requests` |
 | `request.reject` | none | the id, or `{ id, note }` |
+| `undo`, `redo` | none | none: the host's sync client asks the authority to step the person's app instance back or forward through its history (the `history` runtime message) |
 | a component command | a node; absent means the node itself | the argument |
 
 Targets: `#name.path` (nearest node, starting with the node itself, whose id (`@id`, otherwise its key) is `name` or that is an instance of

@@ -106,6 +106,24 @@ describe('validateOn', () => {
         ]);
     });
 
+    it('should accept undo and redo alone, and refuse one with a target, value or from', () => {
+        // Arrange
+        const good = button({ press: [{ command: 'undo' }, { command: 'redo' }] });
+        const bad = button({ press: [{ command: 'undo', target: '.pressed' }, { command: 'redo', value: 1 }, { command: 'undo', from: '$.data.picked' }] });
+
+        // Act
+        const accepted = check(good);
+        const refused = check(bad);
+
+        // Assert
+        expect(accepted).toEqual([]);
+        expect(refused.map((error) => error.statePath)).toEqual([
+            '$.app.children.b.on.press.0',
+            '$.app.children.b.on.press.1',
+            '$.app.children.b.on.press.2'
+        ]);
+    });
+
     it('should accept a component command on an absolute target', () => {
         const app: Node = {
             component: 'toolbar',
