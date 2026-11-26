@@ -99,6 +99,33 @@ describe('createRuntime in a page (inPage)', () => {
         expect(window.history.length).toBe(history);
     });
 
+    it('should write the state of a node by its id, wherever the node is, and refuse an id no node or two nodes have unless the write is optional', () => {
+        // Arrange
+        const { host, runtime, posted } = inPage();
+        const named: AppDocument = {
+            app: {
+                component: 'panel',
+                children: {
+                    first: { component: 'badge', text: 'one', '@id': 'status' },
+                    second: { component: 'badge', text: 'two' },
+                    group: { component: 'panel', children: { second: { component: 'badge', text: 'three' } } }
+                }
+            } as AppDocument['app']
+        };
+        runtime.handle(message('load', { document: named }));
+
+        // Act
+        runtime.handle(message('write', { writes: [{ path: '#status.text', value: 'saved' }] }));
+        runtime.handle(message('write', { writes: [{ path: '#missing.text', value: 'x' }, { path: '#second.text', value: 'x' }, { path: '#gone.text', value: 'x', optional: true }] }));
+
+        // Assert
+        expect(runtime.app()?.store?.get('$.app.children.first.text' as never)).toBe('saved');
+        expect(find(host, 'x-cr-badge')?.shadowRoot?.textContent ?? find(host, 'x-cr-badge')?.textContent).toContain('badge:saved');
+        const refused = posted.filter((item) => item.type === 'error').flatMap((item) => item['errors'] as { code: string; statePath: string }[]);
+        expect(refused.map((error) => [error.code, error.statePath])).toEqual([['SUI-RUN-WRITE', '#missing.text'], ['SUI-RUN-WRITE', '#second.text']]);
+        expect(runtime.app()?.store?.get('$.app.children.second.text' as never)).toBe('two');
+    });
+
     it('should answer inspect in the pixels of its element when the page draws it at half its size', () => {
         // Arrange
         const { host, runtime, posted } = inPage(0.5);

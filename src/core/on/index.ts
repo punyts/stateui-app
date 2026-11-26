@@ -1,4 +1,4 @@
-export { findProvider, findRowProvider, resolveTarget } from './resolveTarget.js';
+export { findProvider, findRowProvider, pathsOfId, resolveTarget } from './resolveTarget.js';
 export { isSystemCommand, parseTarget, readCommand, readEntry } from './parse.js';
 export { recordKeys } from './recordKeys.js';
 export type { RecordKey } from './recordKeys.js';

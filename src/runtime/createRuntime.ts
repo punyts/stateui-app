@@ -3,6 +3,7 @@ import { SYNC_ORIGIN, captureChanges } from '@punyts/state-sync';
 import { LOGIC_ORIGIN } from '../core/logic/index.js';
 import type { Capture, Change } from '@punyts/state-sync';
 import { buildError } from '../core/errors/index.js';
+import { nodeId, pathsOfId } from '../core/on/resolveTarget.js';
 import { appIconNames } from '../core/icons/appIcons.js';
 import type { BuildError } from '../core/errors/index.js';
 import { entryShape } from '../core/resolve/index.js';
@@ -500,11 +501,49 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
         post({ type: 'ready' });
     }
 
+    /** Where each id a host wrote by was last found, checked before it is used again */
+    const idPaths = new Map<string, string>();
+
     /**
-     * Applies one host write. A whole node below `$.app` (a value with a `component`) is mounted as a load would
+     * The state path a write by id reaches: `#save.hidden` is `hidden` of the one node of the app node or a screen
+     * whose id (its `@id`, otherwise its key) is `save`. Undefined when no node or more than one has the id
+     */
+    function pathOfReference(store: NonNullable<MountedApp['store']>, reference: string): string | undefined {
+        const dot = reference.indexOf('.');
+        const id = reference.slice(1, dot);
+        const rest = reference.slice(dot);
+        const kept = idPaths.get(id);
+        if (kept !== undefined) {
+            const node: unknown = store.get(kept as never);
+            if (isNodeValue(node as never) && nodeId(node as never, kept.slice(kept.lastIndexOf('.') + 1)) === id) return kept + rest;
+            idPaths.delete(id);
+        }
+        const found: string[] = [];
+        const app: unknown = store.get('$.app' as never);
+        if (isNodeValue(app as never)) found.push(...pathsOfId(app as never, '$.app', id));
+        const screens: unknown = store.get('$.screens' as never);
+        if (typeof screens === 'object' && screens !== null) {
+            for (const [name, root] of Object.entries(screens)) {
+                if (isNodeValue(root as never)) found.push(...pathsOfId(root as never, `$.screens.${name}`, id));
+            }
+        }
+        if (found.length !== 1) return undefined;
+        idPaths.set(id, found[0] as string);
+        return found[0] + rest;
+    }
+
+    /**
+     * Applies one host write. A path that starts with `#` names a node by its id (`#save.hidden`), so a host keeps a
+     * node's own state on the node without knowing where the node is. A whole node below `$.app` (a value with a `component`) is mounted as a load would
      * mount it, and removing a node removes its links; every other write is a plain store write
      */
-    function applyWrite(app: MountedApp, store: NonNullable<MountedApp['store']>, write: PathWrite): BuildError[] {
+    function applyWrite(app: MountedApp, store: NonNullable<MountedApp['store']>, asked: PathWrite): BuildError[] {
+        let write = asked;
+        if (asked.path.startsWith('#')) {
+            const path = pathOfReference(store, asked.path);
+            if (path === undefined) return asked.optional === true ? [] : [buildError('SUI-RUN-WRITE', { path: asked.path, statePath: asked.path })];
+            write = { ...asked, path };
+        }
         // A runtime property the host still has from an older view is the component's own, so it is not written over
         if (isRuntimeProperty(store, library, write.path)) return [];
         const inApp = NODE_PREFIXES.some((prefix) => write.path.startsWith(prefix));

@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+- **A host writes a node's state by its id** (docs/design/state-definitions-and-instances.md). A `write` path may be
+  `#<id>.<path>` (`#save.hidden`): the runtime finds the one node of the app node or a screen whose id (its `@id`,
+  otherwise its key) it is, and writes there; no node or two nodes with the id is `SUI-RUN-WRITE`, or nothing when the
+  write is `optional: true` (a copy of a page that dropped the node). `pathsOfId`
+  (`core/on`) lists the paths of an id. Test: `runtime/createRuntime.browser.test.ts` ("should write the state of a
+  node by its id …").
+- **Fix: logic finds a node by its `@id`.** `#name` in a rule, table, compute or effect matched the node's key only,
+  so a node whose `@id` differs from its key validated and then failed when the logic ran (`logic.failed`, "does not
+  resolve"). The logic index names a node as links and `on` targets do: by its `@id`, otherwise its key. Test:
+  `core/logic/logic.test.ts` ("should resolve a node by its @id …").
 - **Declared child branches, and a warning for data that is a component's own state** (docs/design/state-definitions-and-instances.md). Breaking. A component whose shape declares `node` properties and neither lays out, places nor lists children refuses `children` with `SUI-NODE-BRANCH`. `SUI-LINK-OWN` (a warning) reports a `$.data` value bound only to `hidden`, `open` or a shared look of the nodes that read it. Tests: `src/core/validate/validate.test.ts` ("validateDocument: declared branches and own state").
 - **The host reads an app by ids; `emit` is gone** (docs/design/state-definitions-and-instances.md). Breaking. The `on`
   command and the logic command `emit`, `DispatchHooks.onEmit`, `LogicHost.emit` and the runtime message `emit` are

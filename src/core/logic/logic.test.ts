@@ -323,6 +323,21 @@ describe('createLogicIndex', () => {
         expect(index.resolve('#nobody')).toBeUndefined();
     });
 
+    it('should resolve a node by its @id, and no longer by the key it sits under', () => {
+        // Arrange
+        const app: Node = { component: 'page', children: { list: { component: 'recordList', '@id': 'people' }, other: { component: 'recordList' } } };
+
+        // Act
+        const named = createLogicIndex(resolveNode(app, LIBRARY, {}), LIBRARY, {});
+
+        // Assert
+        expect(named.resolve('#people')).toBe('$.app.children.list');
+        expect(named.resolve('#people.records')).toBe('$.app.children.list.records');
+        expect(named.resolve('#list')).toBeUndefined();
+        expect(named.resolve('#other')).toBe('$.app.children.other');
+        expect(named.explain('#list')).toBe('no node is named "list"');
+    });
+
     it('should list the fields of a form by child key', () => {
         expect(index.fields('$.app.children.addContact.body')).toEqual({
             name: '$.app.children.addContact.body.children.name.value',

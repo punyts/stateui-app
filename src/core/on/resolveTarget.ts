@@ -57,6 +57,16 @@ function nodesNamed(node: TreeNode, path: string, key: string, name: string, fou
 }
 
 /**
+ * The state path of every node at or below `root` whose id (its `@id`, otherwise its key) is `id`. `path` is the
+ * state path of `root`. A host that writes a node's state by its id (`#save.hidden`) finds the node with this
+ */
+export function pathsOfId(root: TreeNode, path: string, id: string): string[] {
+    const found: { node: TreeNode; path: string }[] = [];
+    nodesNamed(root, path, path.slice(path.lastIndexOf('.') + 1), id, found);
+    return found.map((each) => each.path);
+}
+
+/**
  * Resolves a parsed target against the resolved tree. `chain` runs from the root of the validated tree down to the
  * node that holds the `on` entry (which is its last frame); `rootPath` is the state path of the first frame.
  *

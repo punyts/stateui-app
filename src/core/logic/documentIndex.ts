@@ -1,4 +1,5 @@
 import { parseTarget, resolveTarget } from '../on/index.js';
+import { nodeId } from '../on/resolveTarget.js';
 import type { Frame, ResolvedTree, TreeNode } from '../on/index.js';
 import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
@@ -108,7 +109,7 @@ export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, 
         return value;
     };
 
-    const allNamed = (name: string): Frame[] => [...frames.values()].filter((frame) => frame.key === name || frame.instances.includes(name));
+    const allNamed = (name: string): Frame[] => [...frames.values()].filter((frame) => nodeId(frame.node, frame.key) === name || frame.instances.includes(name));
 
     /** The frames a name means: those of the first place (current screen, app node, all screens) that has any */
     const namedFrames = (name: string): Frame[] => {

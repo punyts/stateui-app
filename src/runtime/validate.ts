@@ -122,9 +122,13 @@ function isRuntimeChange(value: unknown): boolean {
     return value['op'] === 'delete' ? value['value'] === undefined : 'value' in value && isJson(value['value']);
 }
 
+/** A node's state named by the node's id: `#save.hidden`, `#orders.filter.status` */
+const NODE_WRITE = /^#[A-Za-z0-9_-]+(.[A-Za-z0-9_-]+)+$/;
+
 function isPathWrite(value: unknown): boolean {
-    if (!isRecord(value) || !isWritablePath(value['path'])) return false;
-    if (!Object.keys(value).every((key) => key === 'path' || key === 'value' || key === 'remove')) return false;
+    if (!isRecord(value) || !(isWritablePath(value['path']) || isSafePath(value['path'], NODE_WRITE))) return false;
+    if (!Object.keys(value).every((key) => key === 'path' || key === 'value' || key === 'remove' || key === 'optional')) return false;
+    if (value['optional'] !== undefined && value['optional'] !== true) return false;
     if (value['remove'] !== undefined) return value['remove'] === true && value['value'] === undefined;
     return 'value' in value && isJson(value['value']);
 }

@@ -41,9 +41,12 @@ export interface StateSnapshotData {
 
 /** One path write: a value to set, or `remove: true` to delete the path. The runtime applies it as a sync write, so it posts no `change` */
 export interface PathWrite {
+    /** A state path, or a node's state by the node's id: `#save.hidden` */
     path: string;
     value?: JsonValue;
     remove?: true;
+    /** With a path by id: a write whose node the app no longer has is left out, not refused */
+    optional?: true;
 }
 
 /** A runtime error as it travels: the plain fields of a `BuildError` */
