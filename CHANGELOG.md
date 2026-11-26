@@ -1,6 +1,15 @@
 # Changelog
 
 ## Unreleased
+- **The host reads an app by ids; `emit` is gone** (docs/design/state-definitions-and-instances.md). Breaking. The `on`
+  command and the logic command `emit`, `DispatchHooks.onEmit`, `LogicHost.emit` and the runtime message `emit` are
+  removed. Every event of a node that carries an `@id` (a shape and a row-template copy included) reaches
+  `DispatchHooks.onRaised` as a `RaisedReport` `{ id, event, value?, row? }`; the runtime posts it as `raised`, and
+  `AppOpenRequest.onRaised` replaces `onEmit` for an app inside an app. `$.raised` still records every event for logic.
+  Tests: `src/dom/on/dispatcher.browser.test.ts` ("should tell onRaised the id, the event and the payload …", "should
+  tell onRaised nothing about a node without an @id …", "should hand the detail to the shape's entry …"),
+  `src/runtime/startRuntime.browser.test.ts` ("should post raised for an event of a node that carries an @id"),
+  `src/runtime/validate.test.ts`.
 - **`@share` and `$peers`: what the people on the same thing have** (docs/design/state-definitions-and-instances.md,
   "Seeing other people's app state"). A node's `@share` maps its declared properties to `"peers of .<path>"`
   (`SUI-NODE-META` otherwise); `metadataPaths` lists them as `share` (`{ path, by }`), and assembly writes the

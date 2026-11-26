@@ -12,7 +12,7 @@ export const PROTOCOL_VERSION = 1;
 export const INBOUND_TYPES = ['load', 'write', 'command', 'locale', 'theme', 'grant', 'event', 'ping', 'inspect', 'watch', 'fileProgress', 'fileResult', 'fileData', 'fileReleased', 'fileExported'] as const;
 
 /** Messages the runtime sends to the host */
-export const OUTBOUND_TYPES = ['ready', 'change', 'emit', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'fileExport', 'key', 'inspected', 'watched', 'decide', 'history'] as const;
+export const OUTBOUND_TYPES = ['ready', 'change', 'raised', 'error', 'pong', 'file', 'fileCancel', 'fileRead', 'fileRelease', 'fileExport', 'key', 'inspected', 'watched', 'decide', 'history'] as const;
 
 /** The whole closed set of message types */
 export const MESSAGE_TYPES = [...INBOUND_TYPES, ...OUTBOUND_TYPES] as const;
@@ -280,10 +280,15 @@ export interface ChangeMessage extends Envelope<'change'> {
     change: RuntimeChange;
 }
 
-/** The `emit` command of an `on` entry: an event name and its payload */
-export interface EmitMessage extends Envelope<'emit'> {
-    name: string;
-    payload?: JsonValue;
+/**
+ * An event a node with an `@id` raised (`RaisedReport`): the id, the event, its payload and, in a row template, the
+ * row's record. The host reads the app by ids (docs/design/state-definitions-and-instances.md)
+ */
+export interface RaisedMessage extends Envelope<'raised'> {
+    id: string;
+    event: string;
+    value?: JsonValue;
+    row?: JsonValue;
 }
 
 /**
@@ -415,7 +420,7 @@ export type InboundMessage =
 export type OutboundMessage =
     | ReadyMessage
     | ChangeMessage
-    | EmitMessage
+    | RaisedMessage
     | DecideMessage
     | HistoryMessage
     | ErrorMessage

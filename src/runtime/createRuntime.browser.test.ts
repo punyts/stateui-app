@@ -187,7 +187,7 @@ describe('createRuntime in a page (inPage)', () => {
         let result: Promise<EmbeddedApp> | undefined;
 
         // Act
-        inside.dispatchEvent(new CustomEvent(APP_OPEN_EVENT, { bubbles: true, composed: true, detail: { app: 'shop', live: true, element: inside, onEmit: () => undefined, onNavigate: () => undefined, respond: (given: Promise<EmbeddedApp>) => void (result = given) } }));
+        inside.dispatchEvent(new CustomEvent(APP_OPEN_EVENT, { bubbles: true, composed: true, detail: { app: 'shop', live: true, element: inside, onRaised: () => undefined, onNavigate: () => undefined, respond: (given: Promise<EmbeddedApp>) => void (result = given) } }));
 
         // Assert
         expect(await result).toBe(attached);

@@ -8,7 +8,7 @@ import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { parseShape } from '../../core/shape/index.js';
 import type { Shape } from '../../core/shape/index.js';
 import { createDispatcher } from './index.js';
-import type { CommandElement, Dispatcher } from './index.js';
+import type { CommandElement, Dispatcher, RaisedReport } from './index.js';
 
 function shapeOf(properties: Record<string, unknown>, events: string[], commands: string[]): Shape {
     const result = parseShape({ summary: 'Fixture', properties, events, commands }, 'fixture.state.json');
@@ -60,7 +60,7 @@ defineComponent({
 interface Fixture {
     store: Store<unknown>;
     host: HTMLElement;
-    hooks: { onEmit: ReturnType<typeof vi.fn>; onError: ReturnType<typeof vi.fn> };
+    hooks: { onRaised: ReturnType<typeof vi.fn<(report: RaisedReport) => void>>; onError: ReturnType<typeof vi.fn> };
     dispatcher: Dispatcher;
     element(path: string): HTMLElement;
 }
@@ -74,7 +74,7 @@ function mountApp(app: unknown, data: unknown = {}): Fixture {
     mount(host, store, '$', { resolver: (name) => tags[name] });
     const root = host.appendChild(document.createElement('sui-node'));
     root.setAttribute('state', '$.app');
-    const hooks = { onEmit: vi.fn(), onError: vi.fn() };
+    const hooks = { onRaised: vi.fn<(report: RaisedReport) => void>(), onError: vi.fn() };
     const dispatcher = createDispatcher({ host, store, library, hooks });
     const element = (path: string): HTMLElement => {
         const found = find(host, path);
@@ -192,15 +192,15 @@ describe('on dispatch in Chromium', () => {
         expect(hooks.onError).toHaveBeenCalled();
     });
 
-    it('should emit the value at from as the payload', () => {
+    it('should tell onRaised the id, the event and the payload of a node that carries an @id', () => {
         // Arrange
-        const { hooks, element } = mountApp(panel({ b: { component: 'button', on: { press: { command: 'emit', target: 'picked', from: '$.data.pick' } } } }), { pick: 'k2' });
+        const { hooks, element } = mountApp(panel({ b: { component: 'button', '@id': 'save' } }));
 
         // Act
-        raise(element('$.app.children.b'), 'press');
+        raise(element('$.app.children.b'), 'press', { id: 7 });
 
         // Assert
-        expect(hooks.onEmit).toHaveBeenCalledWith('picked', 'k2');
+        expect(hooks.onRaised).toHaveBeenCalledWith({ id: 'save', event: 'press', value: { id: 7 } });
     });
 
     it('should run a list in order', () => {
@@ -272,30 +272,16 @@ describe('on dispatch in Chromium', () => {
         expect(store.get('$.data.flag')).toBe(false);
     });
 
-    it('should send the event payload to onEmit when emit has no value', () => {
+    it('should tell onRaised nothing about a node without an @id, and still run its on entry', () => {
         // Arrange
-        const { element, hooks } = mountApp(
-            panel({ b: { component: 'button', on: { press: { command: 'emit', target: 'saved' } } } })
-        );
+        const { element, hooks, store } = mountApp(panel({ b: { component: 'button', on: { press: { command: 'set', target: '$.data.saved', value: true } } } }), { saved: false });
 
         // Act
         raise(element('$.app.children.b'), 'press', { id: 7 });
 
         // Assert
-        expect(hooks.onEmit).toHaveBeenCalledWith('saved', { id: 7 });
-    });
-
-    it('should send the command value to onEmit when emit has one', () => {
-        // Arrange
-        const { element, hooks } = mountApp(
-            panel({ b: { component: 'button', on: { press: { command: 'emit', target: 'saved', value: 'fixed' } } } })
-        );
-
-        // Act
-        raise(element('$.app.children.b'), 'press', { id: 7 });
-
-        // Assert
-        expect(hooks.onEmit).toHaveBeenCalledWith('saved', 'fixed');
+        expect(hooks.onRaised).not.toHaveBeenCalled();
+        expect(store.get('$.data.saved')).toBe(true);
     });
 
     it('should flip a boolean with toggle and fail on a value that is not a boolean', () => {
@@ -371,10 +357,10 @@ describe('on dispatch in Chromium', () => {
 
     it('should report a component command the element does not handle or throws from', () => {
         // Arrange
-        const { element, hooks } = mountApp(
+        const { element, hooks, store } = mountApp(
             panel({
                 dlg: { component: 'dialog' },
-                b: { component: 'button', on: { press: [{ command: 'close', target: '$.app.children.dlg' }, { command: 'emit', target: 'after' }] } }
+                b: { component: 'button', on: { press: [{ command: 'close', target: '$.app.children.dlg' }, { command: 'set', target: '$.data.after', value: true }] } }
             })
         );
 
@@ -389,7 +375,7 @@ describe('on dispatch in Chromium', () => {
 
         // Assert
         expect(hooks.onError).toHaveBeenCalledTimes(2);
-        expect(hooks.onEmit).not.toHaveBeenCalled();
+        expect(store.get('$.data.after')).toBeUndefined();
     });
 
     it('should ignore an event the node does not map', () => {
@@ -713,13 +699,13 @@ describe('shape events from a drawing in Chromium', () => {
 
     it("should hand the detail to the shape's entry as the payload", () => {
         // Arrange
-        const fixture = mountApp(drawing({ a: { component: 'dot', on: { press: { command: 'emit', target: 'chosen' } } } }));
+        const fixture = mountApp(drawing({ a: { component: 'dot', '@id': 'chosen' } }));
 
         // Act
         raiseOn(fixture, `${MAP}.children.a`);
 
         // Assert
-        expect(fixture.hooks.onEmit).toHaveBeenCalledWith('chosen', { shape: `${MAP}.children.a`, key: 'a', x: 1, y: 2 });
+        expect(fixture.hooks.onRaised).toHaveBeenCalledWith({ id: 'chosen', event: 'press', value: { shape: `${MAP}.children.a`, key: 'a', x: 1, y: 2 } });
     });
 
     it("should hear an event only shapes declare (hover) and run the shape's entry for it", () => {

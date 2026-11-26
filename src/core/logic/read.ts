@@ -68,7 +68,6 @@ const REQUIRED: Record<LogicCommand['command'], readonly ('target' | 'from' | 'i
     'pull-data': ['from', 'target'],
     query: ['from', 'into'],
     notify: ['target'],
-    emit: ['target'],
     call: ['target'],
     reject: [],
     navigate: ['target']
@@ -333,7 +332,7 @@ class Reader {
             const text = value[key];
             if (typeof text !== 'string' || text === '') {
                 this.shape(`${path}.${key}`, `"${key}" must be a path`);
-            } else if (!((command === 'notify' || command === 'emit' || command === 'call' || command === 'navigate') && key === 'target')) {
+            } else if (!((command === 'notify' || command === 'call' || command === 'navigate') && key === 'target')) {
                 this.statePath(text, `${path}.${key}`, captures);
                 if (key !== 'from' && (text === READ_ONLY_ROOT || text.startsWith(`${READ_ONLY_ROOT}.`))) this.shape(`${path}.${key}`, `${READ_ONLY_ROOT} is read only: it shows what the app reads of other apps`);
             }

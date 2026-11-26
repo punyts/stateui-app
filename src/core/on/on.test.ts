@@ -69,13 +69,12 @@ describe('validateOn', () => {
         expect(check(app)).toEqual([]);
     });
 
-    it('should accept set, toggle and emit', () => {
+    it('should accept set and toggle', () => {
         const errors = check(
             button({
                 press: [
                     { command: 'set', target: '$.data.name', value: 'x' },
-                    { command: 'toggle', target: '.pressed' },
-                    { command: 'emit', target: 'orders.edit' }
+                    { command: 'toggle', target: '.pressed' }
                 ]
             })
         );
@@ -193,7 +192,7 @@ describe('validateOn', () => {
     });
 
     it('should accept an app event on the root node only', () => {
-        const rejected = { 'sync.rejected': { command: 'emit', target: 'rejected' } };
+        const rejected = { 'sync.rejected': { command: 'set', target: '$.data.rejected', value: true } };
         const root: Node = { component: 'toolbar', on: rejected, children: { b: { component: 'button', on: rejected } } };
 
         const errors = check(root);
@@ -298,13 +297,13 @@ describe('validateOn', () => {
         expect(errors.map((error) => error.code)).toEqual(['SUI-ON-TARGET']);
     });
 
-    it('should accept set and emit with from, and report a from that names no value or sits beside value', () => {
+    it('should accept set with from, and report a from that names no value or sits beside value', () => {
         // Arrange / Act
         const good = check(
             button({
                 press: [
                     { command: 'set', target: '$.data.name', from: '.pressed' },
-                    { command: 'emit', target: 'picked', from: '$.data.pick' }
+                    { command: 'set', target: '$.data.title', from: '$.data.pick' }
                 ]
             })
         );

@@ -30,7 +30,6 @@ export const LOGIC_COMMANDS = [
     'pull-data',
     'query',
     'notify',
-    'emit',
     'call',
     'reject',
     'navigate'
@@ -352,8 +351,6 @@ export interface LogicHost {
     records?(path: string): string | undefined;
     /** Raises `notify.<name>` in the open views */
     notify?(name: string, payload: JsonValue): void;
-    /** Sends an app event to the server */
-    emit?(name: string, payload: JsonValue): void;
     /** A failed transition or a refused change */
     failed?(failure: LogicFailure): void;
     /** A new record key; it must not be integer-like */

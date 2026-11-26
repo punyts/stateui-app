@@ -21,7 +21,7 @@ function isOpenRequest(value: unknown): value is AppOpenRequest {
         typeof request.live === 'boolean' &&
         request.element instanceof Element &&
         typeof request.respond === 'function' &&
-        typeof request.onEmit === 'function' &&
+        typeof request.onRaised === 'function' &&
         typeof request.onNavigate === 'function'
     );
 }
@@ -45,9 +45,9 @@ function embed(request: AppOpenRequest, opened: OpenedApp, mount: Mount): Embedd
     const document: AppDocument = follows === undefined ? opened.document : { ...opened.document, data: copy(follows.get(DATA_PATH)) ?? {} };
     const hooks: DispatchHooks = {
         ...opened.hooks,
-        onEmit: (name, payload) => {
-            opened.hooks?.onEmit?.(name, payload);
-            request.onEmit(name, payload);
+        onRaised: (report) => {
+            opened.hooks?.onRaised?.(report);
+            request.onRaised(report);
         }
     };
     const app = mount(request.element, document, opened.library, hooks, { ...opened.options, route: false, embedded: true });

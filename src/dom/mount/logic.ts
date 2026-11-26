@@ -23,8 +23,6 @@ export interface BrowserLogicOptions {
     tree: ResolvedTree;
     /** Raises an app event on the root node (`logic.failed`, `notify.<name>`) */
     raise(name: string, payload: JsonValue): void;
-    /** Sends an app event to the server, as the `emit` command does */
-    emit?(name: string, payload: JsonValue): void;
     /** The functions the browser runs, their code loaded for those the document names */
     functions?: FunctionLookup;
     /** Runs only the units of this side (`logicFor`): `browser` in a Full-mode app. Absent runs every unit, `runs` ignored */
@@ -106,7 +104,6 @@ export function startBrowserLogic(options: BrowserLogicOptions): (() => void) | 
         initial: index.initial,
         records: index.records,
         notify: (name, payload) => options.raise(`${NOTIFY_PREFIX}${name}`, payload),
-        emit: (name, payload) => options.emit?.(name, payload),
         schedule(ms, run) {
             const timer = setTimeout(run, ms);
             return () => clearTimeout(timer);

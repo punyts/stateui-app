@@ -162,9 +162,9 @@ function removedWithParent(path: string, change: LogicChange, read: (path: strin
     return change.path !== path && covers(change.path, path) && read(path) === undefined && read(parentOf(path)) === undefined;
 }
 
-/** The keys of a command whose path it writes; `notify`, `emit`, `call` and `navigate` name no state path in `target` */
+/** The keys of a command whose path it writes; `notify`, `call` and `navigate` name no state path in `target` */
 const WRITE_KEYS = ['target', 'into'] as const;
-const NOT_WRITES = new Set(['notify', 'emit', 'call', 'reject', 'navigate']);
+const NOT_WRITES = new Set(['notify', 'call', 'reject', 'navigate']);
 
 /** The commands of a unit's transitions; a table has none */
 function unitCommands(unit: { transitions: readonly LogicTransition[] }): LogicCommand[] {

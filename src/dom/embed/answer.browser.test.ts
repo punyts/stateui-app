@@ -13,14 +13,14 @@ describe('answerAppRequests with an app its host attaches', () => {
         const host = document.body.appendChild(document.createElement('div'));
         const element = host.appendChild(document.createElement('section'));
         const attached: EmbeddedApp = { navigate: () => undefined, dispose: () => undefined };
-        const attach = vi.fn<(request: Pick<AppOpenRequest, 'element' | 'screen' | 'onEmit' | 'onNavigate'>) => EmbeddedApp>(() => attached);
+        const attach = vi.fn<(request: Pick<AppOpenRequest, 'element' | 'screen' | 'onRaised' | 'onNavigate'>) => EmbeddedApp>(() => attached);
         const apps: AppHost = { open: () => Promise.resolve({ attach }) };
         const mount = vi.fn();
         const stop = answerAppRequests(host, apps, mount);
         let result: Promise<EmbeddedApp> | undefined;
-        const onEmit = (): void => undefined;
+        const onRaised = (): void => undefined;
         const onNavigate = (): void => undefined;
-        const detail = { app: 'shop', live: true, screen: 'cart', element, onEmit, onNavigate, respond: (given: Promise<EmbeddedApp>) => void (result = given) };
+        const detail = { app: 'shop', live: true, screen: 'cart', element, onRaised, onNavigate, respond: (given: Promise<EmbeddedApp>) => void (result = given) };
 
         // Act
         element.dispatchEvent(new CustomEvent(APP_OPEN_EVENT, { detail, bubbles: true, composed: true }));
@@ -30,7 +30,7 @@ describe('answerAppRequests with an app its host attaches', () => {
         // Assert
         expect(embedded).toBe(attached);
         expect(attach).toHaveBeenCalledTimes(1);
-        expect(attach.mock.calls[0]?.[0]).toMatchObject({ element, screen: 'cart', onEmit, onNavigate });
+        expect(attach.mock.calls[0]?.[0]).toMatchObject({ element, screen: 'cart', onRaised, onNavigate });
         expect(mount).not.toHaveBeenCalled();
     });
 });

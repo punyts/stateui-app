@@ -204,11 +204,6 @@ const RUNNERS: Record<LogicCommand['command'], Runner> = {
         const payload = value(command, context);
         context.after.push(() => context.host.notify?.(name, payload));
     },
-    emit: (command, context) => {
-        const name = required(command, 'target');
-        const payload = value(command, context);
-        context.after.push(() => context.host.emit?.(name, payload));
-    },
     call: (command, context) => {
         if (command.as === undefined) throw new LogicError('"call" needs "as"');
         context.calls.push({ name: required(command, 'target'), payload: value(command, context), as: command.as });

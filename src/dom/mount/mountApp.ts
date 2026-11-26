@@ -427,7 +427,6 @@ export function mountApp(
                 raise: (name, payload) => {
                     if (!disposed) dispatcher.raise(name as AppEventName, payload);
                 },
-                emit: (name, payload) => hooks.onEmit?.(name, payload),
                 ...(functions ? { functions } : {}),
                 ...(mode === 'full' ? { side: 'browser' as const } : {})
             });

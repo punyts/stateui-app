@@ -457,9 +457,8 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
                     exportFile: exports.exportFile,
                     // Only a host that serves the 3D chunk names it; without the hook a scene shows its fallback
                     ...(message.chunks?.['3d'] !== undefined && { load3d: chunks.load3d(message.chunks['3d']) }),
-                    onEmit(name, payload) {
-                        const json = payload === undefined ? undefined : toJson(payload);
-                        post({ type: 'emit', name, ...(json === undefined ? {} : { payload: json }) });
+                    onRaised(report) {
+                        post({ type: 'raised', ...report });
                     },
                     decide(decision) {
                         post({ type: 'decide', ...decision });

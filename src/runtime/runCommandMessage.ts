@@ -57,8 +57,7 @@ export function runCommandMessage(run: CommandRun, target: string, command: stri
         library: run.library,
         host: run.host,
         store: run.store,
-        payload: undefined,
-        emit: () => undefined
+        payload: undefined
     };
     try {
         runCommand({ command, target, ...(value === undefined ? {} : { value }) }, context);

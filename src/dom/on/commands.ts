@@ -34,7 +34,6 @@ export interface CommandContext {
     host: Element;
     store: { get(path: string): unknown; set(path: string, value: never, options?: { always?: boolean }): boolean };
     payload: unknown;
-    emit(name: string, payload: unknown): void;
     /** Moves `$.route` to a screen; returns why it cannot. Absent in an app without screens */
     navigate?(screen: string, params: JsonValue | undefined): string | undefined;
     /** Hands a request command's decision to the host. Absent when the app is mounted without a host that decides */
@@ -221,9 +220,6 @@ export function runCommand(command: OnCommand, context: CommandContext): void {
             throw new CommandFailure(`${path} holds ${Array.isArray(current) ? 'a list' : `a ${typeof current}`}, not a boolean`);
         }
         write(path, current !== true, context);
-    } else if (command.command === 'emit') {
-        if (command.target === undefined) throw new CommandFailure('emit needs an event name');
-        context.emit(command.target, 'value' in command || command.from !== undefined ? valueOf(command, context) : context.payload);
     } else if (command.command === 'navigate') {
         if (command.target === undefined) throw new CommandFailure('navigate needs a screen name');
         if (context.navigate === undefined) throw new CommandFailure(`the app has no screens, so it cannot navigate to "${command.target}"`);

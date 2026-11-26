@@ -135,7 +135,6 @@ function memoryHost(initial: JsonObject, overrides: Partial<LogicHost> = {}) {
     const commits: LogicWrite[][] = [];
     const failures: LogicFailure[] = [];
     const notices: [string, JsonValue][] = [];
-    const emits: [string, JsonValue][] = [];
     const resolved = resolveNode(APP, LIBRARY, {});
     const index = createLogicIndex(resolved, LIBRARY, initial['data']);
     let next = 0;
@@ -163,12 +162,11 @@ function memoryHost(initial: JsonObject, overrides: Partial<LogicHost> = {}) {
             return value;
         },
         notify: (name, payload) => notices.push([name, payload]),
-        emit: (name, payload) => emits.push([name, payload]),
         failed: (failure) => failures.push(failure),
         newKey: () => `c${(next += 1)}`,
         ...overrides
     };
-    return { host, state, commits, failures, notices, emits, apply, get: (path: string) => walk(state.root, path) };
+    return { host, state, commits, failures, notices, apply, get: (path: string) => walk(state.root, path) };
 }
 
 const BASE: JsonObject = Object.freeze({
@@ -654,8 +652,7 @@ describe('createLogicEngine', () => {
                         { command: 'copy', from: '$.data.profile.name', target: '$.data.title' },
                         { command: 'toggle', target: '$.data.flag' },
                         { command: 'increment', target: '$.data.count', value: 5 },
-                        { command: 'delete-data', target: '$.data.contacts.c9' },
-                        { command: 'emit', target: 'audit', value: { who: '$.data.profile.name' } }
+                        { command: 'delete-data', target: '$.data.contacts.c9' }
                     ]
                 }
             }
@@ -668,7 +665,6 @@ describe('createLogicEngine', () => {
 
         // Assert
         expect(memory.get('$.data')).toEqual({ go: true, profile: { name: 'Ana', city: 'Oslo' }, title: 'Ana', flag: true, count: 5, contacts: {} });
-        expect(memory.emits).toEqual([['audit', { who: 'Ana' }]]);
     });
 
     it('should pull a record into a form', () => {

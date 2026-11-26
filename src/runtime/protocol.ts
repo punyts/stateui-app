@@ -6,7 +6,7 @@ export type {
     ChangeMessage,
     ChangeOp,
     CommandMessage,
-    EmitMessage,
+    RaisedMessage,
     ErrorMessage,
     EventMessage,
     FileCancelMessage,

@@ -40,6 +40,8 @@ const STATUS_PATH = /^\$\.runtime\.(sync|requests)(\.[^.\s]+)*$/;
 const MODES = ['standalone', 'persisted', 'full'];
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 const NAME = /^[A-Za-z][A-Za-z0-9_.:-]*$/;
+/** A node's `@id` */
+const NODE_ID = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 /**
  * A key chord: modifiers in the order mod, shift, alt, then a letter, a digit, `-`, `=` or `escape`. A chord with no
@@ -296,7 +298,14 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['payload'] === undefined || isJson(m['payload'])),
     ready: (m) => hasOnlyKeys(m, []),
     change: (m) => hasOnlyKeys(m, ['change']) && isRuntimeChange(m['change']),
-    emit: (m) => hasOnlyKeys(m, ['name', 'payload']) && isText(m['name'], MAX_NAME_LENGTH) && NAME.test(m['name']) && (m['payload'] === undefined || isJson(m['payload'])),
+    raised: (m) =>
+        hasOnlyKeys(m, ['id', 'event', 'value', 'row']) &&
+        isText(m['id'], MAX_NAME_LENGTH) &&
+        NODE_ID.test(m['id']) &&
+        isText(m['event'], MAX_NAME_LENGTH) &&
+        NAME.test(m['event']) &&
+        (m['value'] === undefined || isJson(m['value'])) &&
+        (m['row'] === undefined || isJson(m['row'])),
     error: (m) => hasOnlyKeys(m, ['errors']) && Array.isArray(m['errors']) && m['errors'].length > 0 && m['errors'].length <= MAX_ERRORS && m['errors'].every(isProtocolError),
     ping: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),
     pong: (m) => hasOnlyKeys(m, ['id']) && isInteger(m['id']),

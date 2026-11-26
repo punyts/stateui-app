@@ -113,7 +113,7 @@ export const MESSAGE_BYTE_LIMITS = {
     event: MAX_EVENT_BYTES,
     ready: MAX_SMALL_BYTES,
     change: MAX_CHANGE_BYTES,
-    emit: MAX_EVENT_BYTES,
+    raised: MAX_EVENT_BYTES,
     error: MAX_EVENT_BYTES,
     ping: MAX_SMALL_BYTES,
     pong: MAX_SMALL_BYTES,

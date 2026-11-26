@@ -544,21 +544,21 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('ready')).toHaveLength(1);
     });
 
-    it('should run the root on entry for sync.rejected with the payload', () => {
+    it('should run the root on entry for sync.rejected', async () => {
         // Arrange
         const document: AppDocument = {
-            app: { ...panel({}), on: { 'sync.rejected': { command: 'emit', target: 'rejected' } } } as AppDocument['app']
+            data: { rejected: false },
+            app: { ...panel({}), on: { 'sync.rejected': { command: 'set', target: '$.data.rejected', value: true } } } as AppDocument['app']
         };
         send(message('load', { document, mode: 'full' }));
 
         // Act
         send(message('event', { name: 'sync.rejected', payload: { path: '$.data.stock', reason: 'sold out' } }));
+        await tick();
 
         // Assert
         expect(ofType('error')).toHaveLength(0);
-        expect(ofType('emit')).toEqual([
-            { v: PROTOCOL_VERSION, nonce: NONCE, type: 'emit', name: 'rejected', payload: { path: '$.data.stock', reason: 'sold out' } }
-        ]);
+        expect(ofType('change').map((change) => (change['change'] as { path: string }).path)).toContain('$.data.rejected');
     });
 
     it('should drop an event that is not an app event, and count one while nothing is mounted', () => {
@@ -1065,18 +1065,18 @@ describe('startRuntime in Chromium', () => {
         expect(ofType('error')).toHaveLength(0);
     });
 
-    it('should post emit from the dispatcher hook', () => {
+    it('should post raised for an event of a node that carries an @id', () => {
         // Arrange
         const document: AppDocument = {
-            app: panel({ go: { component: 'button', on: { press: { command: 'emit', target: 'saved', value: { id: 3 } } } } })
+            app: panel({ go: { component: 'button', '@id': 'go' } })
         };
         send(message('load', { document }));
 
         // Act
-        find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+        find(host, 'x-rt-button')?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true, detail: { id: 3 } }));
 
         // Assert
-        expect(ofType('emit')).toEqual([{ v: PROTOCOL_VERSION, nonce: NONCE, type: 'emit', name: 'saved', payload: { id: 3 } }]);
+        expect(ofType('raised')).toEqual([{ v: PROTOCOL_VERSION, nonce: NONCE, type: 'raised', id: 'go', event: 'press', value: { id: 3 } }]);
     });
 
     it('should post decide for a request command, and refuse one with no id as a runtime error', () => {

@@ -8,7 +8,7 @@ import type { Frame, OnCommand, TreeNode } from '../../core/on/index.js';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
 import { runtimePath } from '../../core/links/index.js';
-import { RESERVED_KEYS, SYNC_NOTICES } from '../../core/types.js';
+import { META_KEYS, RESERVED_KEYS, SYNC_NOTICES } from '../../core/types.js';
 import type { JsonValue } from '../../core/types.js';
 import { CommandFailure, runCommand } from './commands.js';
 import { createRaisedRecorder } from './raised.js';
@@ -280,6 +280,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             const found = locate(target);
             if (!found) return;
             recorder.record(type, payload, target);
+            tell(type, payload, found.chain, found.rowPath);
             run(type, payload, found.chain, found);
             return;
         }
@@ -287,6 +288,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         if (!found) return;
         // A copy is not a node: the repeat holds the event, whose payload names the copy's record (`key`)
         recorder.record(type, payload, copy.repeat);
+        tell(type, payload, found.chain, copy.rowPath);
         const at = found.chain.findIndex((frame) => frame.path === copy.repeat);
         const owner = at < 0 ? (found.owner ?? found.chain) : found.chain.slice(0, at + 1);
         run(type, payload, found.chain, { owner, rowPath: copy.rowPath });
@@ -305,10 +307,36 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         const found = locate(path);
         if (!found) return;
         recorder.record(event.type, payload, path);
+        tell(event.type, payload, found.chain, found.rowPath);
         run(event.type, payload, found.chain, found);
     }
 
-    /** Runs the `on` entry for `type` of the last node of `chain`, if it has one */
+    /**
+     * Tells the host about an event of a node that carries an `@id`: the host reads the app by ids
+     * (docs/design/state-definitions-and-instances.md), so the id, the event, its payload and, in a row template, the
+     * row's record are what it gets. Nodes without an id are never reported
+     */
+    function tell(type: string, payload: unknown, chain: readonly Frame[], rowPath: string | undefined): void {
+        if (hooks?.onRaised === undefined) return;
+        const id: unknown = chain[chain.length - 1]?.node[META_KEYS.id];
+        if (typeof id !== 'string') return;
+        const value = jsonOf(payload);
+        const row = rowPath === undefined ? undefined : jsonOf(store.get(rowPath));
+        hooks.onRaised({ id, event: type, ...(value === undefined ? {} : { value }), ...(row === undefined ? {} : { row }) });
+    }
+
+    /** A JSON copy of a value, undefined when it has none or is not JSON */
+function jsonOf(value: unknown): JsonValue | undefined {
+    if (value === undefined) return undefined;
+    try {
+        const text = JSON.stringify(value);
+        return text === undefined ? undefined : (JSON.parse(text) as JsonValue);
+    } catch {
+        return undefined;
+    }
+}
+
+/** Runs the `on` entry for `type` of the last node of `chain`, if it has one */
     function run(type: string, payload: unknown, chain: Frame[], found?: { owner?: Frame[]; rowPath?: string }): void {
         const self = chain[chain.length - 1];
         if (!self) return;
@@ -351,7 +379,6 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
             host,
             store,
             payload,
-            emit: (name, payload) => hooks?.onEmit?.(name, payload),
             ...(options.navigate === undefined ? {} : { navigate: options.navigate }),
             ...(hooks?.decide === undefined ? {} : { decide: hooks.decide }),
             ...(hooks?.travel === undefined ? {} : { travel: hooks.travel })

@@ -1,7 +1,7 @@
 import type { Store } from '@punyts/state';
 import type { ComponentLibrary } from '../../core/resolve/index.js';
 import type { AppDocument } from '../../core/types.js';
-import type { DispatchHooks } from '../on/types.js';
+import type { DispatchHooks, RaisedReport } from '../on/types.js';
 import type { MountedApp, MountOptions } from '../mount/types.js';
 
 /**
@@ -24,8 +24,8 @@ export interface AppAsk {
 export interface AppOpenRequest extends AppAsk {
     /** Where the app is mounted: an element inside the asking component */
     readonly element: Element;
-    /** Called with each `emit` of the app inside, after the host's own `onEmit` */
-    readonly onEmit: (name: string, payload: unknown) => void;
+    /** Called with each event a node with an `@id` raises in the app inside, after the host's own `onRaised` */
+    readonly onRaised: (report: RaisedReport) => void;
     /** Called with the screen the app inside shows, when it moves to another screen itself */
     readonly onNavigate: (screen: string) => void;
     /**
@@ -64,11 +64,11 @@ export interface OpenedApp {
 
 /**
  * What an app host gives for an app it mounts itself: one whose runtime it runs, such as a live app whose sync client
- * writes its store. The host mounts it in the request's element, on its screen, calls `onEmit` and `onNavigate` as the
- * app emits and moves, and leaves the document title alone
+ * writes its store. The host mounts it in the request's element, on its screen, calls `onRaised` and `onNavigate` as the
+ * app's nodes raise events and it moves, and leaves the document title alone
  */
 export interface AttachedApp {
-    attach(request: Pick<AppOpenRequest, 'element' | 'screen' | 'onEmit' | 'onNavigate'>): EmbeddedApp;
+    attach(request: Pick<AppOpenRequest, 'element' | 'screen' | 'onRaised' | 'onNavigate'>): EmbeddedApp;
 }
 
 /**

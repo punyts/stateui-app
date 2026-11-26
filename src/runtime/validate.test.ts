@@ -6,7 +6,7 @@ const base = (type: string, fields: Record<string, unknown> = {}) => ({ v: PROTO
 describe('runtime message validator', () => {
     it('should list the whole closed set', () => {
         expect([...MESSAGE_TYPES].sort()).toEqual(
-            ['change', 'command', 'decide', 'emit', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'grant', 'history', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'ready', 'theme', 'watch', 'watched', 'write']
+            ['change', 'command', 'decide', 'error', 'event', 'file', 'fileCancel', 'fileData', 'fileExport', 'fileExported', 'fileProgress', 'fileRead', 'fileRelease', 'fileReleased', 'fileResult', 'grant', 'history', 'inspect', 'inspected', 'key', 'load', 'locale', 'ping', 'pong', 'raised', 'ready', 'theme', 'watch', 'watched', 'write']
         );
     });
 
@@ -36,7 +36,8 @@ describe('runtime message validator', () => {
         base('ready'),
         base('change', { change: { id: 'c1', path: '$.data.a', op: 'set', value: 1 } }),
         base('change', { change: { id: 'c2', path: '$.app.children.x', op: 'delete' } }),
-        base('emit', { name: 'order.saved', payload: { id: 1 } }),
+        base('raised', { id: 'save', event: 'press', value: { id: 1 } }),
+        base('raised', { id: 'orders', event: 'activate', value: 'p1', row: { id: 'p1', name: 'Tea' } }),
         base('error', { errors: [{ code: 'SUI-RUN-WRITE', message: 'm', severity: 'error', statePath: '$.data.a' }] }),
         base('ping', { id: 1 }),
         base('pong', { id: 1 }),
@@ -91,7 +92,7 @@ describe('runtime message validator', () => {
         ['too many writes', base('write', { writes: Array.from({ length: MAX_WRITES + 1 }, () => ({ path: '$.data.a', value: 1 })) })],
         ['bad locale', base('locale', { locale: 'not a locale' })],
         ['empty error list', base('error', { errors: [] })],
-        ['emit name with spaces', base('emit', { name: 'a b' })],
+        ['raised id with spaces', base('raised', { id: 'a b', event: 'press' })],
         ['file with a size that differs from the buffer', base('file', { requestId: 1, name: 'a', size: 4, mediaType: 'text/plain', data: new ArrayBuffer(3) })],
         ['file whose data is a typed array', base('file', { requestId: 1, name: 'a', size: 3, mediaType: 'text/plain', data: new Uint8Array(3) })],
         ['file without a media type', base('file', { requestId: 1, name: 'a', size: 3, data: new ArrayBuffer(3) })],
@@ -135,7 +136,7 @@ describe('runtime message validator', () => {
 
     it('should report an unknown type and an oversized message', () => {
         expect(validateMessage(base('explode'))).toEqual({ ok: false, reason: 'unknown' });
-        expect(validateMessage(base('emit', { name: 'a', payload: 'x'.repeat(70 * 1024) }))).toEqual({ ok: false, reason: 'oversized' });
+        expect(validateMessage(base('raised', { id: 'a', event: 'press', value: 'x'.repeat(70 * 1024) }))).toEqual({ ok: false, reason: 'oversized' });
     });
 
     it('should report a file buffer over MAX_FILE_BYTES as oversized and a long fileResult message as oversized', () => {

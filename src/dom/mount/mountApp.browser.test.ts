@@ -323,12 +323,8 @@ describe('mountApp in Chromium', () => {
     it('should not call the hooks of a disposed app', () => {
         // Arrange
         const host = freshHost();
-        const onEmit = vi.fn();
-        const app = start(
-            host,
-            { app: panel({ send: { component: 'button', on: { press: { command: 'emit', target: 'chat.send', value: 1 } } } }) },
-            { onEmit }
-        );
+        const onRaised = vi.fn();
+        const app = start(host, { app: panel({ send: { component: 'button', '@id': 'send' } }) }, { onRaised });
         const button = find(host, 'x-mount-button');
         app.dispose();
 
@@ -336,7 +332,7 @@ describe('mountApp in Chromium', () => {
         button?.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
 
         // Assert
-        expect(onEmit).not.toHaveBeenCalled();
+        expect(onRaised).not.toHaveBeenCalled();
     });
 
     it('should run registered steps and let them replace the theme and locale', () => {

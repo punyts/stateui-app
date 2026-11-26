@@ -115,10 +115,21 @@ export interface CommandElement extends Element {
     commands?: Readonly<Record<string, CommandHandler>>;
 }
 
+/**
+ * An event a node with an `@id` raised, as the host gets it: the id, the event, its payload as JSON and, for a node in a
+ * row template, the record of its row
+ */
+export interface RaisedReport {
+    id: string;
+    event: string;
+    value?: JsonValue;
+    row?: JsonValue;
+}
+
 /** What the host application hands to the dispatcher */
 export interface DispatchHooks {
-    /** Called by the system command `emit` with the event name (the command's `target`) and its payload */
-    onEmit?(name: string, payload: unknown): void;
+    /** Called with each event a node that carries an `@id` raises (`RaisedReport`): the host reads the app by ids */
+    onRaised?(report: RaisedReport): void;
     /**
      * Called by the `request.*` commands with the decision on a request waiting for the owner
      * (docs/design/statenet-requests.md). Set by the runtime; absent when the app is mounted without a host that decides
