@@ -1,16 +1,41 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
 import { extractLinks } from '../links/index.js';
+import type { Link } from '../links/index.js';
 import { entryShape } from '../resolve/index.js';
 import type { ComponentLibrary } from '../resolve/index.js';
 import { nodeChildren, validateNode } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
-import { META_KEYS } from '../types.js';
+import { META_KEYS, RESERVED_KEYS } from '../types.js';
 import type { JsonValue, Node } from '../types.js';
 import { dataPathExists } from './document.js';
 import type { ValidateDocumentOptions } from './types.js';
 
 const DATA_TARGET = /^\$\.data(\.|$)/;
+
+/** The properties that are a component's own state rather than data: whether it shows, whether it is open */
+const OWN_STATE = new Set(['hidden', 'open']);
+
+/**
+ * The branches a component with a fixed shape declares: its properties that hold a node (a form's `body`, a dialog's
+ * `footer`). docs/design/state-definitions-and-instances.md: such a component keeps its nodes there, and only a
+ * component that lays out children (`layout`, a `placement` for them, or a `childComponents` list) holds `children`
+ */
+export function declaredBranches(shape: Shape): string[] {
+    return Object.entries(shape.properties)
+        .filter(([, property]) => property.type === 'node')
+        .map(([name]) => name);
+}
+
+/** True when a component takes `children`: it lays them out, places them, or names the components it accepts */
+function holdsChildren(shape: Shape): boolean {
+    return shape.layout || shape.placement !== undefined || shape.childComponents !== undefined;
+}
+
+/** True when a property of a shape is the component's own state or look: `hidden`, `open` or a shared look (`tone`, `size`) */
+function ownState(shape: Shape, name: string): boolean {
+    return OWN_STATE.has(name) || shape.shared.includes(name);
+}
 
 function shapeOf(library: ComponentLibrary, component: string): Shape | undefined {
     if (!Object.hasOwn(library, component)) return undefined;
@@ -78,6 +103,8 @@ class TreeChecker {
     readonly errors: BuildError[] = [];
     /** The path of each `@id` found so far: an id names one node of the tree */
     private readonly ids = new Map<string, string>();
+    /** The shape of each node visited, by state path, for the link checks */
+    private readonly shapes = new Map<string, Shape>();
     constructor(
         private readonly library: ComponentLibrary,
         private readonly instances: Readonly<Record<string, string[]>>,
@@ -108,7 +135,15 @@ class TreeChecker {
             if (other === undefined) this.ids.set(id, path);
             else this.errors.push(buildError('SUI-NODE-ID-TWICE', { name: id, path, other, statePath: path }));
         }
-        if (shape) this.addNodeErrors(validateNode(shape, withoutRuntimeDefaults(shape, node), path, { ...this.options, insideRow }));
+        if (shape) {
+            this.shapes.set(path, shape);
+            this.addNodeErrors(validateNode(shape, withoutRuntimeDefaults(shape, node), path, { ...this.options, insideRow }));
+            const branches = declaredBranches(shape);
+            if (branches.length > 0 && !holdsChildren(shape) && Object.hasOwn(node, RESERVED_KEYS.children)) {
+                const at = `${path}.${RESERVED_KEYS.children}`;
+                this.errors.push(buildError('SUI-NODE-BRANCH', { component: node.component, path: at, other: branches.join(', '), statePath: at }));
+            }
+        }
         for (const child of nodeChildren(node, path, shape)) {
             const refused = childRefusal(this.library, child.node.component, child.accepts);
             if (refused !== undefined) this.errors.push(refused(child.path));
@@ -116,10 +151,33 @@ class TreeChecker {
         }
     }
 
+    /**
+     * Warns of a `$.data` value that only a component's own state reads (`hidden`, `open` or a look): that is the
+     * component's state, which its instance keeps, not a field of the data (SUI-LINK-OWN). A value read by anything else
+     * too is data
+     */
+    private checkOwnState(links: readonly Link[]): void {
+        const byTarget = new Map<string, Link[]>();
+        for (const link of links) {
+            if (!DATA_TARGET.test(link.target)) continue;
+            byTarget.set(link.target, [...(byTarget.get(link.target) ?? []), link]);
+        }
+        for (const [target, bound] of byTarget) {
+            const own = bound.every((link) => {
+                const shape = this.shapes.get(link.statePath);
+                return shape !== undefined && ownState(shape, link.key);
+            });
+            if (!own) continue;
+            const first = bound[0] as Link;
+            this.errors.push(buildError('SUI-LINK-OWN', { target, name: first.key, path: first.statePath, statePath: first.statePath }));
+        }
+    }
+
     /** Checks the `<-` properties of the tree: syntax, node references, and that each `$.data` target exists */
     checkLinks(root: Node): void {
         const extracted = extractLinks(root, { path: this.rootPath, library: this.library, instances: this.instances });
         this.errors.push(...extracted.errors);
+        this.checkOwnState(extracted.links);
         for (const link of extracted.links) {
             if (DATA_TARGET.test(link.target) && !dataPathExists(this.data, link.target)) {
                 this.errors.push(

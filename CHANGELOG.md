@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Declared child branches, and a warning for data that is a component's own state** (docs/design/state-definitions-and-instances.md). Breaking. A component whose shape declares `node` properties and neither lays out, places nor lists children refuses `children` with `SUI-NODE-BRANCH`. `SUI-LINK-OWN` (a warning) reports a `$.data` value bound only to `hidden`, `open` or a shared look of the nodes that read it. Tests: `src/core/validate/validate.test.ts` ("validateDocument: declared branches and own state").
 - **The host reads an app by ids; `emit` is gone** (docs/design/state-definitions-and-instances.md). Breaking. The `on`
   command and the logic command `emit`, `DispatchHooks.onEmit`, `LogicHost.emit` and the runtime message `emit` are
   removed. Every event of a node that carries an `@id` (a shape and a row-template copy included) reaches

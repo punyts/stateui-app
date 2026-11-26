@@ -1059,3 +1059,46 @@ describe('validateDocument unknown icon message', () => {
         expect(error?.message).toContain('"missing" is neither one of the app\'s own icons nor an icon of the set');
     });
 });
+
+describe('validateDocument: declared branches and own state', () => {
+    it('should refuse children on a component that declares its branches, and take them in those branches', () => {
+        // Arrange
+        const inChildren = doc({ component: 'panel', children: { dialog: { component: 'modal', children: { save: { component: 'button' } } } } });
+        const inBranch = doc({ component: 'panel', children: { dialog: { component: 'modal', footer: { component: 'button' } } } });
+
+        // Act
+        const refused = validateDocument(inChildren, LIBRARY).errors;
+        const taken = codes(inBranch);
+
+        // Assert
+        expect(refused.map((error) => [error.code, error.statePath])).toEqual([['SUI-NODE-BRANCH', '$.app.children.dialog.children']]);
+        expect(refused[0]?.message).toContain('body, footer');
+        expect(taken).toEqual([]);
+    });
+
+    it('should warn of a data value bound only to a component own state, and not of one read as data too', () => {
+        // Arrange
+        const ownOnly = doc(
+            { component: 'panel', children: { note: { component: 'text', '<-hidden': '$.data.ui.noteHidden' } } },
+            { data: { ui: { noteHidden: false } } }
+        );
+        const readToo = doc(
+            {
+                component: 'panel',
+                children: {
+                    note: { component: 'text', '<-hidden': '$.data.ui.noteHidden' },
+                    flag: { component: 'text', '<-label': '$.data.ui.noteHidden' }
+                }
+            },
+            { data: { ui: { noteHidden: false } } }
+        );
+
+        // Act
+        const warned = validateDocument(ownOnly, LIBRARY).errors;
+        const quiet = codes(readToo);
+
+        // Assert
+        expect(warned.map((error) => [error.code, error.severity, error.statePath])).toEqual([['SUI-LINK-OWN', 'warning', '$.app.children.note']]);
+        expect(quiet).toEqual([]);
+    });
+});

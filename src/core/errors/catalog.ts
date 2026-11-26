@@ -64,6 +64,13 @@ export const ERROR_CATALOG = {
     'SUI-NODE-META': {
         template: 'Metadata "{name}" at {path} does not fit: @id is a name, @local, @secret and @transient are true or a list of the properties of "{component}"'
     },
+    'SUI-NODE-BRANCH': {
+        template: 'Component "{component}" at {path} declares its branches ({other}) and lays out no children; put the nodes in those branches'
+    },
+    'SUI-LINK-OWN': {
+        template: 'Data {target} is bound only to "{name}" at {path}, which is the component\'s own state; keep it on the node instead of in $.data',
+        severity: 'warning'
+    },
     'SUI-NODE-ID-TWICE': { template: 'The id "{name}" at {path} is the @id of another node of the tree too, at {other}' },
     'SUI-STATE-INVALID': { template: 'Property "{name}" at {path} does not fit the shape of "{component}"' },
     'SUI-STATE-UNKNOWN': { template: 'Property "{name}" at {path} is not in the shape of "{component}"' },
