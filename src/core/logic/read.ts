@@ -30,6 +30,8 @@ const EFFECT_KEYS = ['request', 'run', 'status', 'records', 'window', 'value', '
 const UNIT_KEYS = ['machines', 'rules', 'tables', 'computes', 'effects'] as const;
 const TRIGGER_KEYS = ['path', 'result', 'is', 'was', 'if', 'after', 'debounce'];
 const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** A node reference a trigger may watch: `#name` and the steps below it, with no `*`, `{capture}` or `{{ }}` */
+const TRIGGER_REFERENCE = /^#[^\s.{}*]+(\.[^\s.{}*]+)*$/;
 /** A `$.server` path in a text: a path, a trigger or a `{{ }}` expression */
 const SERVER_PATH = /(^|[^A-Za-z0-9_$.])\$\.server(?![A-Za-z0-9_])/;
 
@@ -239,6 +241,23 @@ class Reader {
         return undefined;
     }
 
+    /**
+     * A trigger path that is a node reference (`#addBook.pressed`): the state of one node, so it holds no `*`, capture
+     * or template, and it resolves to one node. Returns it as written, since the engine resolves it where it runs
+     */
+    private triggerReference(text: string, path: string): string | undefined {
+        const bad = (target: string): undefined => {
+            this.errors.push(buildError('SUI-LOGIC-PATH', { target, path, statePath: path }));
+            return undefined;
+        };
+        if (!TRIGGER_REFERENCE.test(text)) return bad(text);
+        if (this.options.resolve && this.options.resolve(text) === undefined) {
+            const why = this.options.explain?.(text);
+            return bad(why === undefined ? text : `${text} (${why})`);
+        }
+        return text;
+    }
+
     trigger(value: JsonValue | undefined, path: string, place: TriggerPlace): { trigger?: LogicTrigger; captures: string[] } {
         const results = place.results;
         if (!isObject(value)) {
@@ -267,9 +286,12 @@ class Reader {
         }
         if (hasPath) {
             const text = value['path'];
-            const pattern = typeof text === 'string' ? compilePattern(text) : undefined;
+            const pattern = typeof text === 'string' && !text.startsWith('#') ? compilePattern(text) : undefined;
             const root = pattern?.steps[0];
-            if (!pattern || root?.kind !== 'literal' || !LOGIC_ROOTS.includes(root.text)) {
+            if (typeof text === 'string' && text.startsWith('#')) {
+                const reference = this.triggerReference(text, `${path}.path`);
+                if (reference !== undefined) trigger.path = reference;
+            } else if (!pattern || root?.kind !== 'literal' || !LOGIC_ROOTS.includes(root.text)) {
                 this.errors.push(buildError('SUI-LOGIC-PATH', { target: String(text), path: `${path}.path`, statePath: `${path}.path` }));
             } else {
                 trigger.path = pattern.source;
@@ -734,7 +756,7 @@ function schemaProperties(schema: unknown): { names: string[]; required: string[
  * Reads the `logic` root of a document: the keyed maps `machines`, `rules`, `tables`, `computes` and `effects`. Reports `SUI-LOGIC-SHAPE` (an unknown
  * key, a wrong type, a missing field), `SUI-LOGIC-COMMAND` (an unknown command), `SUI-LOGIC-PATH` (a path that is not
  * under `$.app`, `$.data` or `$.server`, a capture the trigger does not have, or a node reference that does not
- * resolve), `SUI-LOGIC-STATE` (a `from` or `to` that is neither the machine's `initial` nor the `to` of a transition)
+ * resolve; a trigger path may be a node reference too, `#addBook.pressed`, with no `*`, capture or template), `SUI-LOGIC-STATE` (a `from` or `to` that is neither the machine's `initial` nor the `to` of a transition)
  * and `SUI-LOGIC-EXPRESSION` (an expression that does not compile), each with its state path. A table's rows are
  * compiled: `SUI-LOGIC-GAP` (a combination no row covers), `SUI-LOGIC-UNREACHABLE` and `SUI-LOGIC-SIZE` (warnings),
  * and `SUI-LOGIC-CYCLE` for tables and computes that feed each other; `SUI-LOGIC-FUNCTION` (a warning) for a compute

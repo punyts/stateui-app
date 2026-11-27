@@ -20,7 +20,7 @@ const library: ComponentLibrary = Object.freeze({
     panel: { tier: 'root', tag: 'x-scr-panel', shape: shapeOf({ children: { type: 'map', items: 'string', default: {} } }) },
     label: { tier: 'root', tag: 'x-scr-label', shape: shapeOf({ text: { type: 'string', default: '' } }) },
     field: { tier: 'root', tag: 'x-scr-field', shape: shapeOf({ value: { type: 'string', default: '' } }) },
-    button: { tier: 'root', tag: 'x-scr-button', shape: shapeOf({}, ['press']) },
+    button: { tier: 'root', tag: 'x-scr-button', shape: shapeOf({ pressed: { type: 'object', default: {} } }, ['press']) },
     /** The test stand-in for the app component: a layout host for the screens and the toasts after it */
     app: { tier: 'root', tag: 'x-scr-app', shape: shapeOf({ toasts: { type: 'node' } }, [], true) }
 });
@@ -32,7 +32,18 @@ defineComponent({
 defineComponent({ tag: 'x-scr-label', template: '<p>{{ $.text }}</p>' });
 /** An input whose typed value lives only in the DOM, like any articulation the store does not hold */
 defineComponent({ tag: 'x-scr-field', template: '<input />' });
-defineComponent({ tag: 'x-scr-button', template: '<b>button</b>' });
+/** A click writes `pressed` and then raises `press`, as the library's button does */
+defineComponent({
+    tag: 'x-scr-button',
+    template: '<b>button</b>',
+    controller: ({ element, store, basePath }) => {
+        element.addEventListener('click', () => {
+            store.set(`${basePath}.pressed`, { at: Date.now(), device: 'test' }, { always: true });
+            element.dispatchEvent(new CustomEvent('press', { bubbles: true, composed: true }));
+        });
+        return {};
+    }
+});
 defineComponent({ tag: 'x-scr-app', template: '<section layout-host=""></section><sui-node state=".toasts"></sui-node>' });
 
 /** An app node, a home screen with a field and a button that opens a product screen, and a product screen */
@@ -324,6 +335,74 @@ describe('screens in mountApp', () => {
         expect(app.store?.get('$.route')).toEqual({ screen: 'product', params: { id: 'p9' } });
         expect(app.visibleScreen()).toBe('product');
         expect(app.store?.get('$.data.seen')).toBe(true);
+    });
+
+    it('should run a rule whose trigger is #name.pressed on a click of that button, on the screen shown and on a screen that was left', async () => {
+        // Arrange: the button also navigates to product in its on entry, so the rule runs after the screen changed
+        const doc = copy();
+        (doc as unknown as Record<string, unknown>)['logic'] = {
+            rules: { openPressed: { when: { path: '#open.pressed' }, do: [{ command: 'increment', target: '$.data.presses' }] } }
+        };
+        (doc.data as Record<string, unknown>)['presses'] = 0;
+        const { app, host } = start(doc);
+        const button = find(host, 'x-scr-button') as HTMLElement;
+
+        // Act
+        const atStart = app.store?.get('$.data.presses');
+        button.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        const afterFirst = app.store?.get('$.data.presses');
+        const screen = app.visibleScreen();
+        button.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Assert
+        expect(app.errors.filter((error) => error.severity !== 'warning')).toEqual([]);
+        expect(atStart).toBe(0);
+        expect(afterFirst).toBe(1);
+        expect(screen).toBe('product');
+        expect(app.store?.get('$.data.presses')).toBe(2);
+        expect(errorSpy).not.toHaveBeenCalledWith('Logic failed', expect.anything());
+    });
+
+    it('should resolve a press rule again when the screen changes: the node of the screen shown, else the app node', async () => {
+        // Arrange: the home screen and the app node each have a node named open
+        const doc = copy();
+        const screens = doc.screens as unknown as Record<string, { root: { children: Record<string, unknown> } }>;
+        (screens['home'] as { root: { children: Record<string, unknown> } }).root.children['open'] = { component: 'button' };
+        (doc.app as unknown as Record<string, unknown>)['toasts'] = { component: 'button', '@id': 'open' };
+        (doc as unknown as Record<string, unknown>)['logic'] = {
+            rules: { openPressed: { when: { path: '#open.pressed' }, do: [{ command: 'increment', target: '$.data.presses' }] } }
+        };
+        (doc.data as Record<string, unknown>)['presses'] = 0;
+        const { app, host } = start(doc);
+        const buttons = findAll(host, 'x-scr-button') as HTMLElement[];
+        const screen = findAll(host, 'sui-node').find((element) => element.getAttribute(SCREEN_ATTRIBUTE) === 'home') as Element;
+        const home = (find(screen, 'x-scr-button') ?? find(screen.shadowRoot as ShadowRoot, 'x-scr-button')) as HTMLElement;
+        const inApp = buttons.find((element) => element !== home) as HTMLElement;
+
+        // Act
+        home.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        const onHome = app.store?.get('$.data.presses');
+        app.navigate('product', { id: 'p2' });
+        home.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        const stale = app.store?.get('$.data.presses');
+        inApp.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Assert
+        expect(app.errors.filter((error) => error.severity !== 'warning')).toEqual([]);
+        expect(buttons).toHaveLength(2);
+        expect(onHome).toBe(1);
+        expect(stale).toBe(1);
+        expect(app.store?.get('$.data.presses')).toBe(2);
     });
 });
 

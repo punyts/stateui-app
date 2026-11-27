@@ -98,7 +98,7 @@ function checkUnits(units: JsonObject, needs: readonly string[], params: readonl
     eachString(units, '$', '', (text, path, key) => {
         const node = NODE_PATH.exec(text);
         if (node) errors.push(buildError('SUI-MODULE-NODE', { path, target: `$.${node[1] as string}`, statePath: path }));
-        else if (text.startsWith('#') && (PATH_KEYS.includes(key) || isUnitPath(path))) {
+        else if (text.startsWith('#') && (PATH_KEYS.includes(key) || isUnitPath(path) || path.endsWith('.when.path'))) {
             errors.push(buildError('SUI-MODULE-NODE', { path, target: text, statePath: path }));
         }
         for (const match of text.matchAll(DATA_PATH)) {

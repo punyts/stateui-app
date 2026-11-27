@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+- **A rule or a machine transition triggers on a node's state by its name** (docs/design/magnetic-editor-links-and-presses.md,
+  stage L0). `when.path` may be a node reference, `#name.property` (`#addBook.pressed`), where it was
+  `SUI-LOGIC-PATH` before; a guard's trigger too. `readLogic` resolves it through `options.resolve` and refuses,
+  as `SUI-LOGIC-PATH`, one that names no node or several (with `explain`'s reason) and one that holds `*`, a
+  capture or a template. `createLogicEngine` resolves it through `LogicHost.resolve` when it is made and again,
+  before a change is looked up, whenever `$.route.screen` is another screen than the one it resolved for; a
+  reference that then finds no node or several listens to nothing and is reported once through `LogicHost.failed`
+  (`SUI-LOGIC-PATH: …`, the reference and the unit's path, no value). A debounce timer keeps the path that matched.
+  A logic module that names a node in a trigger is `SUI-MODULE-NODE`. Tests: `src/core/logic/triggerReference.test.ts`,
+  `src/dom/mount/screens.browser.test.ts` ("should run a rule whose trigger is #name.pressed …", "should resolve a
+  press rule again when the screen changes …").
 - **A host writes a node's state by its id** (docs/design/state-definitions-and-instances.md). A `write` path may be
   `#<id>.<path>` (`#save.hidden`): the runtime finds the one node of the app node or a screen whose id (its `@id`,
   otherwise its key) it is, looking as logic does (the screen that shows, the app node, then the other screens), and

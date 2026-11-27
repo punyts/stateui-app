@@ -55,7 +55,10 @@ export const LOGIC_COMMAND_KEYS = [
 
 /** What starts a transition: a change at a path, or a named result of an earlier command (of the same machine, or of a rule) */
 export interface LogicTrigger {
-    /** A state path with `*` (one segment) and `{name}` (one segment, captured) steps */
+    /**
+     * A state path with `*` (one segment) and `{name}` (one segment, captured) steps, or a node reference
+     * (`#addBook.pressed`): the state of the one node the name means, with no `*` or capture
+     */
     path?: string;
     /** The `as` name of a `save-data` or `delete-data` command: of the same machine for a transition, of a rule for a rule */
     result?: string;

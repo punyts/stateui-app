@@ -477,6 +477,24 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   `if` is an expression. `debounce` (milliseconds) fires a path trigger once the path
   has been quiet that long, with the last change. `after` (milliseconds, a machine transition with `from` only) fires
   that long after the machine entered the state; an `after` transition that stays in its state repeats.
+- **A trigger on a node's state.** `path` may be a node reference, `#name.property`: the state of the one node
+  whose id (its `@id`, otherwise its key) is `name`, so a rule or a machine transition follows the node when it
+  moves in the tree. `{ "when": { "path": "#addBook.pressed" }, "do": [ … ] }` runs on every press of that button, in
+  the browser or on the app server, because a button writes `pressed` on each press. The reference holds no `*`,
+  `{name}` or `{{ }}` (a node inside a row template is not one node). The validator resolves it as it resolves a
+  command's reference (the app node, then all screens) and reports `SUI-LOGIC-PATH` when no node or several have the
+  name. The engine resolves it through `LogicHost.resolve`, in the order a command's reference is looked up (the
+  screen shown, the app node, then the other screens): once when it is made, and again before it looks a change up
+  whenever `$.route.screen` is another screen than the one it resolved for, so a trigger never listens to the node a
+  name meant on the screen that was left. A name that one node of the app has means the same node on every screen;
+  give a node that logic listens to such a name. The engine knows the nodes only through its host: a changed document
+  gets a new engine (`mountApp` for a loaded document, the app server when it sets the document), which resolves
+  again, while a node written into a mounted app with `writeNode` is not seen by that mount's logic, for a trigger as
+  for a command. A reference that
+  finds no node, or several, while the engine runs listens to nothing and is reported once through
+  `LogicHost.failed` with the reason `SUI-LOGIC-PATH: …` (the reference and the unit's path, never a value), and
+  again only after it had resolved in between. A guard's trigger may be a reference too. `logicRunOrder` lists no
+  read for a reference, which it cannot resolve without a document.
 - **Machines.** The current state is the value at `state` (`initial` is written when it has none). The first
   transition of the current state whose trigger matches fires; `from` absent matches any state, `to` absent keeps it.
 - **Tables.** `tables.<name>` is a lookup table that only writes values: `inputs` (a path, or `{ path | value, values |

@@ -1,4 +1,5 @@
 import { isReported, report } from '@punyts/core';
+import { buildError } from '../errors/index.js';
 import type { JsonValue } from '../types.js';
 import { REPORT, elapsed, reportClock } from '../report.js';
 import { runCommand } from './commands.js';
@@ -83,6 +84,11 @@ interface Unit {
     declared?: DeclaredPlan;
     transitions: LogicTransition[];
     patterns: (PathPattern | undefined)[];
+    /**
+     * The trigger paths written as node references (`#addBook.pressed`), by transition index. Their patterns are
+     * compiled from the state path the host resolves each to, and again when the screen shown changes
+     */
+    references: Map<number, string>;
 }
 
 interface Hit {
@@ -100,7 +106,10 @@ interface Hit {
 
 interface Guard {
     name: string;
-    pattern: PathPattern;
+    /** Absent while its trigger is a node reference that does not resolve */
+    pattern?: PathPattern;
+    /** Its trigger path when that is a node reference, which `pattern` is compiled from */
+    reference?: string;
     trigger: LogicTransition['when'];
     reason: string;
 }
@@ -265,29 +274,51 @@ function declaredPlan(unit: { table: LogicTable } | { compute: LogicCompute }, r
     return { plan, patterns };
 }
 
-/** The units and guards of a logic document, in document order (machines, rules, tables) */
+/** True for a trigger path written as a node reference (`#addBook.pressed`) */
+function isReference(path: string | undefined): path is string {
+    return path !== undefined && path.startsWith('#');
+}
+
+/**
+ * The units and guards of a logic document, in document order (machines, rules, tables). A trigger path that is a node
+ * reference gets no pattern here: it is listed in the unit's `references` (a guard's `reference`), and the engine
+ * compiles it from what its host resolves it to
+ */
 function buildUnits(logic: LogicDocument, resolve?: (reference: string) => string | undefined): { units: Unit[]; guards: Guard[] } {
     const units: Unit[] = [];
     const guards: Guard[] = [];
-    const pattern = (when: LogicTransition['when']): PathPattern | undefined => (when.path === undefined ? undefined : compilePattern(when.path));
+    const pattern = (when: LogicTransition['when']): PathPattern | undefined => (when.path === undefined || isReference(when.path) ? undefined : compilePattern(when.path));
+    const references = (transitions: readonly LogicTransition[]): Map<number, string> =>
+        new Map(transitions.flatMap((transition, index): [number, string][] => (isReference(transition.when.path) ? [[index, transition.when.path]] : [])));
     for (const [name, machine] of Object.entries(logic.machines ?? {})) {
-        units.push({ id: `machine:${name}`, kind: 'machine', name, machine, transitions: machine.transitions, patterns: machine.transitions.map((transition) => pattern(transition.when)) });
+        units.push({
+            id: `machine:${name}`,
+            kind: 'machine',
+            name,
+            machine,
+            transitions: machine.transitions,
+            patterns: machine.transitions.map((transition) => pattern(transition.when)),
+            references: references(machine.transitions)
+        });
     }
     for (const [name, rule] of Object.entries(logic.rules ?? {})) {
         const compiled = pattern(rule.when);
         if (isGuard(rule.do)) {
-            if (compiled) guards.push({ name, pattern: compiled, trigger: rule.when, reason: rule.do[0]?.reason ?? `refused by ${name}` });
+            const reason = rule.do[0]?.reason ?? `refused by ${name}`;
+            if (isReference(rule.when.path)) guards.push({ name, reference: rule.when.path, trigger: rule.when, reason });
+            else if (compiled) guards.push({ name, pattern: compiled, trigger: rule.when, reason });
             continue;
         }
-        units.push({ id: `rule:${name}`, kind: 'rule', name, transitions: [{ when: rule.when, do: rule.do }], patterns: [compiled] });
+        const transitions = [{ when: rule.when, do: rule.do }];
+        units.push({ id: `rule:${name}`, kind: 'rule', name, transitions, patterns: [compiled], references: references(transitions) });
     }
     for (const [name, table] of Object.entries(logic.tables ?? {})) {
         const { plan, patterns } = declaredPlan({ table }, resolve);
-        units.push({ id: `table:${name}`, kind: 'table', name, declared: plan, transitions: patterns.map((item) => ({ when: item === undefined ? {} : { path: item.source } })), patterns });
+        units.push({ id: `table:${name}`, kind: 'table', name, declared: plan, transitions: patterns.map((item) => ({ when: item === undefined ? {} : { path: item.source } })), patterns, references: new Map() });
     }
     for (const [name, compute] of Object.entries(logic.computes ?? {})) {
         const { plan, patterns } = declaredPlan({ compute }, resolve);
-        units.push({ id: `compute:${name}`, kind: 'compute', name, declared: plan, transitions: patterns.map((item) => ({ when: item === undefined ? {} : { path: item.source } })), patterns });
+        units.push({ id: `compute:${name}`, kind: 'compute', name, declared: plan, transitions: patterns.map((item) => ({ when: item === undefined ? {} : { path: item.source } })), patterns, references: new Map() });
     }
     return { units, guards };
 }
@@ -399,6 +430,9 @@ function previousAt(at: string, change: LogicChange, current: JsonValue | undefi
  * to that machine, a rule's to every rule whose `when.result` names it; a `call`'s result comes when the host answers it. A rule whose commands are one `reject` is a guard and never
  * fires; the host asks `guard` before it applies a change.
  *
+ * A trigger path may be a node reference (`#addBook.pressed`). The host resolves it (`LogicHost.resolve`) when the
+ * engine is made and again when the screen shown (`$.route.screen`) changes; see `resolveReferences` below.
+ *
  * Time comes from the host (`schedule`). A `debounce` trigger restarts its timer on each matching change and fires
  * with the last one. An `after` transition is armed while its machine is in `from`: the engine compares each machine's
  * state with the state its timers were armed for after every start, change, timer and answer, and re-arms when it
@@ -448,7 +482,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     units.push(...built.units);
     guards.push(...built.guards);
 
-    const ordered = chainOrder(units);
+    let ordered = chainOrder(units);
 
     /** The changes looked up since the effects last settled, for the window rows of changed records */
     const touched: LogicChange[] = [];
@@ -508,17 +542,69 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     };
 
     /** The trigger paths of every transition, so a change reaches only the transitions whose paths can match it */
-    const triggers = new PathIndex<{ unit: string; index: number }>();
-    for (const unit of units) {
-        unit.patterns.forEach((pattern, index) => {
-            if (pattern) triggers.add(pattern, { unit: unit.id, index });
-        });
-    }
-    const guardIndex = new PathIndex<Guard>();
-    for (const rule of guards) guardIndex.add(rule.pattern, rule);
+    let triggers = new PathIndex<{ unit: string; index: number }>();
+    let guardIndex = new PathIndex<Guard>();
+    const indexTriggers = (): void => {
+        triggers = new PathIndex();
+        guardIndex = new PathIndex();
+        for (const unit of units) {
+            unit.patterns.forEach((pattern, index) => {
+                if (pattern) triggers.add(pattern, { unit: unit.id, index });
+            });
+        }
+        for (const rule of guards) if (rule.pattern) guardIndex.add(rule.pattern, rule);
+    };
+
+    /**
+     * Trigger paths written as node references (`#addBook.pressed`). The host resolves a reference as it resolves a
+     * command's: in the screen shown, then the app node, then the other screens. So each is resolved when the engine
+     * is made and again whenever `$.route.screen` is another screen than it was resolved for, before a change is
+     * looked up: a trigger never listens to the node a name meant on the screen that was left. A document that changes
+     * gets a new engine from its host. A reference that finds no node, or several, listens to nothing and is reported
+     * once as a failure (`SUI-LOGIC-PATH`), and again only after it had resolved in between
+     */
+    const referenced = units.some((unit) => unit.references.size > 0) || guards.some((rule) => rule.reference !== undefined);
+    const screenShown = (): JsonValue | undefined => host.get(`${ROUTE_PATH}.screen`);
+    let resolvedFor: JsonValue | undefined;
+    const unresolved = new Set<string>();
+    const referencePattern = (key: string, kind: LogicFailure['kind'], name: string, at: string, reference: string): PathPattern | undefined => {
+        const path = host.resolve?.(reference);
+        const pattern = path === undefined ? undefined : compilePattern(path);
+        if (pattern) unresolved.delete(key);
+        else if (!unresolved.has(key)) {
+            unresolved.add(key);
+            const error = buildError('SUI-LOGIC-PATH', { target: reference, path: at });
+            failed({ kind, name, reason: `${error.code}: ${error.message}` });
+        }
+        return pattern;
+    };
+    const resolveReferences = (): void => {
+        resolvedFor = screenShown();
+        for (const unit of units) {
+            for (const [index, reference] of unit.references) {
+                const at = unit.machine ? `$.logic.machines.${unit.name}.transitions.${index}.when.path` : `$.logic.rules.${unit.name}.when.path`;
+                unit.patterns[index] = referencePattern(`${unit.id}#${index}`, unit.kind, unit.name, at, reference);
+            }
+        }
+        for (const rule of guards) {
+            if (rule.reference === undefined) continue;
+            const pattern = referencePattern(`guard:${rule.name}`, 'guard', rule.name, `$.logic.rules.${rule.name}.when.path`, rule.reference);
+            if (pattern) rule.pattern = pattern;
+            else delete rule.pattern;
+        }
+        ordered = chainOrder(units);
+        indexTriggers();
+    };
+    /** Resolves the trigger references again when the screen shown is not the one they were resolved for */
+    const refresh = (): void => {
+        if (referenced && !deepEqual(screenShown(), resolvedFor)) resolveReferences();
+    };
+    if (referenced) resolveReferences();
+    else indexTriggers();
 
     /** The transitions, by unit id, whose trigger paths can match one of the changes */
     const reached = (changes: readonly LogicChange[]): Map<string, Set<number>> => {
+        refresh();
         const found = new Set<{ unit: string; index: number }>();
         for (const change of changes) triggers.find(change.path, found);
         const byUnit = new Map<string, Set<number>>();
@@ -834,9 +920,10 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
 
     /** The guard that refuses a change; a guard sees only changes of the value at its path, not removed parents */
     const refusal = (change: LogicChange): { name: string; reason: string } | undefined => {
+        refresh();
         const reach = guardIndex.find(change.path);
         for (const rule of guards) {
-            if (!reach.has(rule)) continue;
+            if (!rule.pattern || !reach.has(rule)) continue;
             const proposed = new WorkingCopy((path) => host.get(path));
             if (change.value === undefined) proposed.delete(change.path);
             else proposed.set(change.path, change.value);
@@ -931,12 +1018,14 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
     const debounce = (unit: Unit, hit: Hit, ms: number): void => {
         const key = `${unit.id}#${hit.index}`;
         debounced.get(key)?.();
+        // The pattern that matched: a trigger reference may resolve to another path by the time the timer fires
+        const source = (unit.patterns[hit.index] as PathPattern).source;
         const cancel = host.schedule?.(ms, () => {
             debounced.delete(key);
             if (stopped) return;
             const state = stateOf(unit);
             if (hit.transition.from !== undefined && hit.transition.from !== state) return;
-            const path = (unit.patterns[hit.index] as PathPattern).source.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (whole, name: string) => hit.captures[name] ?? whole);
+            const path = source.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (whole, name: string) => hit.captures[name] ?? whole);
             const trigger = path.includes('*') ? hit.trigger : (host.get(path) ?? null);
             const scope: Scope = { read: (at) => host.get(at), trigger: trigger ?? null, previous: hit.previous ?? null, captures: hit.captures, functions, call };
             try {
@@ -1092,6 +1181,7 @@ export function createLogicEngine(logic: LogicDocument, host: LogicHost): LogicE
 
     /** The start pass of `LogicEngine.derive` */
     const derive = (): void => {
+        refresh();
         const units = ordered.filter(derivesOnly);
         if (units.length === 0) return;
         traced(
