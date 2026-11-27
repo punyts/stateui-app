@@ -480,8 +480,11 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
 - **A trigger on a node's state.** `path` may be a node reference, `#name.property`: the state of the one node
   whose id (its `@id`, otherwise its key) is `name`, so a rule or a machine transition follows the node when it
   moves in the tree. `{ "when": { "path": "#addBook.pressed" }, "do": [ … ] }` runs on every press of that button, in
-  the browser or on the app server, because a button writes `pressed` on each press. The reference holds no `*`,
-  `{name}` or `{{ }}` (a node inside a row template is not one node). The validator resolves it as it resolves a
+  the browser or on the app server, because a button writes `pressed` on each press. A rule with such a trigger answers a change and is never run by
+  the start pass (see "Deriving at start"), whatever its commands: a button's `pressed` before any press is no press.
+  The reference holds no `*`, `{name}` or `{{ }}` (a node inside a row template is not one node), and it names no
+  property the node links (`<-value`): a write to a linked property is a change of the link's target, so the
+  validator reports `SUI-LOGIC-PATH` with the target to name instead. The validator resolves it as it resolves a
   command's reference (the app node, then all screens) and reports `SUI-LOGIC-PATH` when no node or several have the
   name. The engine resolves it through `LogicHost.resolve`, in the order a command's reference is looked up (the
   screen shown, the app node, then the other screens): once when it is made, and again before it looks a change up
@@ -494,7 +497,8 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   finds no node, or several, while the engine runs listens to nothing and is reported once through
   `LogicHost.failed` with the reason `SUI-LOGIC-PATH: …` (the reference and the unit's path, never a value), and
   again only after it had resolved in between. A guard's trigger may be a reference too. `logicRunOrder` lists no
-  read for a reference, which it cannot resolve without a document.
+  read for a reference, of a rule, a machine or a guard, which it cannot resolve without a document; its positions
+  are those of the document without the references resolved.
 - **Machines.** The current state is the value at `state` (`initial` is written when it has none). The first
   transition of the current state whose trigger matches fires; `from` absent matches any state, `to` absent keeps it.
 - **Tables.** `tables.<name>` is a lookup table that only writes values: `inputs` (a path, or `{ path | value, values |
@@ -555,7 +559,8 @@ see Functions below) for the rest. A cell sets a value in state; listeners (rule
   trigger a `path` without `was` or `after`, every command `set`, `merge`, `copy` or `query`, and no machine.
   Each fires for every concrete path its trigger matches that has a value (`$.data.products.{id}.price` fires for each
   product), in chain order, traced with the cause `start`, so a count or a total is right before the first change.
-  Rules that notify, toggle, save, call or navigate, those with `was`, and those whose conditions or values read
+  Rules that notify, toggle, save, call or navigate, those with `was`, those whose trigger is a node reference
+  (`#addBook.pressed`), and those whose conditions or values read
   `$previous`, `now()` or `today()` (a stamp records a change), wait for a change. `start({ derive: false })`
   skips the pass and `engine.derive()` runs it later (the app server does so once an instance is attached to its
   shared datasets, so the derived values are written through).

@@ -6,7 +6,7 @@ import type { ComponentLibrary } from '../resolve/index.js';
 import { cloneJson, isNodeValue, isObject } from '../resolve/merge.js';
 import { nodeChildren } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
-import { RESERVED_KEYS } from '../types.js';
+import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { covers } from './working.js';
 import { pathSteps } from '@punyts/state';
@@ -20,6 +20,8 @@ export interface LogicIndex {
     resolve(reference: string): string | undefined;
     /** Why a reference does not resolve: no node has the name, or several do (with their paths) */
     explain(reference: string): string | undefined;
+    /** The link target (`$.data.draft`) of the property a reference names, when its node links that property (`<-value`) */
+    linked(reference: string): string | undefined;
     /** The fields of the `form` node at a path: child key to the state path of the field's value */
     fields(path: string): Record<string, string> | undefined;
     /** The document's value at a `$.app` or `$.data` path, with the shape defaults of every node (runtime properties left out) */
@@ -148,6 +150,16 @@ export function createLogicIndex(tree: ResolvedTree, library: ComponentLibrary, 
             if (located?.kind === 'node') return located.path;
             if (located?.kind === 'property') return [located.path, located.property, ...located.rest].join('.');
             return undefined;
+        },
+        linked(reference) {
+            const parsed = parseTarget(reference);
+            if (parsed?.form !== 'named') return undefined;
+            const named = namedFrames(parsed.name);
+            if (named.length !== 1) return undefined;
+            const located = resolveTarget(parsed, named, (named[0] as Frame).path);
+            if (located?.kind !== 'property') return undefined;
+            const target = (located.node as Record<string, JsonValue>)[`${PREFIXES.link}${located.property}`];
+            return typeof target === 'string' ? target : undefined;
         },
         fields(path) {
             const form = frames.get(path);

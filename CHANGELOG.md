@@ -1,6 +1,20 @@
 # Changelog
 
 ## Unreleased
+- **A rule triggered by a node reference never runs in the start pass, and a trigger may not name a linked property**
+  (docs/design/magnetic-editor-links-and-presses.md, stage L0). Fix: a rule whose trigger is `#name.pressed` and whose
+  commands are only `set`, `merge`, `copy` or `query` counted as a deriving rule, so `start` and `derive` ran it
+  with no press (the button's `pressed` default `{}` read as a value that had just arrived), and the app server ran
+  it again with every changed document. A rule with a reference trigger now answers changes only. A rule written
+  with the absolute path of a node's state (`$.screens.home.children.button.pressed`) is unchanged and still derives.
+  Fix: `readLogic` refuses, as `SUI-LOGIC-PATH`, a trigger reference to a property its node links (`#title.value`
+  with `<-value`), naming the link's target: the browser reports a write to a linked property at the target, so the
+  rule or guard never ran and nothing said so. `ReadLogicOptions.linked` and `LogicIndex.linked(reference)` answer
+  the link target; the document validator passes it. Fix: `logicRunOrder` listed a guard's reference trigger as a
+  read; it lists none, as for a rule. Tests: `src/core/logic/triggerReference.test.ts` ("should not run a press
+  rule that only sets a value …", "should refuse a trigger on a property its node links …", "should list no read for
+  a guard …"), `src/dom/mount/screens.browser.test.ts` ("should not run a press rule that only sets a value when
+  the app is mounted …", "should refuse a rule whose trigger names a property its node links …").
 - **A rule or a machine transition triggers on a node's state by its name** (docs/design/magnetic-editor-links-and-presses.md,
   stage L0). `when.path` may be a node reference, `#name.property` (`#addBook.pressed`), where it was
   `SUI-LOGIC-PATH` before; a guard's trigger too. `readLogic` resolves it through `options.resolve` and refuses,

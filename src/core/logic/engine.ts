@@ -345,7 +345,8 @@ const unique = (paths: readonly string[]): string[] => [...new Set(paths)];
 
 /**
  * The units of a logic document in the order the engine looks them up for a change (`chainOrder`), with the paths each
- * reads and writes, then the guards. For a build tool that says where a written unit runs; it reads no state
+ * reads and writes, then the guards. For a build tool that says where a written unit runs; it reads no state. A
+ * trigger that is a node reference is no read of a unit or a guard: only a host resolves it
  */
 export function logicRunOrder(logic: LogicDocument): LogicUnitPlace[] {
     const { units, guards } = buildUnits(logic);
@@ -357,7 +358,7 @@ export function logicRunOrder(logic: LogicDocument): LogicUnitPlace[] {
             reads: [effect.request],
             writes: unique([effect.status, ...(effect.records ? [effect.records.into] : []), ...(effect.window === undefined ? [] : [effect.window]), ...(effect.value === undefined ? [] : [effect.value])])
         })),
-        ...guards.map((guard) => ({ kind: 'guard' as const, name: guard.name, reads: guard.trigger.path === undefined ? [] : [guard.trigger.path], writes: [] }))
+        ...guards.map((guard) => ({ kind: 'guard' as const, name: guard.name, reads: guard.trigger.path?.startsWith('$.') ? [guard.trigger.path] : [], writes: [] }))
     ];
 }
 
@@ -375,11 +376,13 @@ const READS_CHANGE = /\$previous\b|\b(?:now|today)\s*\(/;
 /**
  * True for a table, and for a rule that only derives values: every trigger is a `path` with no `was` (which needs a
  * change), every command is `set`, `merge`, `copy` or `query`, and no condition or value reads `$previous`,
- * `now()` or `today()` (a stamp records a change, so running it at start would stamp every record). A machine never is
+ * `now()` or `today()` (a stamp records a change, so running it at start would stamp every record). A machine never
+ * is, and neither is a rule whose trigger is a node reference: a node's state is what somebody did (a press, a typed
+ * value), and its default at start is not a press
  */
 function derivesOnly(unit: Unit): boolean {
     if (unit.declared) return true;
-    if (unit.machine) return false;
+    if (unit.machine || unit.references.size > 0) return false;
     if (unit.transitions.some((transition) => transition.when.path === undefined || transition.when.was !== undefined || transition.when.after !== undefined)) return false;
     if (READS_CHANGE.test(JSON.stringify(unit.transitions))) return false;
     return unitCommands(unit).every((command) => DERIVE_COMMANDS.has(command.command));

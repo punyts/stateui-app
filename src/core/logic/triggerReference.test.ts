@@ -133,6 +133,31 @@ describe('readLogic: a trigger path that is a node reference', () => {
         expect(result.logic).toEqual({});
     });
 
+    it('should refuse a trigger on a property its node links, and name the link target', () => {
+        // Arrange: a write to a linked property is reported at the link's target, never at the node's path
+        const screens = { home: { component: 'panel', children: { title: { component: 'textField', '<-value': '$.data.draft' }, plain: { component: 'textField' } } } } as unknown as Screens;
+        const index = indexOf(screens);
+        const logic = {
+            rules: {
+                linked: { when: { path: '#title.value' }, do: [{ command: 'increment', target: '$.data.presses' }] },
+                locked: { when: { path: '#title.value' }, do: [{ command: 'reject', reason: 'fixed' }] },
+                plain: { when: { path: '#plain.value' }, do: [{ command: 'increment', target: '$.data.presses' }] },
+                writes: { when: { path: '$.data.go' }, do: [{ command: 'set', target: '#title.value', value: '' }] }
+            }
+        };
+
+        // Act
+        const result = readLogic(logic, { resolve: index.resolve, explain: index.explain, linked: index.linked });
+
+        // Assert
+        expect(result.errors.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LOGIC-PATH', '$.logic.rules.linked.when.path'],
+            ['SUI-LOGIC-PATH', '$.logic.rules.locked.when.path']
+        ]);
+        expect(result.errors[0]?.message).toContain('#title.value (the node links this property to $.data.draft; a trigger names that path)');
+        expect(Object.keys(result.logic.rules ?? {})).toEqual(['plain', 'writes']);
+    });
+
     it('should refuse a trigger whose name two nodes have, and name both', () => {
         // Arrange: a key of the home screen is the @id of a node of the about screen
         const screens = { ...SCREENS, about: { component: 'panel', children: { button: { component: 'button', '@id': 'addBook' } } } } as unknown as Screens;
@@ -236,6 +261,27 @@ describe('createLogicEngine: a trigger path that is a node reference', () => {
 
         // Assert
         expect(memory.get('$.data.presses')).toBe(0);
+    });
+
+    it('should not run a press rule that only sets a value when the engine starts or derives, and run it on a press', () => {
+        // Arrange: set is a deriving command, and the button's pressed is {} before any press
+        const logic = {
+            rules: { openOnPress: { when: { path: '#addBook.pressed' }, do: [{ command: 'set', target: '$.data.opened', value: true }] } }
+        } as unknown as LogicDocument;
+        const memory = screenHost(SCREENS, 'home');
+        memory.apply({ path: '$.screens.home.children.addBook.pressed', value: {} });
+        const engine = createLogicEngine(logic, memory.host);
+
+        // Act
+        engine.start();
+        engine.derive();
+        const atStart = memory.get('$.data.opened');
+        press(memory, engine, '$.screens.home.children.addBook', 1);
+
+        // Assert
+        expect(atStart).toBeUndefined();
+        expect(engine.trace().map((run) => run.cause)).toEqual(['change']);
+        expect(memory.get('$.data.opened')).toBe(true);
     });
 
     it('should move a machine on a transition whose trigger is a node reference', () => {
@@ -381,5 +427,24 @@ describe('createLogicEngine: a trigger path that is a node reference', () => {
 
         // Assert
         expect(order).toEqual([{ kind: 'rule', name: 'addBookPressed', position: 1, reads: [], writes: ['$.data.presses'] }]);
+    });
+
+    it('should list no read for a guard whose trigger is a node reference, and the path of one that names a state path', () => {
+        // Arrange
+        const logic = {
+            rules: {
+                locked: { when: { path: '#title.value' }, do: [{ command: 'reject', reason: 'no' }] },
+                frozen: { when: { path: '$.data.total' }, do: [{ command: 'reject', reason: 'no' }] }
+            }
+        } as unknown as LogicDocument;
+
+        // Act
+        const order = logicRunOrder(logic);
+
+        // Assert
+        expect(order).toEqual([
+            { kind: 'guard', name: 'locked', reads: [], writes: [] },
+            { kind: 'guard', name: 'frozen', reads: ['$.data.total'], writes: [] }
+        ]);
     });
 });

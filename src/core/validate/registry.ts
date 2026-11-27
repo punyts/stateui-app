@@ -41,7 +41,7 @@ registerDocumentValidator('scenes', validateSceneCount);
 registerDocumentValidator('logic', (context) => {
     if (context.document.logic === undefined) return [];
     const index = createLogicIndex(context.tree, context.library, undefined, { trees: context.screens ?? {} });
-    return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain, ...(context.functions !== undefined && { functions: context.functions }) }).errors;
+    return readLogic(context.document.logic, { resolve: index.resolve, explain: index.explain, linked: index.linked, ...(context.functions !== undefined && { functions: context.functions }) }).errors;
 });
 registerDocumentValidator('functions', validateFunctions);
 registerDocumentValidator('route', validateRoutes);

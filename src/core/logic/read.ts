@@ -83,6 +83,8 @@ export interface ReadLogicOptions {
     resolve?(reference: string): string | undefined;
     /** Why a reference does not resolve (no node or several have its name), for the error */
     explain?(reference: string): string | undefined;
+    /** The link target of the property a reference names, when its node links that property; a trigger may not name one */
+    linked?(reference: string): string | undefined;
     /** The path the units are reported under: `$.logic` (the default) for a document, `$` for a logic module */
     root?: string;
     /** The functions this side runs; with it a unit that runs another path is `SUI-LOGIC-FUNCTION` (a warning) */
@@ -243,7 +245,8 @@ class Reader {
 
     /**
      * A trigger path that is a node reference (`#addBook.pressed`): the state of one node, so it holds no `*`, capture
-     * or template, and it resolves to one node. Returns it as written, since the engine resolves it where it runs
+     * or template, it resolves to one node, and the node does not link the property (a link's changes are its
+     * target's). Returns it as written, since the engine resolves it where it runs
      */
     private triggerReference(text: string, path: string): string | undefined {
         const bad = (target: string): undefined => {
@@ -255,6 +258,9 @@ class Reader {
             const why = this.options.explain?.(text);
             return bad(why === undefined ? text : `${text} (${why})`);
         }
+        // A write to a linked property is a change of the link's target, so a trigger at the node's own path never runs
+        const target = this.options.linked?.(text);
+        if (target !== undefined) return bad(`${text} (the node links this property to ${target}; a trigger names that path)`);
         return text;
     }
 

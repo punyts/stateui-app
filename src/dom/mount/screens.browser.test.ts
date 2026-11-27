@@ -367,6 +367,43 @@ describe('screens in mountApp', () => {
         expect(errorSpy).not.toHaveBeenCalledWith('Logic failed', expect.anything());
     });
 
+    it('should not run a press rule that only sets a value when the app is mounted, and run it on the click', async () => {
+        // Arrange: set is a command the start pass derives with, and pressed is {} before any press
+        const doc = copy();
+        (doc as unknown as Record<string, unknown>)['logic'] = {
+            rules: { openOnPress: { when: { path: '#open.pressed' }, do: [{ command: 'set', target: '$.data.opened', value: true }] } }
+        };
+        (doc.data as Record<string, unknown>)['opened'] = false;
+        const { app, host } = start(doc);
+
+        // Act
+        await Promise.resolve();
+        const atStart = app.store?.get('$.data.opened');
+        (find(host, 'x-scr-button') as HTMLElement).click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Assert
+        expect(app.errors.filter((error) => error.severity !== 'warning')).toEqual([]);
+        expect(atStart).toBe(false);
+        expect(app.store?.get('$.data.opened')).toBe(true);
+    });
+
+    it('should refuse a rule whose trigger names a property its node links, which no write would reach', () => {
+        // Arrange: greeting links text to $.data.name
+        const doc = copy();
+        (doc as unknown as Record<string, unknown>)['logic'] = {
+            rules: { greeted: { when: { path: '#greeting.text' }, do: [{ command: 'increment', target: '$.data.presses' }] } }
+        };
+        (doc.data as Record<string, unknown>)['presses'] = 0;
+
+        // Act
+        const { app } = start(doc);
+
+        // Assert
+        expect(app.errors.map((error) => [error.code, error.statePath])).toEqual([['SUI-LOGIC-PATH', '$.logic.rules.greeted.when.path']]);
+    });
+
     it('should resolve a press rule again when the screen changes: the node of the screen shown, else the app node', async () => {
         // Arrange: the home screen and the app node each have a node named open
         const doc = copy();
