@@ -15,6 +15,7 @@ export type { PeerShare } from './types.js';
 export { APP_EVENTS, DOCUMENT_KEYS, META_KEYS, META_KEY_NAMES, PREFIXES, RESERVED_KEYS, RESERVED_KEY_NAMES, SYNC_NOTICES, isAppEvent } from './types.js';
 export type { AppDocument, AppEventName, AppTheme, DocumentScreen, JsonObject, JsonValue, Node, ThemeOverlay, ThemeState } from './types.js';
 export {
+    COMMAND_NEEDS,
     COMPONENT_CATEGORIES,
     MAX_COLOR_LENGTH,
     MAX_EDIT_FACES,
@@ -50,6 +51,7 @@ export {
 export type {
     Bounds,
     CollectedTokens,
+    CommandNeed,
     ColorForm,
     ComponentCategory,
     FieldValidators,

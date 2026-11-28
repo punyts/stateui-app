@@ -312,6 +312,7 @@ export function rootEntry(component: ScannedComponent, shape: CatalogShape, size
             layout: shape.layout,
             ...(shape.childComponents === undefined ? {} : { childComponents: shape.childComponents }),
             ...(shape.commandValues === undefined ? {} : { commandValues: shape.commandValues }),
+            ...(shape.commandNeeds === undefined ? {} : { commandNeeds: shape.commandNeeds }),
             ...(shape.tokens === undefined ? {} : { tokens: shape.tokens }),
             ...(shape.marks === undefined ? {} : { marks: shape.marks })
         },

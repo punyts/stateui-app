@@ -7,8 +7,8 @@ import { tokenLayer } from '../theme/defaults.js';
 import { PREFIXES, RESERVED_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 import { fitsProperty, typesOf } from './fit.js';
-import { MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.js';
-import type { PropertyShape, PropertyType, Shape } from './types.js';
+import { COMMAND_NEEDS, MAX_PATTERN_LENGTH, MAX_SUMMARY_LENGTH, PROPERTY_TYPES } from './types.js';
+import type { CommandNeed, PropertyShape, PropertyType, Shape } from './types.js';
 import type { ComponentToken } from '../theme/types.js';
 import { VALIDATORS, isValidatorName } from './validators.js';
 import { COMPONENT_CATEGORIES, MAX_PURPOSE_LENGTH, checkPurposes, isComponentCategory } from './categories.js';
@@ -536,6 +536,11 @@ export function finishShape(shape: Shape, context: RuleContext): void {
             context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `commandValues.${command}` }));
         }
     }
+    for (const command of Object.keys(shape.commandNeeds ?? {})) {
+        if (!shape.commands.includes(command)) {
+            context.errors.push(buildError('SUI-BUILD-SHAPE', { file: context.file, name: `commandNeeds.${command}` }));
+        }
+    }
     if (context.errors.length > 0) return;
     shape.properties[HIDDEN] = {
         type: 'boolean',
@@ -610,6 +615,22 @@ export const SHAPE_KEYS: readonly KeyRule<Shape>[] = [
                 return;
             }
             shape.commandValues = input as Record<string, string>;
+        }
+    },
+    {
+        name: 'commandNeeds',
+        type: 'object',
+        required: false,
+        rule(value, shape, context) {
+            const input = asObject(value);
+            const valid =
+                Object.keys(input).length > 0 &&
+                Object.entries(input).every(([command, need]) => EVENT_NAME.test(command) && (COMMAND_NEEDS as readonly unknown[]).includes(need));
+            if (!valid) {
+                context.errors.push(invalid(context, 'commandNeeds'));
+                return;
+            }
+            shape.commandNeeds = input as Record<string, CommandNeed>;
         }
     },
     {

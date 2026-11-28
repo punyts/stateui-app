@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **A shape says what a command needs: `commandNeeds`** (docs/design/magnetic-editor-links-and-presses.md, stage L5).
+  `{ "scrollTo": "value" }` marks a command that does nothing or fails without a value, `{ "delete": "row" }` one that
+  needs the row of a row template, sent through `$row`. The catalog keeps it in the entry's `shape`, so an editor
+  such as Magnetic's When pressed leaves out a command it cannot give what it needs. A name that is not a declared
+  command, or a need other than `value` and `row`, is `SUI-BUILD-SHAPE`. `CommandNeed` and `COMMAND_NEEDS` are
+  exported from `/core`. Tests: `src/core/shape/shape.test.ts` ("commandNeeds"), `src/build/catalog.test.ts` ("should
+  keep what a command needs in the shape of the entry").
 - **`validateDocument` refuses a link that loops** (docs/design/magnetic-editor-links-and-presses.md, stage L3).
   Fix: only `applyLinks` raised `SUI-LINK-CYCLE`, when the app ran, so a node write that linked `b.value` to
   `#a.value` while `a.value` was linked to `#b.value` (or a property to itself) was accepted and the preview then

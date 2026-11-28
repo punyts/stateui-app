@@ -209,6 +209,30 @@ describe('parseShape', () => {
         });
     });
 
+    describe('commandNeeds', () => {
+        it('should accept commandNeeds that name declared commands with value or row', () => {
+            // Arrange
+            const input = { summary: 'x', commands: ['scrollTo', 'delete', 'clear'], commandNeeds: { scrollTo: 'value', delete: 'row' } };
+
+            // Act
+            const result = parseShape(input, 'x.state.json');
+
+            // Assert
+            expect(result.errors).toEqual([]);
+            expect(result.shape?.commandNeeds).toEqual({ scrollTo: 'value', delete: 'row' });
+        });
+
+        it.each([
+            [{ scrollTo: 'value' }, []],
+            [{ scrollTo: 'key' }, ['scrollTo']],
+            [{ scrollTo: true }, ['scrollTo']],
+            [{}, ['scrollTo']]
+        ])('should reject commandNeeds %j with commands %j', (commandNeeds, commands) => {
+            // Act and Assert
+            expect(parseCodes({ summary: 'x', commands, commandNeeds })).toEqual(['SUI-BUILD-SHAPE']);
+        });
+    });
+
     describe('validators', () => {
         it('should report an unknown validator with the file', () => {
             const result = parseShape({ summary: 'x', properties: { a: { type: 'string', validators: { email: true } } } }, FILE);

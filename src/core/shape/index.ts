@@ -8,6 +8,7 @@ export { COMPONENT_CATEGORIES, MAX_PURPOSES, MAX_PURPOSE_LENGTH, MIN_PURPOSES, c
 export type { ComponentCategory } from './categories.js';
 export type { KeyRule, RuleContext } from './table.js';
 export {
+    COMMAND_NEEDS,
     MAX_COLOR_LENGTH,
     MAX_EDIT_FACES,
     MAX_EDIT_VERTICES,
@@ -23,6 +24,7 @@ export {
 } from './types.js';
 export type {
     Bounds,
+    CommandNeed,
     FieldValidators,
     FileRefOptions,
     ObjectField,

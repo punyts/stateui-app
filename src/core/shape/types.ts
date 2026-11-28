@@ -121,6 +121,12 @@ export interface PropertyShape {
 }
 
 /** A parsed `*.state.json`: defaults, validation rules and the catalog entry of one component */
+/** What a command needs to act (`commandNeeds`): a value, or the row of a row template */
+export type CommandNeed = 'value' | 'row';
+
+/** The closed list of what a command may need */
+export const COMMAND_NEEDS: readonly CommandNeed[] = ['value', 'row'];
+
 export interface Shape {
     /** One line, at most MAX_SUMMARY_LENGTH characters */
     summary: string;
@@ -135,6 +141,13 @@ export interface Shape {
      * "messages" }`), so `validateOn` can check a literal value. Absent when the shape declares none
      */
     commandValues?: Record<string, string>;
+    /**
+     * Commands that do nothing or fail without what they act on: `value` for one that needs a value (a key, a place),
+     * `row` for one that needs the row of a row template, sent through `$row` (`table`: `{ delete: "row" }`). An
+     * editor leaves out a `value` command it cannot give a value, and a `row` command outside a row. Absent when the
+     * shape declares none
+     */
+    commandNeeds?: Record<string, CommandNeed>;
     /** The components the `children` slot accepts (`accordion`: `disclosure`); a child of any other component is `SUI-NODE-CHILD`. Absent means any */
     childComponents?: string[];
     /** True when the component lays out children, so a node may carry `layout` */

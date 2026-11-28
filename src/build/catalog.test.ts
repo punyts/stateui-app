@@ -235,6 +235,17 @@ describe('shapeEntry', () => {
         expect(entry.childComponents).toEqual(['bar', 'dot']);
     });
 
+    it('should keep what a command needs in the shape of the entry', () => {
+        // Arrange
+        const shape = parsed({ summary: 'A list of records', commands: ['scrollTo', 'scrollToEnd'], commandNeeds: { scrollTo: 'value' }, properties: {} });
+
+        // Act
+        const entry = rootEntry(scanned('rows', 'composites'), shape, 'composite');
+
+        // Assert
+        expect(entry.shape.commandNeeds).toEqual({ scrollTo: 'value' });
+    });
+
     it('should list the options of the graphics validators, with the field list of fields, in the catalog text', () => {
         const viewBox = {
             x: { type: 'number', required: true },
