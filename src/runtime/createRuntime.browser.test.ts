@@ -21,13 +21,15 @@ function shapeOf(properties: Record<string, unknown>): Shape {
 
 const library: ComponentLibrary = {
     panel: { tier: 'root', tag: 'x-cr-panel', shape: shapeOf({ children: { type: 'map', items: 'string', default: {} } }) },
-    badge: { tier: 'root', tag: 'x-cr-badge', shape: shapeOf({ text: { type: 'string', default: '' } }) }
+    badge: { tier: 'root', tag: 'x-cr-badge', shape: shapeOf({ text: { type: 'string', default: '' } }) },
+    label: { tier: 'root', tag: 'x-cr-label', shape: shapeOf({ _text: { type: 'string', kind: 'content', default: '' } }) }
 };
 
 defineComponent({
     tag: 'x-cr-panel',
     template: '<sui-node repeat="{{ $k,$i,$v in $.children }}" key="{{ $k }}" state="{{ $v }}"></sui-node>'
 });
+defineComponent({ tag: 'x-cr-label', template: '<p>{{ $._text }}</p>' });
 defineComponent({ tag: 'x-cr-badge', template: '<p style="display: block; height: 40px; margin: 0">badge:{{ $.text }}</p>' });
 
 function find(root: ParentNode, tag: string): Element | undefined {
@@ -221,6 +223,31 @@ describe('createRuntime in a page (inPage)', () => {
         const [answer] = mine.posted.filter((item) => item.type === 'inspected') as unknown as Inspected[];
         expect(answer?.nodes.map((node) => node.path)).toEqual(['$.app.children.first']);
         expect(answer?.nodes[0]?.rect.y).toBeCloseTo(box.y - origin.y, 0);
+    });
+
+    it('should show a load in the language it names after another runtime of the page was made and loaded', () => {
+        // Arrange: an app with German, loaded in German, then a second runtime in the same page with an app of its own
+        const translated: AppDocument = {
+            app: { component: 'panel', children: { first: { component: 'label', _text: 'one' } } } as AppDocument['app'],
+            locales: { de: { children: { first: { _text: 'eins' } } } }
+        };
+        const mine = inPage();
+        mine.runtime.handle(message('load', { document: translated, locale: 'de' }));
+        const other = inPage();
+        other.runtime.handle(message('load', { document: document_ }));
+
+        // Act: the first app loaded again, as a host does after the document changed
+        mine.runtime.handle(message('load', { document: translated, locale: 'de' }));
+        mine.runtime.handle(message('locale', { locale: 'en' }));
+        const english = mine.runtime.app()?.store?.get('$.app.children.first._text' as never);
+        mine.runtime.handle(message('locale', { locale: 'de' }));
+
+        // Assert: German after the load and after switching back, with no error, and the other app left as it was
+        expect(mine.posted.filter((item) => item.type === 'error')).toEqual([]);
+        expect(english).toBe('one');
+        expect(mine.runtime.app()?.store?.get('$.app.children.first._text' as never)).toBe('eins');
+        expect(other.runtime.app()?.store?.get('$.app.children.first.text' as never)).toBe('one');
+        expect(other.posted.filter((item) => item.type === 'error')).toEqual([]);
     });
 
     it('should answer an app asked for inside the loaded app through the app host it was given', async () => {

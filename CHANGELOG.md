@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+- **Each runtime keeps the localizer of its own app when several runtimes share a page.** Fix: `createRuntime`
+  registered its locale step under one page-wide name when it was made, so a runtime made later in the same page took
+  the step over; the first runtime's next `load` then ran the other runtime's step and refused its own `locale`
+  (`SUI-LOCALE-UNKNOWN`), and the app showed its default language (Magnetic's board lost its preview language after
+  any write that reloaded it). The runtime now builds its step with `createLocaleStep` and registers it under
+  `LOCALE_STEP_NAME` only while it mounts its own app, then gives back a step the page registered itself.
+  `registerLocaleStep` is unchanged for code that mounts with `mountApp`. Test: `src/runtime/createRuntime.browser.test.ts`
+  ("should show a load in the language it names after another runtime of the page was made and loaded").
 - **`@punyts/stateui-app/protocol` exports `isLanguageCode`.** The check the protocol's validator gives a `load` or
   `locale` message's `locale`, so the preview host checks a language without importing `/core`. Covered by
   `src/runtime/languageCode.test.ts` (the pattern) and stateui-mcp's `test/browser.integration.test.ts`.

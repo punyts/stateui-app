@@ -4,7 +4,7 @@ import { cloneJson, mergeValues } from '../../core/resolve/index.js';
 import { screenPath } from '../../core/route/index.js';
 import type { JsonObject } from '../../core/types.js';
 import { registerMountStep } from '../mount/index.js';
-import type { MountContext } from '../mount/index.js';
+import type { MountContext, MountStep } from '../mount/index.js';
 import type { BuildError } from '../../core/errors/index.js';
 import { createNodeLocale, pickPaths } from './nodeLocale.js';
 import type { NodeLocale, NodeLocaleStore } from './nodeLocale.js';
@@ -12,9 +12,11 @@ import { LOCALE_ORIGIN, switchLocale } from './switchLocale.js';
 
 const APP_PATH = '$.app';
 const LOCALE_PATH = '$.locale';
+/** The name the locale step is registered under (`registerMountStep`) */
+export const LOCALE_STEP_NAME = 'locale-nodes';
 
-/** What `registerLocaleStep` gives back: the live localizer of the mounted application */
-export interface LocaleStepHandle {
+/** What `createLocaleStep` gives back: the live localizer of the application its step mounted, and the step */
+export interface LocaleStep {
     /** The overlay of `$.app` per language, base language included, as the step built it; undefined until an application is mounted */
     readonly overlays: Record<string, JsonObject> | undefined;
     /** The overlays of each screen by screen name, then language, base language included; undefined until an application is mounted */
@@ -26,6 +28,15 @@ export interface LocaleStepHandle {
     readonly nodes: NodeLocale | undefined;
     /** `switchLocale` over `overlays` and `screenOverlays`; returns `SUI-LOCALE-UNKNOWN` when no application is mounted or the language has no overlay */
     switchTo(code: string): BuildError[];
+    /**
+     * The mount step that builds the overlays of the application it starts in; registered by its owner under
+     * `LOCALE_STEP_NAME` for the mounts it is meant for
+     */
+    readonly step: MountStep;
+}
+
+/** What `registerLocaleStep` gives back: the locale step, registered for every mount until `unregister` */
+export interface LocaleStepHandle extends Omit<LocaleStep, 'step'> {
     /** Removes the step; an application that is already mounted keeps running with it */
     unregister(): void;
 }
@@ -95,21 +106,23 @@ function routed(localizers: ReadonlyMap<string, NodeLocale>): NodeLocale {
 }
 
 /**
- * Registers the mount step that keeps the language of an application complete: when the store exists it builds the
+ * The mount step that keeps the language of an application complete, and the localizer it fills: when the store exists it builds the
  * overlay of each language for the app node (`$.app`) and for each screen (`$.screens.{name}`) from `componentOverlays`,
  * the document's `locales` (for the app node) or the screen's `locales`, and the base overlay of the mounted content,
  * applies the components' overlay of the base language (`$.locale`) to the texts still at their component default, so
  * a `de` app shows the components' German texts, then watches each root for nodes created later and translates them (`createNodeLocale`). A switch changes every
  * screen in the store, so a screen that is hidden or not mounted yet shows the language when it appears.
- * The step needs the document, library and instances `mountApp` already gives it, so `mountApp` is unchanged
+ * The step needs the document, library and instances `mountApp` already gives it, so `mountApp` is unchanged.
+ * Nothing is registered: a runtime registers the step for its own loads only, so several runtimes in one page each
+ * keep the localizer of their own application
  */
-export function registerLocaleStep(componentOverlays: ComponentOverlays): LocaleStepHandle {
+export function createLocaleStep(componentOverlays: ComponentOverlays): LocaleStep {
     let overlays: Record<string, JsonObject> | undefined;
     let screenOverlays: Record<string, Record<string, JsonObject>> | undefined;
     let nodes: NodeLocale | undefined;
     let mounted: NodeLocaleStore | undefined;
 
-    const unregister = registerMountStep('locale-nodes', {
+    const step: MountStep = {
         start(context) {
             const store = context.store as unknown as NodeLocaleStore;
             const baseLocale = String(store.get(LOCALE_PATH));
@@ -160,7 +173,7 @@ export function registerLocaleStep(componentOverlays: ComponentOverlays): Locale
                 }
             };
         }
-    });
+    };
 
     return {
         get overlays() {
@@ -175,6 +188,25 @@ export function registerLocaleStep(componentOverlays: ComponentOverlays): Locale
         switchTo(code) {
             return mounted === undefined || overlays === undefined ? [unknownLanguage(code)] : switchLocale(mounted, code, overlays, screenOverlays);
         },
+        step
+    };
+}
+
+/** Registers the locale step (`createLocaleStep`) for every application `mountApp` mounts from now on */
+export function registerLocaleStep(componentOverlays: ComponentOverlays): LocaleStepHandle {
+    const locale = createLocaleStep(componentOverlays);
+    const unregister = registerMountStep(LOCALE_STEP_NAME, locale.step);
+    return {
+        get overlays() {
+            return locale.overlays;
+        },
+        get screenOverlays() {
+            return locale.screenOverlays;
+        },
+        get nodes() {
+            return locale.nodes;
+        },
+        switchTo: (code) => locale.switchTo(code),
         unregister
     };
 }

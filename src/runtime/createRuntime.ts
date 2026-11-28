@@ -15,8 +15,8 @@ import { buildOverlayCatalog } from '../core/theme/index.js';
 import type { ThemeOverlays } from '../core/theme/index.js';
 import { PREFIXES } from '../core/types.js';
 import type { JsonValue } from '../core/types.js';
-import { registerLocaleStep } from '../dom/locale/index.js';
-import { mountApp, registerMountStep } from '../dom/mount/index.js';
+import { LOCALE_STEP_NAME, createLocaleStep } from '../dom/locale/index.js';
+import { mountApp, mountSteps, registerMountStep } from '../dom/mount/index.js';
 import type { MountedApp } from '../dom/mount/index.js';
 import type { AppHost } from '../dom/embed/types.js';
 import type { CommandContext } from '../dom/on/commands.js';
@@ -248,7 +248,8 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
     const dropped: DroppedCounts = { invalid: 0, unknown: 0, oversized: 0, unhandled: 0, foreign: 0 };
     let mounted: MountedApp | undefined;
     let capture: Capture | undefined;
-    const localeStep = registerLocaleStep(options.componentOverlays ?? {});
+    // Registered only while this runtime mounts its own app: another runtime in the page has a locale step of its own
+    const localeStep = createLocaleStep(options.componentOverlays ?? {});
     let themeOverlays: ThemeOverlays = buildOverlayCatalog(undefined).overlays;
     let passwordData = new Set<string>();
     let postedErrors = 0;
@@ -431,6 +432,8 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
         documentIcons = appIconNames(message.document.icons);
         passwordData = passwordDataPaths(message.document);
         themeOverlays = buildOverlayCatalog(message.document.themes).overlays;
+        const pageLocale = mountSteps().find(([name]) => name === LOCALE_STEP_NAME)?.[1];
+        const unregisterLocale = registerMountStep(LOCALE_STEP_NAME, localeStep.step);
         const unregister = registerMountStep(STEP_NAME, {
             start(context): void {
                 const store = context.store;
@@ -482,6 +485,9 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
             );
         } finally {
             unregister();
+            unregisterLocale();
+            // A locale step the page registered for its own mounts is its again
+            if (pageLocale !== undefined) registerMountStep(LOCALE_STEP_NAME, pageLocale);
         }
         if (!app.store) {
             postErrors(app.errors);
@@ -871,7 +877,6 @@ export function createRuntime(options: RuntimeCoreOptions): RuntimeCore {
             exports.cancelAll();
             chunks.dispose();
             if (releaseTimer !== undefined) clearTimeout(releaseTimer);
-            localeStep.unregister();
         }
     };
 }
