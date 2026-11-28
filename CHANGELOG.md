@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+- **A written node's link waits for a target that is not there yet.** Fix: `MountedApp.writeNode` refused a `<-` link
+  whose target was not in the store with `SUI-LINK-MISSING` and never tried it again, so a node a host wrote before
+  the synced data it links to arrived (Magnetic's list given `<-items` right after the Screens view mounted the live
+  app) kept reading `$.runtime.empty` until a reload. The link still returns `SUI-LINK-MISSING`, and now waits: the
+  mount listens at its target and the branches above it, and applies it in a microtask once a write makes the target,
+  also when a load replaces the whole `$.data`. Replacing or removing the node, or disposing the app, drops it. Tests: `src/dom/mount/mountApp.browser.test.ts` ("should apply a
+  link refused for a missing target once the target is written", "… once the whole data branch that holds it is
+  replaced", "should not apply a waiting link of a node removed before its target appears").
 - **A rule sets a text's content: `#count._text`** (docs/design/magnetic-editor-links-and-presses.md, stage L7).
   Pinned, no code change: a rule triggered by `$.data.books` whose `set` writes `{{ string(size($.data.books)) }}`
   into `#count._text` is accepted by `readLogic` with no error or warning, runs once at start and again when a record

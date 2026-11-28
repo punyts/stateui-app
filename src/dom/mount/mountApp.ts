@@ -7,7 +7,7 @@ import { FunctionTable, functionPaths } from '../../core/functions/index.js';
 import type { BuildError } from '../../core/errors/index.js';
 import type { Link } from '../../core/links/index.js';
 import { extractBaseOverlay } from '../../core/locale/index.js';
-import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks } from '../../core/links/index.js';
+import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks, isLinkApplied } from '../../core/links/index.js';
 import { cloneJson, entryShape, resolveNode } from '../../core/resolve/index.js';
 import { APP_COMPONENT, ROUTE_PATH, initialRoute, isRouteRefusal, routeTo, screenPath } from '../../core/route/index.js';
 import { isNodeValue } from '../../core/resolve/merge.js';
@@ -135,6 +135,14 @@ function slotAccepts(library: ComponentLibrary, parent: { node: Node; path: stri
 /** True when `path` is `base` or below it */
 function atOrBelow(path: string, base: string): boolean {
     return path === base || path.startsWith(`${base}.`);
+}
+
+/** The path and each path above it but `$`: `$.data.a.b` is `$.data.a.b`, `$.data.a` and `$.data` */
+function pathAndParents(path: string): string[] {
+    const segments = path.split('.');
+    const paths: string[] = [];
+    for (let length = segments.length; length > 1; length -= 1) paths.push(segments.slice(0, length).join('.'));
+    return paths;
 }
 
 /** The segments of `path` after `base` (`path` is `base` or below it) */
@@ -412,7 +420,44 @@ export function mountApp(
     const dropLinks = (path: string): void => {
         const gone = appLinks.filter((link) => atOrBelow(link.statePath, path));
         disposeLinks(store, gone);
-        for (const link of gone) appLinks.splice(appLinks.indexOf(link), 1);
+        for (const link of gone) {
+            appLinks.splice(appLinks.indexOf(link), 1);
+            waiting.delete(link);
+        }
+        watchWaiting();
+    };
+    /**
+     * The links of written nodes that the store refused because their target did not exist yet: a host can write a node
+     * before the synced data it links to has arrived. Each stays linked to `$.runtime.empty` and is applied once a write
+     * reaches its target or a branch above it (the whole `$.data` a load replaces)
+     */
+    const waiting = new Set<Link>();
+    let watching: string[] = [];
+    let retryQueued = false;
+    const retryWaiting = (): void => {
+        retryQueued = false;
+        if (disposed) return;
+        const ready = [...waiting].filter((link) => store.get(link.target as never) !== undefined);
+        for (const link of ready) waiting.delete(link);
+        // A target that exists and is still refused is a loop: reported, not waited for
+        for (const error of applyLinks(store, ready)) hooks.onError?.(error);
+        watchWaiting();
+    };
+    const onTargetWrite = (): void => {
+        if (retryQueued) return;
+        retryQueued = true;
+        // After the write that made the target has finished notifying, so the link is not re-pointed inside its events
+        queueMicrotask(retryWaiting);
+    };
+    /** Listens at each waiting target and the branches above it below `$`, and nowhere else */
+    const watchWaiting = (): void => {
+        const paths = new Set<string>();
+        for (const link of waiting) for (const path of pathAndParents(link.target)) paths.add(path);
+        const gone = watching.filter((path) => !paths.has(path));
+        const added = [...paths].filter((path) => !watching.includes(path));
+        if (gone.length > 0) store.off(gone, onTargetWrite);
+        if (added.length > 0) store.on(added, onTargetWrite);
+        watching = [...paths];
     };
     let stopLogic: (() => void) | undefined;
     const startLogic = (): void => {
@@ -492,7 +537,13 @@ export function mountApp(
             // The node is already rendered and a new store link notifies nobody, so each property is first linked to the
             // empty record and then re-pointed at its target: a re-point notifies the listeners the new node registered
             for (const link of links) store.link(`${link.statePath}.${link.key}`, RUNTIME_PATHS.empty);
-            return applyLinks(store, links);
+            const linkErrors = applyLinks(store, links);
+            const missing = links.filter((link) => !isLinkApplied(store, link) && store.get(link.target as never) === undefined);
+            if (missing.length > 0) {
+                for (const link of missing) waiting.add(link);
+                watchWaiting();
+            }
+            return linkErrors;
         },
         removeNode(path, writeOptions): boolean {
             if (disposed || baseOf(path) === undefined) return false;
@@ -517,6 +568,8 @@ export function mountApp(
                     report.error('mountApp step failed to dispose', { reason: String(error) });
                 }
             }
+            waiting.clear();
+            watchWaiting();
             disposeLinks(store, appLinks);
             if (isReported(REPORT.mount)) report(REPORT.mount, 'App unmounted', { mode });
         }

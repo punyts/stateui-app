@@ -59,6 +59,11 @@ export function applyLinks(store: LinkStore, links: readonly Link[]): BuildError
     return errors;
 }
 
+/** True when `applyLinks` has made this link in the store, pointing at its target now */
+export function isLinkApplied(store: LinkStore, link: Link): boolean {
+    return applied.get(store)?.get(fromPath(link)) === link.target;
+}
+
 /** Removes the store links `applyLinks` created for these entries. Listeners stay registered; remove them with `off` */
 export function disposeLinks(store: LinkStore, links: readonly Link[]): void {
     const done = applied.get(store);

@@ -486,6 +486,58 @@ describe('mountApp in Chromium', () => {
             expect(textOf(host)).not.toContain('changed');
         });
 
+        it('should apply a link refused for a missing target once the target is written', async () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+            const errors = app.writeNode('$.app.children.stat', { component: 'label', '<-text': '$.data.later' } as never);
+            await tick();
+
+            // Act
+            app.store?.set('$.data.later' as never, 'arrived' as never);
+            await tick();
+
+            // Assert
+            expect(errors.map((error) => error.code)).toEqual(['SUI-LINK-MISSING']);
+            expect(app.store?.get('$.app.children.stat.text' as never)).toBe('arrived');
+            expect(textOf(host)).toContain('arrived');
+            app.store?.set('$.data.later' as never, 'changed' as never);
+            await tick();
+            expect(textOf(host)).toContain('changed');
+        });
+
+        it('should apply a link refused for a missing target once the whole data branch that holds it is replaced', async () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+            app.writeNode('$.app.children.stat', { component: 'label', '<-text': '$.data.books.first' } as never);
+            await tick();
+
+            // Act
+            app.store?.set('$.data' as never, { total: 'ten', books: { first: 'Dune' } } as never);
+            await tick();
+
+            // Assert
+            expect(app.store?.get('$.app.children.stat.text' as never)).toBe('Dune');
+            expect(textOf(host)).toContain('Dune');
+        });
+
+        it('should not apply a waiting link of a node removed before its target appears', async () => {
+            // Arrange
+            const host = freshHost();
+            const app = start(host, JSON.parse(JSON.stringify(DOC)) as AppDocument);
+            app.writeNode('$.app.children.stat', { component: 'label', '<-text': '$.data.later' } as never);
+            app.removeNode('$.app.children.stat');
+
+            // Act
+            app.store?.set('$.data.later' as never, 'arrived' as never);
+            await tick();
+
+            // Assert
+            expect(app.store?.get('$.app.children.stat' as never)).toBeUndefined();
+            expect(textOf(host)).not.toContain('arrived');
+        });
+
         it('should refuse a node outside the app tree or under a missing parent', () => {
             // Arrange
             const host = freshHost();

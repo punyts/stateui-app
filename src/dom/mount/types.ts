@@ -148,7 +148,10 @@ export interface MountedApp {
     /**
      * Mounts a node written after start at `path` (below `$.app` or a screen's `$.screens.{name}`), as a load would: component defaults and composed
      * components resolved, its `<-` links applied (node references resolve against the whole app) and the links of the
-     * node it replaces removed. A plain store write of a node does none of this. Returns the errors; empty when it mounted
+     * node it replaces removed. A plain store write of a node does none of this. Returns the errors; empty when it mounted.
+     * A link whose target does not exist yet is returned as `SUI-LINK-MISSING` and still waits: the property reads
+     * `$.runtime.empty` until a write makes the target (or a branch above it, such as the whole `$.data`), and then the
+     * link is applied in a microtask, unless the node was replaced or removed first
      */
     writeNode(path: string, node: Node, options?: WriteOptions): BuildError[];
     /** Removes the node at `path` with its links. False when nothing was removed */
