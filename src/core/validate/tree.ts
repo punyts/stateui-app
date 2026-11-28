@@ -176,10 +176,43 @@ class TreeChecker {
         }
     }
 
-    /** Checks the `<-` properties of the tree: syntax, node references, and that each `$.data` target exists */
+    /**
+     * Refuses a link whose chain of links leads back to the property it links (SUI-LINK-CYCLE), as the store refuses
+     * it when the app runs: a link to itself (`#a.value` on `a`), or `a` linked to `b` while `b` is linked to `a`. Each
+     * link of such a loop is reported. Node references are resolved to state paths by `extractLinks`, so a chain is
+     * followed as the store follows its aliases: the longest linked path at the start of the target is replaced by its
+     * target
+     */
+    private checkCycles(links: readonly Link[]): void {
+        const aliases = new Map<string, string>();
+        for (const link of links) aliases.set(`${link.statePath}.${link.key}`, link.target);
+        const follow = (path: string): string | undefined => {
+            for (let end = path.length; end > 0; end = path.lastIndexOf('.', end - 1)) {
+                const target = aliases.get(path.slice(0, end));
+                if (target !== undefined) return target + path.slice(end);
+            }
+            return undefined;
+        };
+        const loops = (from: string, target: string): boolean =>
+            target === from || target.startsWith(`${from}.`) || from.startsWith(`${target}.`);
+        for (const link of links) {
+            const from = `${link.statePath}.${link.key}`;
+            let current: string | undefined = link.target;
+            for (let hops = 0; current !== undefined && hops <= aliases.size; hops += 1) {
+                if (loops(from, current)) {
+                    this.errors.push(buildError('SUI-LINK-CYCLE', { target: link.target, path: link.statePath, statePath: link.statePath }));
+                    break;
+                }
+                current = follow(current);
+            }
+        }
+    }
+
+    /** Checks the `<-` properties of the tree: syntax, node references, loops, and that each `$.data` target exists */
     checkLinks(root: Node): void {
         const extracted = extractLinks(root, { path: this.rootPath, library: this.library, instances: this.instances });
         this.errors.push(...extracted.errors);
+        this.checkCycles(extracted.links);
         this.checkOwnState(extracted.links);
         for (const link of extracted.links) {
             if (DATA_TARGET.test(link.target) && !dataPathExists(this.data, link.target)) {

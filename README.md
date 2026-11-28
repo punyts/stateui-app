@@ -213,7 +213,8 @@ store alias (`store.link`) of its target, so reads, writes and change events fol
   template; `resolveRowLinks` takes `owner` (the owner's chain) for the same rule, and `library`.
 - **`applyLinks(store, links)`** calls `store.link(statePath.key, target)` and returns errors: `SUI-LINK-CYCLE` when the
   target is the property, inside it, above it or loops through other links, `SUI-LINK-MISSING` otherwise, each with the
-  node path. It is idempotent per store (the same link twice does nothing; a new target re-points) and tries every link.
+  node path. `validateDocument` refuses the same loops before the app runs (`SUI-LINK-CYCLE` on each link of a
+  loop, `#a.value` on `a`, or `a` and `b` linked to each other), so a writer that checks the document never stores one. It is idempotent per store (the same link twice does nothing; a new target re-points) and tries every link.
   `disposeLinks(store, links)` unlinks what `applyLinks` created; listeners stay registered.
 - **`runtimePath(appPath)`** is the only place that builds a node's runtime path: `$.app.a.b` gives
   `$.runtime.nodes.app.a.b`. `RUNTIME_PATHS` names `nodes`, `icons` and `empty`, which are separate keys.

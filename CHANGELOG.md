@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- **`validateDocument` refuses a link that loops** (docs/design/magnetic-editor-links-and-presses.md, stage L3).
+  Fix: only `applyLinks` raised `SUI-LINK-CYCLE`, when the app ran, so a node write that linked `b.value` to
+  `#a.value` while `a.value` was linked to `#b.value` (or a property to itself) was accepted and the preview then
+  refused the link. `checkTree` follows each link's chain of resolved targets as the store follows aliases and
+  reports `SUI-LINK-CYCLE` on every link of a loop; a chain that ends is accepted. Test:
+  `src/core/validate/validate.test.ts` ("should report SUI-LINK-CYCLE for links of stored properties …").
 - **`ownState` is exported from `/core`** (docs/design/magnetic-editor-links-and-presses.md, stage L3): whether a
   property is a component's own state or look (`hidden`, `open`, a shared look), the rule `SUI-LINK-OWN` warns by, so
   an editor that offers link targets leaves out the ones the validator would warn of. Comments of `src/core/on/` no

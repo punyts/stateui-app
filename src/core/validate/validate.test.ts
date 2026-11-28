@@ -443,6 +443,39 @@ describe('validateDocument', () => {
         ]);
     });
 
+    it('should report SUI-LINK-CYCLE for links of stored properties that lead back to themselves, and accept a chain', () => {
+        // Arrange
+        const loop = doc({
+            component: 'panel',
+            children: {
+                a: { component: 'text', '@id': 'a', '<-label': '#a.label' },
+                b: { component: 'text', '@id': 'b', '<-label': '#c.label' },
+                c: { component: 'text', '@id': 'c', '<-label': '#b.label' },
+                d: { component: 'text', '<-label': '#b.label' }
+            }
+        });
+        const chain = doc({
+            component: 'panel',
+            children: {
+                a: { component: 'text', '@id': 'a', '<-label': '#b.label' },
+                b: { component: 'text', '@id': 'b', '<-label': '#c.label' },
+                c: { component: 'text', '@id': 'c', label: 'C' }
+            }
+        });
+
+        // Act
+        const looped = validateDocument(loop, LIBRARY).errors;
+        const chained = validateDocument(chain, LIBRARY).errors;
+
+        // Assert
+        expect(looped.map((error) => [error.code, error.statePath])).toEqual([
+            ['SUI-LINK-CYCLE', '$.app.children.a'],
+            ['SUI-LINK-CYCLE', '$.app.children.b'],
+            ['SUI-LINK-CYCLE', '$.app.children.c']
+        ]);
+        expect(chained).toEqual([]);
+    });
+
     it('should report SUI-LINK-TARGET for climbing and absolute app targets', () => {
         const document = doc({
             component: 'panel',
