@@ -5,7 +5,7 @@ import type { ComponentLibrary } from '../resolve/index.js';
 import { parseShape } from '../shape/index.js';
 import type { Shape } from '../shape/index.js';
 import type { JsonObject, Node } from '../types.js';
-import { documentValidators, libraryFromCatalog, registerDocumentValidator, validateDocument } from './index.js';
+import { documentValidators, libraryFromCatalog, ownState, registerDocumentValidator, validateDocument } from './index.js';
 
 function shapeOf(properties: Record<string, unknown>, events: string[] = [], commands: string[] = [], layout = false): Shape {
     const result = parseShape({ summary: 'Test', properties, events, commands, layout }, 'test.state.json');
@@ -1100,5 +1100,18 @@ describe('validateDocument: declared branches and own state', () => {
         // Assert
         expect(warned.map((error) => [error.code, error.severity, error.statePath])).toEqual([['SUI-LINK-OWN', 'warning', '$.app.children.note']]);
         expect(quiet).toEqual([]);
+    });
+});
+
+describe('ownState', () => {
+    it('should name hidden, open and the shared looks of a shape, and no other property', () => {
+        // Arrange
+        const shape = { shared: ['tone', 'size'] };
+
+        // Act
+        const own = ['hidden', 'open', 'tone', 'size', 'value', '_text'].map((name) => ownState(shape, name));
+
+        // Assert
+        expect(own).toEqual([true, true, true, true, false, false]);
     });
 });

@@ -6,7 +6,7 @@ import type { OnCommand, ParsedTarget, SystemCommand } from './types.js';
 const NAMED = /^#([^.#$\s]+)((?:\.[^.\s]+)*)$/;
 const STEP = /^[^.\s]+$/;
 
-/** True when `command` is one of `SYSTEM_COMMANDS`: `set`, `toggle`, `emit`, `navigate` and the `request.*` commands */
+/** True when `command` is one of `SYSTEM_COMMANDS`: `set`, `toggle`, `navigate`, the `request.*` commands, `undo` and `redo` */
 export function isSystemCommand(command: string): command is SystemCommand {
     return (SYSTEM_COMMANDS as readonly string[]).includes(command);
 }

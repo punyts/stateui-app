@@ -32,8 +32,11 @@ function holdsChildren(shape: Shape): boolean {
     return shape.layout || shape.placement !== undefined || shape.childComponents !== undefined;
 }
 
-/** True when a property of a shape is the component's own state or look: `hidden`, `open` or a shared look (`tone`, `size`) */
-function ownState(shape: Shape, name: string): boolean {
+/**
+ * True when a property of a shape is the component's own state or look: `hidden`, `open` or a shared look (`tone`,
+ * `size`). A `$.data` value linked only from such properties is warned of (`SUI-LINK-OWN`)
+ */
+export function ownState(shape: Pick<Shape, 'shared'>, name: string): boolean {
     return OWN_STATE.has(name) || shape.shared.includes(name);
 }
 

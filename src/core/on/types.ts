@@ -36,11 +36,11 @@ export type SystemCommand = (typeof SYSTEM_COMMANDS)[number];
 export const COMMAND_KEYS = ['command', 'target', 'value', 'from'] as const;
 
 /**
- * One command object of an `on` entry. `target` names where the command acts (for `emit` it is the event name);
- * `value` is the command's argument: what `set` writes, the key `select` takes, the payload `emit` sends.
+ * One command object of an `on` entry. `target` names where the command acts;
+ * `value` is the command's argument: what `set` writes, the key `select` takes.
  * For `navigate`, `target` is the screen name and `value` the params, where a `$row` or `$row.path` value is read
  * from the record the slot shows.
- * When `value` is absent, `emit` sends the event's own payload. `from` takes the place of `value`: a path in any target
+ * `from` takes the place of `value`: a path in any target
  * form (`$.data.x`, `#name.path`, `.path`, `$row.path`) whose current value is the argument, so `set` copies a value
  */
 export interface OnCommand {

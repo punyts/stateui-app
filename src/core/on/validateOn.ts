@@ -308,7 +308,7 @@ class OnValidator {
  * Checks every `on` entry in a resolved tree and returns the errors, in tree order:
  * - a malformed `on` (reported as `SUI-DOC-SHAPE` with the state path until the catalog has a `SUI-ON` code for it):
  *   not a map of event to entry, an entry that is not one command object or a non-empty list of them, a command
- *   object with other keys or with both `value` and `from`, an `emit` without a target (its event name), a `set`
+ *   object with other keys or with both `value` and `from`, a `set`
  *   without a value or `from`, or a `set` or
  *   `toggle` without a target
  * - `SUI-ON-EVENT`: the node's component does not declare the event; the root node (`$.app`) may also use the app
@@ -323,7 +323,7 @@ class OnValidator {
  *   path or `$row.path`
  *
  * Target rules: a component command without a target acts on the node itself; `set` and `toggle` target a property
- * (`$.data.name`, `.value`, `#form.children.name.value`); `emit` uses `target` as the event name and is not resolved.
+ * (`$.data.name`, `.value`, `#form.children.name.value`).
  * A node of an unknown component is skipped for event, command and property checks. Pure; never throws.
  * `tree` is the result of `resolveNode`
  */

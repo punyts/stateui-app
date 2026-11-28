@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **`ownState` is exported from `/core`** (docs/design/magnetic-editor-links-and-presses.md, stage L3): whether a
+  property is a component's own state or look (`hidden`, `open`, a shared look), the rule `SUI-LINK-OWN` warns by, so
+  an editor that offers link targets leaves out the ones the validator would warn of. Comments of `src/core/on/` no
+  longer name the removed `emit` command. Test: `src/core/validate/validate.test.ts` ("ownState").
 - **A rule triggered by a node reference never runs in the start pass, and a trigger may not name a linked property**
   (docs/design/magnetic-editor-links-and-presses.md, stage L0). Fix: a rule whose trigger is `#name.pressed` and whose
   commands are only `set`, `merge`, `copy` or `query` counted as a deriving rule, so `start` and `derive` ran it
