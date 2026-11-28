@@ -5,7 +5,7 @@ Component system and app documents built on `@punyts/stateui`.
 ## Entry points
 - `@punyts/stateui-app`: everything.
 - `@punyts/stateui-app/core`: the DOM-free part; safe to import under plain Node.
-- `@punyts/stateui-app/protocol`: the runtime message types, limits and structural validator; no DOM and no StateUI, so the preview host can import it.
+- `@punyts/stateui-app/protocol`: the runtime message types, limits and structural validator (and `isLanguageCode`, the check of its `locale` fields); no DOM and no StateUI, so the preview host can import it.
 - `@punyts/stateui-app/runtime`: `createRuntime`, `startRuntime` and the protocol (the runtime of a live app, in the preview iframe or in a page).
 
 ## Error catalog, types and limits

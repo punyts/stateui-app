@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- **`@punyts/stateui-app/protocol` exports `isLanguageCode`.** The check the protocol's validator gives a `load` or
+  `locale` message's `locale`, so the preview host checks a language without importing `/core`. Covered by
+  `src/runtime/languageCode.test.ts` (the pattern) and stateui-mcp's `test/browser.integration.test.ts`.
 - **A component text the locale step writes into a new node is never sent as a change.** Fix: the node localizer wrote
   a created node's texts in the current language (since LC0 also in the base language, so in every app written in
   `de`, `es` or `fr`) with no origin, so `captureChanges` posted them back to the host and the logic engine ran on

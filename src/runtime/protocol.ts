@@ -1,4 +1,5 @@
 export { isIconsMap } from './icons.js';
+export { isLanguageCode } from '../core/locale/languageCode.js';
 export * from './limits.js';
 export { APP_EVENTS, CHANGE_OPS, FILE_ERROR_CODES, INBOUND_TYPES, MESSAGE_TYPES, OUTBOUND_TYPES, PROTOCOL_VERSION } from './messages.js';
 export type {
