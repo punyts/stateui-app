@@ -1,6 +1,6 @@
 export { buildAppOverlay } from './buildAppOverlay.js';
 export { extractBaseOverlay, isContentKey } from './extractBaseOverlay.js';
-export { LANGUAGE_CODE, isLanguageCode } from './languageCode.js';
+export { DEFAULT_LOCALE, LANGUAGE_CODE, isLanguageCode } from './languageCode.js';
 export { unknownLanguage } from './errors.js';
 export { validateDocumentLocales } from './documentValidator.js';
 export { MAX_MISSING_PER_LANGUAGE, findUntranslated, validateAppLocale } from './validateAppLocale.js';

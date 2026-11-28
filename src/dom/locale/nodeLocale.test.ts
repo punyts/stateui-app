@@ -9,7 +9,7 @@ import type { Shape } from '../../core/shape/index.js';
 import type { JsonObject, Node } from '../../core/types.js';
 import { createNodeLocale } from './nodeLocale.js';
 import type { NodeLocaleStore } from './nodeLocale.js';
-import { switchLocale } from './switchLocale.js';
+import { LOCALE_ORIGIN, switchLocale } from './switchLocale.js';
 
 function shapeOf(properties: Record<string, unknown>): Shape {
     const result = parseShape({ summary: 'Test', properties }, 'test.state.json');
@@ -50,10 +50,10 @@ const APP: Node = {
     }
 };
 
-function setup() {
+function setup(baseLocale = 'en') {
     const resolved = resolveNode(cloneJson(APP as JsonObject) as Node, LIBRARY, {});
     const tree = cloneJson(resolved.node as JsonObject);
-    const store = createStore<Record<string, unknown>>({ locale: 'en', app: cloneJson(tree) });
+    const store = createStore<Record<string, unknown>>({ locale: baseLocale, app: cloneJson(tree) });
     const overlays: Record<string, JsonObject> = {
         en: extractBaseOverlay(tree, []),
         de: buildAppOverlay('de', tree, COMPONENTS, OVERRIDES.de, { library: LIBRARY, instances: resolved.instances }),
@@ -63,7 +63,7 @@ function setup() {
     const locale = createNodeLocale({
         store: nodeStore,
         overlays,
-        baseLocale: 'en',
+        baseLocale,
         componentOverlays: COMPONENTS,
         appOverrides: OVERRIDES,
         library: LIBRARY,
@@ -94,6 +94,35 @@ describe('createNodeLocale', () => {
         expect(inEnglish).toBe('Text');
         expect(backInGerman).toBe('Text (de)');
         expect(store.get('$.app.children.note._text')).toBe('Texte');
+    });
+
+    it('should tag the texts it writes into a node written while German is active with the locale origin', () => {
+        // Arrange
+        const { store, switchTo } = setup();
+        switchTo('de');
+        const origins: (string | undefined)[] = [];
+        store.on('$.app.children.note._text', (_path, _value, _old, _action, origin) => origins.push(origin));
+
+        // Act
+        store.set('$.app.children.note', { component: 'text', _text: 'Text' }, { origin: 'sync' });
+
+        // Assert
+        expect(store.get('$.app.children.note._text')).toBe('Text (de)');
+        expect(origins).toEqual([LOCALE_ORIGIN]);
+    });
+
+    it('should tag the base language texts it writes into a node written in a German base with the locale origin', () => {
+        // Arrange
+        const { store } = setup('de');
+        const origins: (string | undefined)[] = [];
+        store.on('$.app.children.note._text', (_path, _value, _old, _action, origin) => origins.push(origin));
+
+        // Act
+        store.set('$.app.children.note', { component: 'text', _text: 'Text' }, { origin: 'sync' });
+
+        // Assert
+        expect(store.get('$.app.children.note._text')).toBe('Text (de)');
+        expect(origins).toEqual([LOCALE_ORIGIN]);
     });
 
     it('should leave the text the author wrote and apply the override for the path', () => {

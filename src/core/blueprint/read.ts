@@ -198,7 +198,10 @@ class Reader {
 
     locales(value: JsonValue, path: string): void {
         if (!this.object(value, path, 'locales')) return;
-        for (const [name, messages] of Object.entries(value)) this.object(messages, `${path}.${name}`, 'a locale');
+        for (const [name, messages] of Object.entries(value)) {
+            if (!isLanguageCode(name)) this.shape(`${path}.${name}`, `"${name}" must be a language code such as "en" or "pt-BR"`);
+            this.object(messages, `${path}.${name}`, 'a locale');
+        }
     }
 }
 

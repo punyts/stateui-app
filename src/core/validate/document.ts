@@ -36,6 +36,11 @@ function isMapOf(value: JsonValue, accepts: (entry: JsonValue) => boolean): bool
     return isObject(value) && Object.values(value).every(accepts);
 }
 
+/** Overlays by language: each key a `LANGUAGE_CODE`, each value an object */
+function isLocales(value: JsonValue): boolean {
+    return isMapOf(value, isObject) && Object.keys(value as object).every(isLanguageCode);
+}
+
 /** Top-level keys: only the document keys (`runtime` is not one), each of the right type */
 export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
     const errors: BuildError[] = [];
@@ -52,7 +57,7 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
         ['appThemes', (value) => isMapOf(value, (entry) => isObject(entry) && isObject(entry['tokens'] ?? {}) && isObject(entry['overlays'] ?? {}))],
         ['locale', isLanguageCode],
         ['data', isObject],
-        ['locales', (value) => isMapOf(value, isObject)],
+        ['locales', isLocales],
         ['logic', isObject]
     ];
     for (const [key, fits] of typed) {
@@ -157,7 +162,7 @@ function checkScreens(document: Record<string, JsonValue>): BuildError[] {
             const problem = screen['params'] === undefined ? undefined : paramsProblem(screen['params']);
             if (problem !== undefined) errors.push(screenError(path, problem));
             const locales = screen['locales'];
-            if (locales !== undefined && (!isObject(locales) || Object.values(locales).some((overlay) => !isObject(overlay)))) {
+            if (locales !== undefined && !isLocales(locales)) {
                 errors.push(screenError(path, '"locales" must map language codes to overlays'));
             }
         }

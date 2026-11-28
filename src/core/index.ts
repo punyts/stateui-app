@@ -225,6 +225,7 @@ export type { ArticulationName, SharedName } from './articulation/index.js';
 export {
     MAX_MISSING_PER_LANGUAGE,
     buildAppOverlay,
+    DEFAULT_LOCALE,
     extractBaseOverlay,
     LANGUAGE_CODE,
     findUntranslated,

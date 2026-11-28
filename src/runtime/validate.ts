@@ -20,7 +20,7 @@ import {
 } from './limits.js';
 import { CHANGE_OPS, FILE_ERROR_CODES, MAX_FLOATING, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
 import { isAppEvent } from '../core/types.js';
-import { LANGUAGE_CODE } from '../core/locale/languageCode.js';
+import { isLanguageCode } from '../core/locale/languageCode.js';
 import { MAX_REQUEST_ID, MAX_REQUEST_NOTE } from '../core/on/types.js';
 import { EXPORT_NAME_PATTERN, EXPORT_SOURCE_PATTERN, readExportRequest } from '../core/records/index.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
@@ -245,9 +245,6 @@ function isInspectedNode(value: unknown): boolean {
     );
 }
 
-function isLocale(value: unknown): boolean {
-    return typeof value === 'string' && value.length <= MAX_NAME_LENGTH && LANGUAGE_CODE.test(value);
-}
 
 /** The `active` of a `load`: theme overlay names by kind, a few at most */
 function isActive(value: unknown): boolean {
@@ -279,7 +276,7 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         (m['chunks'] === undefined || isChunks(m['chunks'])) &&
         (m['keys'] === undefined || (Array.isArray(m['keys']) && m['keys'].length <= MAX_KEYS && m['keys'].every(isKeyChord))) &&
         (m['active'] === undefined || isActive(m['active'])) &&
-        (m['locale'] === undefined || isLocale(m['locale'])) &&
+        (m['locale'] === undefined || isLanguageCode(m['locale'])) &&
         (m['open'] === undefined || isOpen(m['open'])) &&
         (m['files'] === undefined || isFilesSource(m['files'])),
     write: (m) =>
@@ -293,7 +290,7 @@ const FIELD_CHECKS: Record<MessageType, (message: Record<string, unknown>) => bo
         isText(m['target'], MAX_PATH_LENGTH) &&
         isText(m['command'], MAX_NAME_LENGTH) &&
         (m['value'] === undefined || isJson(m['value'])),
-    locale: (m) => hasOnlyKeys(m, ['locale']) && isLocale(m['locale']),
+    locale: (m) => hasOnlyKeys(m, ['locale']) && isLanguageCode(m['locale']),
     grant: (m) => hasOnlyKeys(m, ['grant']) && isGrant(m['grant']),
     theme: (m) => hasOnlyKeys(m, ['kind', 'name']) && isText(m['kind'], MAX_NAME_LENGTH) && isText(m['name'], MAX_NAME_LENGTH),
     event: (m) =>

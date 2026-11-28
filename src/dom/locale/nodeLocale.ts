@@ -4,6 +4,7 @@ import { cloneJson, mergeValues } from '../../core/resolve/index.js';
 import type { ComponentLibrary, DocumentComposed } from '../../core/resolve/index.js';
 import { isNodeValue, isObject } from '../../core/resolve/merge.js';
 import type { JsonObject, JsonValue } from '../../core/types.js';
+import { LOCALE_ORIGIN } from './switchLocale.js';
 import type { LocaleStore } from './switchLocale.js';
 
 const APP_PATH = '$.app';
@@ -265,7 +266,7 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
         const segments = segmentsBelow(path, rootPath) ?? [];
         applying = true;
         try {
-            store.apply(rootPath, wrap(segments, layer));
+            store.apply(rootPath, wrap(segments, layer), { origin: LOCALE_ORIGIN });
         } finally {
             applying = false;
         }

@@ -326,7 +326,7 @@ describe('document validation of locales', () => {
         ]);
     });
 
-    it('should refuse an overlay in the default language, of the app node and of a screen, at its path', () => {
+    it('should refuse an overlay in the default language, of the app node and of a screen, at its path, and one in en when no default is named', () => {
         // Arrange
         const documentIn = (locale: string | undefined) => ({
             ...(locale === undefined ? {} : { locale }),
@@ -349,7 +349,9 @@ describe('document validation of locales', () => {
         expect(german.errors.find((error) => error.code === 'SUI-LOCALE-BASE')?.message).toBe('Overlay "de" is in the app\'s default language at $.locales.de');
         expect(german.valid).toBe(false);
         expect(french.errors.filter((error) => error.code.startsWith('SUI-LOCALE'))).toEqual([]);
-        expect(unset.errors.filter((error) => error.code.startsWith('SUI-LOCALE'))).toEqual([]);
+        expect(unset.errors.filter((error) => error.code.startsWith('SUI-LOCALE')).map((error) => `${error.code} ${error.statePath ?? ''}`)).toEqual([
+            'SUI-LOCALE-BASE $.locales.en'
+        ]);
     });
 
     it('should refuse a default language that is not a language code', () => {

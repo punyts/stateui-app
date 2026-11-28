@@ -6,7 +6,7 @@ import { buildError, isValid } from '../../core/errors/index.js';
 import { FunctionTable, functionPaths } from '../../core/functions/index.js';
 import type { BuildError } from '../../core/errors/index.js';
 import type { Link } from '../../core/links/index.js';
-import { extractBaseOverlay } from '../../core/locale/index.js';
+import { DEFAULT_LOCALE, extractBaseOverlay } from '../../core/locale/index.js';
 import { RUNTIME_PATHS, applyLinks, disposeLinks, extractLinks, isLinkApplied } from '../../core/links/index.js';
 import { cloneJson, entryShape, resolveNode } from '../../core/resolve/index.js';
 import { APP_COMPONENT, ROUTE_PATH, initialRoute, isRouteRefusal, routeTo, screenPath } from '../../core/route/index.js';
@@ -35,7 +35,6 @@ import { fillPage } from './pageFill.js';
 import '../route/index.js';
 import type { AppState, MountContext, MountedApp, MountOptions, StartedContext } from './types.js';
 
-const DEFAULT_LOCALE = 'en';
 const APP_PATH = '$.app';
 
 function rootEntry(library: ComponentLibrary, name: string): { tag: string; shape: Parameters<typeof reflectedProperties>[0] } | undefined {

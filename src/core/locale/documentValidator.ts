@@ -7,6 +7,7 @@ import type { ResolvedTree } from '../on/index.js';
 import type { DocumentValidator } from '../validate/types.js';
 import type { JsonObject, Node } from '../types.js';
 import { baseLanguageOverlay } from './errors.js';
+import { DEFAULT_LOCALE } from './languageCode.js';
 import { validateLocaleOverlay } from './validateLocaleOverlay.js';
 
 const LOCALE_VALIDATOR = 'locale';
@@ -41,16 +42,17 @@ function checkRoot(
     return errors;
 }
 
-/** `SUI-LOCALE-BASE` for an overlay of `locales` (at `path`) in the default language `base` */
-function checkBase(locales: Readonly<Record<string, JsonObject>>, base: unknown, path: string): BuildError[] {
-    return typeof base === 'string' && Object.hasOwn(locales, base) ? [baseLanguageOverlay(base, `${path}.${base}`)] : [];
+/** `SUI-LOCALE-BASE` for an overlay of `locales` (at `path`) in the default language: `locale`, or `DEFAULT_LOCALE` without one */
+function checkBase(locales: Readonly<Record<string, JsonObject>>, locale: unknown, path: string): BuildError[] {
+    const base = typeof locale === 'string' ? locale : DEFAULT_LOCALE;
+    return Object.hasOwn(locales, base) ? [baseLanguageOverlay(base, `${path}.${base}`)] : [];
 }
 
 /**
  * The `locale` plug-in validator: checks every `locales.<code>` overlay of the document against the resolved
  * application, and every `screens.<name>.locales.<code>` against that screen's resolved root (content leaves only,
  * existing paths, no linked property, each `_` leaf a content property of its component), and refuses an overlay in the
- * document's default language `locale` with `SUI-LOCALE-BASE`. It does not report untranslated content, because the component overlays are not part of a document: use
+ * document's default language (`locale`, or `DEFAULT_LOCALE` when the document names none) with `SUI-LOCALE-BASE`. It does not report untranslated content, because the component overlays are not part of a document: use
  * `validateAppLocale` for `SUI-LOCALE-MISSING`
  */
 export const validateDocumentLocales: DocumentValidator = (context) => {

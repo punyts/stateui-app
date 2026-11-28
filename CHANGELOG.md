@@ -1,6 +1,22 @@
 # Changelog
 
 ## Unreleased
+- **A component text the locale step writes into a new node is never sent as a change.** Fix: the node localizer wrote
+  a created node's texts in the current language (since LC0 also in the base language, so in every app written in
+  `de`, `es` or `fr`) with no origin, so `captureChanges` posted them back to the host and the logic engine ran on
+  them; the write now carries `LOCALE_ORIGIN`. Test: `src/dom/locale/nodeLocale.test.ts` ("should tag the texts it
+  writes into a node written while German is active …", "should tag the base language texts it writes into a node
+  written in a German base …").
+- **The keys of `locales` are language codes, and a code has at most four subtags.** Breaking: `readBlueprint`
+  refuses a key of `locales` or of a screen's `locales` that fails `LANGUAGE_CODE` with `SUI-BLUEPRINT-SHAPE` at its
+  path, and the document check with `SUI-DOC-TYPE` (`$.locales`) or `SUI-DOC-SCREEN` (a screen); `LANGUAGE_CODE` is
+  `/^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,4}$/`, at most 39 characters, so the runtime protocol judges a code by
+  `isLanguageCode` alone and no longer accepts a default language it would refuse in a `locale` message. Test:
+  `src/runtime/languageCode.test.ts`.
+- **An overlay in `en` is refused when the document names no `locale`.** Breaking: the runtime takes such an app to
+  be in `DEFAULT_LOCALE` (`en`, now exported from `/core`) and dropped its `en` overlay silently; `SUI-LOCALE-BASE`
+  now refuses it at `$.locales.en` or `$.screens.<name>.locales.en`. Test: `src/core/locale/appOverlay.test.ts`
+  ("should refuse an overlay in the default language, … and one in en when no default is named").
 - **An app names the language it is written in** (docs/design/magnetic-editor-locale.md, stage LC0). A blueprint takes
   `locale`, which `assembleApp` copies to `document.locale` and `splitDocument` keeps from a document; one exported
   `LANGUAGE_CODE` (`/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/`, with `isLanguageCode`) judges every code: `readBlueprint`
