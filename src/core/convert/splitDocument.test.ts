@@ -225,6 +225,21 @@ describe('splitDocument reports', () => {
         // Assert
         expect(result.report).toEqual([{ path: '$.screens', reason: 'the document already has screens' }]);
     });
+
+    it('should keep the document\'s default language in the blueprint, and none when it has none', () => {
+        // Arrange
+        const german = deepFreeze({ locale: 'de', app: { component: 'text', _text: 'Hallo' } }) as unknown as AppDocument;
+
+        // Act
+        const result = splitDocument({ name: 'Greeting', document: german });
+        const without = splitDocument({ name: 'Greeting', document: withData({}) });
+
+        // Assert
+        expect(result.report).toEqual([]);
+        expect(result.app?.blueprint.locale).toBe('de');
+        expect(Object.hasOwn(without.app?.blueprint ?? {}, 'locale')).toBe(false);
+        expect(errorsOf(result)).toEqual([]);
+    });
 });
 
 describe('splitDocument names', () => {

@@ -1,6 +1,24 @@
 # Changelog
 
 ## Unreleased
+- **An app names the language it is written in** (docs/design/magnetic-editor-locale.md, stage LC0). A blueprint takes
+  `locale`, which `assembleApp` copies to `document.locale` and `splitDocument` keeps from a document; one exported
+  `LANGUAGE_CODE` (`/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/`, with `isLanguageCode`) judges every code: `readBlueprint`
+  refuses another `locale` with `SUI-BLUEPRINT-SHAPE` at `$.locale`, the document check with `SUI-DOC-TYPE`, the
+  runtime protocol drops a `load` or `locale` message with another code, and `scanLibrary`'s own `LOCALE_CODE` is gone.
+  Breaking: a runtime `locale` with an uppercase primary subtag (`DE`) and a component locale file with a subtag of one
+  or more than eight characters are refused. The new `SUI-LOCALE-BASE` refuses an overlay in the default language, of
+  the app node or of a screen, at `$.locales.<code>` or `$.screens.<name>.locales.<code>`. Fix: an app whose default
+  language is one the components translate (`de`) showed their English defaults; the locale step now applies the
+  components' overlay of the base language on mount and to nodes created later, and every other language's overlay
+  puts those texts back. Tests: `src/core/blueprint/blueprint.test.ts` ("should read the default language and refuse
+  one that is not a language code"), `src/core/assemble/assemble.test.ts` ("should copy the default language to the
+  document …"), `src/core/convert/splitDocument.test.ts` ("should keep the document's default language in the
+  blueprint …"), `src/core/locale/appOverlay.test.ts` ("should refuse an overlay in the default language …", "should
+  refuse a default language that is not a language code"), `src/core/errors/errors.test.ts`,
+  `src/runtime/languageCode.test.ts`, `src/runtime/startRuntime.browser.test.ts` ("should mount an app written in German
+  with the components' German texts …"), `src/dom/locale/localeStep.browser.test.ts` ("should give a node added to an
+  app written in German …").
 - **A written node's link waits for a target that is not there yet.** Fix: `MountedApp.writeNode` refused a `<-` link
   whose target was not in the store with `SUI-LINK-MISSING` and never tried it again, so a node a host wrote before
   the synced data it links to arrived (Magnetic's list given `<-items` right after the Screens view mounted the live

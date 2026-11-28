@@ -5,6 +5,7 @@ import { isPartName } from '../blueprint/names.js';
 import { FIELD_TYPES } from '../blueprint/types.js';
 import { appIconProblems } from '../icons/appIcons.js';
 import { ephemeralProblems, MAX_MARKED_PATHS } from '../ephemeral/ephemeral.js';
+import { isLanguageCode } from '../locale/languageCode.js';
 import { DOCUMENT_KEYS } from '../types.js';
 import type { JsonValue } from '../types.js';
 
@@ -49,7 +50,7 @@ export function checkRoot(document: Record<string, JsonValue>): BuildError[] {
         ['theme', isObject],
         ['themes', (value) => isMapOf(value, isObject)],
         ['appThemes', (value) => isMapOf(value, (entry) => isObject(entry) && isObject(entry['tokens'] ?? {}) && isObject(entry['overlays'] ?? {}))],
-        ['locale', (value) => typeof value === 'string'],
+        ['locale', isLanguageCode],
         ['data', isObject],
         ['locales', (value) => isMapOf(value, isObject)],
         ['logic', isObject]

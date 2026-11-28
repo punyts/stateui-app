@@ -1,14 +1,14 @@
 import { buildAppOverlay, extractBaseOverlay, unknownLanguage } from '../../core/locale/index.js';
 import type { ComponentOverlays } from '../../core/locale/index.js';
-import { cloneJson } from '../../core/resolve/index.js';
+import { cloneJson, mergeValues } from '../../core/resolve/index.js';
 import { screenPath } from '../../core/route/index.js';
 import type { JsonObject } from '../../core/types.js';
 import { registerMountStep } from '../mount/index.js';
 import type { MountContext } from '../mount/index.js';
 import type { BuildError } from '../../core/errors/index.js';
-import { createNodeLocale } from './nodeLocale.js';
+import { createNodeLocale, pickPaths } from './nodeLocale.js';
 import type { NodeLocale, NodeLocaleStore } from './nodeLocale.js';
-import { switchLocale } from './switchLocale.js';
+import { LOCALE_ORIGIN, switchLocale } from './switchLocale.js';
 
 const APP_PATH = '$.app';
 const LOCALE_PATH = '$.locale';
@@ -48,18 +48,28 @@ function rootsOf(store: NodeLocaleStore, context: MountContext): { app: Root; sc
     return { app, screens };
 }
 
-/** The overlay of one root per language: the base content under `baseLocale`, then each code's component overlays and overrides */
-function overlaysOf(root: Root, codes: ReadonlySet<string>, baseLocale: string, componentOverlays: ComponentOverlays, context: MountContext): Record<string, JsonObject> {
-    const built: Record<string, JsonObject> = { [baseLocale]: extractBaseOverlay(root.tree, [], root.path) };
+/** The overlays of one root by language, and the base language's component overlay the mounted content still lacks */
+interface RootOverlays {
+    built: Record<string, JsonObject>;
+    baseLayer: JsonObject;
+}
+
+/**
+ * The overlay of one root per language. Under `baseLocale`: the base content with the components' overlay of that
+ * language on the texts still at their component default (an overlay of the root in the base language is ignored).
+ * Under each other code: the base content those component texts replaced, then the code's component overlays and
+ * overrides, so switching from the base language back and forth stays complete
+ */
+function overlaysOf(root: Root, codes: ReadonlySet<string>, baseLocale: string, componentOverlays: ComponentOverlays, context: MountContext): RootOverlays {
+    const options = { library: context.library, composed: context.document.composed, instances: context.instances, path: root.path };
+    const base = extractBaseOverlay(root.tree, [], root.path);
+    const baseLayer = buildAppOverlay(baseLocale, root.tree, componentOverlays, {}, options);
+    const restore = pickPaths(base, baseLayer);
+    const built: Record<string, JsonObject> = { [baseLocale]: mergeValues(base, baseLayer) as JsonObject };
     for (const code of codes) {
-        built[code] = buildAppOverlay(code, root.tree, componentOverlays, root.overrides?.[code] ?? {}, {
-            library: context.library,
-            composed: context.document.composed,
-            instances: context.instances,
-            path: root.path
-        });
+        built[code] = mergeValues(restore, buildAppOverlay(code, root.tree, componentOverlays, root.overrides?.[code] ?? {}, options)) as JsonObject;
     }
-    return built;
+    return { built, baseLayer };
 }
 
 /** One localizer over several: each path goes to the localizer of the root that holds it */
@@ -88,7 +98,8 @@ function routed(localizers: ReadonlyMap<string, NodeLocale>): NodeLocale {
  * Registers the mount step that keeps the language of an application complete: when the store exists it builds the
  * overlay of each language for the app node (`$.app`) and for each screen (`$.screens.{name}`) from `componentOverlays`,
  * the document's `locales` (for the app node) or the screen's `locales`, and the base overlay of the mounted content,
- * then watches each root for nodes created later and translates them (`createNodeLocale`). A switch changes every
+ * applies the components' overlay of the base language (`$.locale`) to the texts still at their component default, so
+ * a `de` app shows the components' German texts, then watches each root for nodes created later and translates them (`createNodeLocale`). A switch changes every
  * screen in the store, so a screen that is hidden or not mounted yet shows the language when it appears.
  * The step needs the document, library and instances `mountApp` already gives it, so `mountApp` is unchanged
  */
@@ -110,7 +121,9 @@ export function registerLocaleStep(componentOverlays: ComponentOverlays): Locale
 
             const localizers = new Map<string, NodeLocale>();
             const localize = (root: Root): Record<string, JsonObject> => {
-                const built = overlaysOf(root, codes, baseLocale, componentOverlays, context);
+                const { built, baseLayer } = overlaysOf(root, codes, baseLocale, componentOverlays, context);
+                // The mounted content is in the base language: its component texts take that language's overlay now
+                if (Object.keys(baseLayer).length > 0) store.apply(root.path, cloneJson(baseLayer), { origin: LOCALE_ORIGIN });
                 localizers.set(
                     root.path,
                     createNodeLocale({

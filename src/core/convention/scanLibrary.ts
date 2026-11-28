@@ -1,10 +1,10 @@
 import { buildError } from '../errors/index.js';
 import type { BuildError } from '../errors/index.js';
+import { LANGUAGE_CODE } from '../locale/languageCode.js';
 import type { ComponentFiles, FileMap, ScannedComponent } from './types.js';
 
 /** Lower-case words joined by single hyphens; the tag and the camel-cased name both derive from it */
 const FOLDER_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
-const LOCALE_CODE = /^[a-z]{2,3}(?:-[A-Za-z0-9]+)*$/;
 const LOCALE_ROLE = /^locale\.(.+)\.json$/;
 
 const FILE_ROLES: ReadonlyMap<string, keyof ComponentFiles> = new Map([
@@ -97,7 +97,7 @@ export function scanLibrary(fileMap: FileMap): ScanResult {
         const locale = LOCALE_ROLE.exec(role)?.[1];
         if (fileRole !== undefined) {
             folder.files[fileRole] = path;
-        } else if (locale !== undefined && LOCALE_CODE.test(locale)) {
+        } else if (locale !== undefined && LANGUAGE_CODE.test(locale)) {
             folder.locales[locale] = path;
         } else {
             folder.broken = true;

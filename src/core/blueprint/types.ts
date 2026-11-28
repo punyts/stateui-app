@@ -111,7 +111,9 @@ export interface AppBlueprint {
     screens: Record<string, BlueprintScreen>;
     /** The app's own units, which may touch its screens */
     logic?: LogicDocument;
-    /** Locale name to messages */
+    /** The language the app's own texts are written in (`LANGUAGE_CODE`); `en` at run time when absent */
+    locale?: string;
+    /** Overlays of the app node's content by language code, relative to the app node; never one in `locale` */
     locales?: Record<string, JsonObject>;
     /** The app's own icons by name, each outline path data in a 24×24 view box; a name here wins over the icon set's */
     icons?: Record<string, AppIcon>;

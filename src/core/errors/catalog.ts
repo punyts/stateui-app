@@ -154,6 +154,7 @@ export const ERROR_CATALOG = {
     'SUI-LOCALE-UNKNOWN': { template: 'No overlay for language "{locale}"' },
     'SUI-LOCALE-LINKED': { template: 'Overlay "{locale}" sets linked property "{name}" at {path}' },
     'SUI-LOCALE-MISSING': { template: 'Language "{locale}" does not translate {path}', severity: 'warning' },
+    'SUI-LOCALE-BASE': { template: 'Overlay "{locale}" is in the app\'s default language at {path}' },
     'SUI-BUILD-SHAPE': { template: 'Invalid shape file {file}: {name}' },
     'SUI-BUILD-EXPOSES': { template: 'Exposed path "{key}" in {file} {name}' },
     'SUI-BUILD-NAME': { template: 'Name "{name}" in {file} is not allowed' },

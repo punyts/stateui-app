@@ -6,6 +6,7 @@ import { registerDocumentValidator } from '../validate/registry.js';
 import type { ResolvedTree } from '../on/index.js';
 import type { DocumentValidator } from '../validate/types.js';
 import type { JsonObject, Node } from '../types.js';
+import { baseLanguageOverlay } from './errors.js';
 import { validateLocaleOverlay } from './validateLocaleOverlay.js';
 
 const LOCALE_VALIDATOR = 'locale';
@@ -40,15 +41,25 @@ function checkRoot(
     return errors;
 }
 
+/** `SUI-LOCALE-BASE` for an overlay of `locales` (at `path`) in the default language `base` */
+function checkBase(locales: Readonly<Record<string, JsonObject>>, base: unknown, path: string): BuildError[] {
+    return typeof base === 'string' && Object.hasOwn(locales, base) ? [baseLanguageOverlay(base, `${path}.${base}`)] : [];
+}
+
 /**
  * The `locale` plug-in validator: checks every `locales.<code>` overlay of the document against the resolved
  * application, and every `screens.<name>.locales.<code>` against that screen's resolved root (content leaves only,
- * existing paths, no linked property, each `_` leaf a content property of its component). It does not report untranslated content, because the component overlays are not part of a document: use
+ * existing paths, no linked property, each `_` leaf a content property of its component), and refuses an overlay in the
+ * document's default language `locale` with `SUI-LOCALE-BASE`. It does not report untranslated content, because the component overlays are not part of a document: use
  * `validateAppLocale` for `SUI-LOCALE-MISSING`
  */
 export const validateDocumentLocales: DocumentValidator = (context) => {
-    const { locales, screens } = context.document;
+    const { locale, locales, screens } = context.document;
     const errors: BuildError[] = [];
+    if (isObject(locales)) errors.push(...checkBase(locales as Record<string, JsonObject>, locale, '$.locales'));
+    for (const [name, screen] of Object.entries(isObject(screens) ? screens : {})) {
+        if (isObject(screen?.locales)) errors.push(...checkBase(screen.locales as Record<string, JsonObject>, locale, `$.screens.${name}.locales`));
+    }
     if (isObject(locales)) errors.push(...checkRoot(locales as Record<string, JsonObject>, context.tree, context.library, '$.app'));
     for (const [name, tree] of Object.entries(context.screens ?? {})) {
         const screenLocales = isObject(screens) && Object.hasOwn(screens, name) ? screens[name]?.locales : undefined;

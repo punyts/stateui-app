@@ -325,4 +325,41 @@ describe('document validation of locales', () => {
             'SUI-LOCALE-CONTENT $.screens.home.children.a.component'
         ]);
     });
+
+    it('should refuse an overlay in the default language, of the app node and of a screen, at its path', () => {
+        // Arrange
+        const documentIn = (locale: string | undefined) => ({
+            ...(locale === undefined ? {} : { locale }),
+            app: { component: 'panel', _title: 'Laden' },
+            locales: { de: { _title: 'Laden' }, en: { _title: 'Shop' } },
+            screens: { home: { root: { component: 'panel', _title: 'Start' }, locales: { de: { _title: 'Start' }, fr: { _title: 'Accueil' } } } },
+            start: 'home'
+        }) as unknown as AppDocument;
+
+        // Act
+        const german = validateDocument(documentIn('de'), LIBRARY);
+        const french = validateDocument(documentIn('it'), LIBRARY);
+        const unset = validateDocument(documentIn(undefined), LIBRARY);
+
+        // Assert
+        expect(german.errors.filter((error) => error.code === 'SUI-LOCALE-BASE').map((error) => error.statePath)).toEqual([
+            '$.locales.de',
+            '$.screens.home.locales.de'
+        ]);
+        expect(german.errors.find((error) => error.code === 'SUI-LOCALE-BASE')?.message).toBe('Overlay "de" is in the app\'s default language at $.locales.de');
+        expect(german.valid).toBe(false);
+        expect(french.errors.filter((error) => error.code.startsWith('SUI-LOCALE'))).toEqual([]);
+        expect(unset.errors.filter((error) => error.code.startsWith('SUI-LOCALE'))).toEqual([]);
+    });
+
+    it('should refuse a default language that is not a language code', () => {
+        // Arrange
+        const document = { locale: 'DE', app: { component: 'panel', _title: 'Laden' } } as unknown as AppDocument;
+
+        // Act
+        const result = validateDocument(document, LIBRARY);
+
+        // Assert
+        expect(result.errors.map((error) => `${error.code} ${error.statePath ?? ''}`)).toContain('SUI-DOC-TYPE $.locale');
+    });
 });

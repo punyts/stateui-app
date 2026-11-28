@@ -351,6 +351,7 @@ export function splitDocument(input: SplitInput): SplitResult {
     const blueprint: AppBlueprint = {
         title: input.name,
         ...(Object.keys(uses).length > 0 ? { uses } : {}),
+        ...(document.locale === undefined ? {} : { locale: document.locale }),
         start,
         app: appNode as unknown as Node,
         screens,

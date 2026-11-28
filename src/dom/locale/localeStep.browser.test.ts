@@ -87,6 +87,30 @@ describe('the locale step in Chromium', () => {
         expect(textOf(host).match(/Überschrift/g)).toHaveLength(2);
     });
 
+    it('should give a node added to an app written in German its component\'s German text, and English after a switch', () => {
+        // Arrange
+        const handle = registerLocaleStep(components);
+        handles.push(handle);
+        const host = document.body.appendChild(document.createElement('div'));
+        const german: AppDocument = { ...documentOf(), locale: 'de', locales: { en: { children: { first: { _text: 'Heading' } } } } };
+        const app = mountApp(host, german, library);
+        apps.push(app);
+
+        // Act
+        const mounted = textOf(host);
+        app.store?.set('$.app.children.second', { component: 'heading', _text: 'Heading' });
+        const added = textOf(host);
+        handle.switchTo('en');
+        const english = textOf(host);
+
+        // Assert
+        expect(app.errors).toEqual([]);
+        expect(mounted).toBe('Überschrift');
+        expect(added.match(/Überschrift/g)).toHaveLength(2);
+        expect(english.match(/Heading/g)).toHaveLength(2);
+        expect(english).not.toContain('Überschrift');
+    });
+
     it('should leave a node alone before an application is mounted and after it is disposed', () => {
         // Arrange
         const handle = registerLocaleStep(components);

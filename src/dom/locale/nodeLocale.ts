@@ -103,6 +103,23 @@ function holdsNode(value: JsonValue): boolean {
     return isObject(value) && Object.values(value).some((item) => holdsNode(item));
 }
 
+/**
+ * The values of `source` at the leaf paths of `shape`: what the base content held where the base language's component
+ * overlay changed it, so another language puts it back
+ */
+export function pickPaths(source: JsonObject, shape: JsonObject): JsonObject {
+    const picked: JsonObject = {};
+    for (const [key, value] of Object.entries(shape)) {
+        if (!Object.hasOwn(source, key)) continue;
+        const held = source[key] as JsonValue;
+        if (isObject(value) && isObject(held)) {
+            const inner = pickPaths(held, value);
+            if (Object.keys(inner).length > 0) picked[key] = inner;
+        } else picked[key] = cloneJson(held);
+    }
+    return picked;
+}
+
 /** Merges `source` into `target` in place, deep; the values taken from `source` are copies */
 function mergeInto(target: JsonObject, source: JsonObject): void {
     for (const [key, value] of Object.entries(source)) {
@@ -132,7 +149,9 @@ function removeFrom(target: JsonObject, segments: readonly string[]): void {
  * every language's overlay learns the new content, so switching back and forth afterwards stays complete.
  *
  * The overlay of a node is what `buildAppOverlay` gives for it: its component's overlay on content that still
- * holds the component's default, then the document's `appOverrides` for its path. A keyed entry under an existing
+ * holds the component's default, then the document's `appOverrides` for its path. In the base language a node gets
+ * its component's overlay of that language (a `de` app shows the components' German texts), and every other
+ * language puts back the content that overlay changed. A keyed entry under an existing
  * node takes the component overlay's entry for its key, when there is one, and the overrides for its path.
  *
  * Timing: a write emits its `insert` event at the new path before the event at the parent that makes a list
@@ -179,8 +198,8 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
     };
 
     /** The overlay of one language for a created value, relative to the value's path */
-    const layerOf = (code: string, path: string, segments: readonly string[], value: JsonObject): JsonObject => {
-        const overrides = overridesAt(code, segments);
+    const layerOf = (code: string, path: string, segments: readonly string[], value: JsonObject, withOverrides = true): JsonObject => {
+        const overrides = withOverrides ? overridesAt(code, segments) : {};
         if (holdsNode(value)) {
             return buildAppOverlay(code, value, componentOverlays, overrides, { library, composed, instances, path });
         }
@@ -196,11 +215,15 @@ export function createNodeLocale(options: NodeLocaleOptions): NodeLocale {
         if (segments === undefined || segments.length === 0) return undefined;
         if (extra !== undefined) Object.assign(instances, extra);
         const base = extractBaseOverlay(value, [], path);
-        if (!isEmpty(base)) mergeInto((overlays[baseLocale] ??= {}), wrap(segments, base));
+        // The base language's component texts sit on the node's own; an overlay in the base language is ignored
+        const baseLayer = layerOf(baseLocale, path, segments, value, false);
+        const restore = pickPaths(base, baseLayer);
+        const baseAll = mergeValues(base, baseLayer) as JsonObject;
+        if (!isEmpty(baseAll)) mergeInto((overlays[baseLocale] ??= {}), wrap(segments, baseAll));
         const current = currentLocale();
-        let forCurrent: JsonObject | undefined;
+        let forCurrent: JsonObject | undefined = current === baseLocale && !isEmpty(baseLayer) ? baseLayer : undefined;
         for (const code of languages()) {
-            const layer = layerOf(code, path, segments, value);
+            const layer = mergeValues(restore, layerOf(code, path, segments, value)) as JsonObject;
             if (isEmpty(layer)) continue;
             mergeInto((overlays[code] ??= {}), wrap(segments, layer));
             if (code === current) forCurrent = layer;

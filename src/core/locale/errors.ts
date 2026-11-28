@@ -23,6 +23,11 @@ export function missingPath(locale: string, path: string): BuildError {
     return buildError('SUI-LOCALE-PATH', { locale, path, statePath: path });
 }
 
+/** An overlay in the app's default language: the content of the nodes is that language already */
+export function baseLanguageOverlay(locale: string, path: string): BuildError {
+    return buildError('SUI-LOCALE-BASE', { locale, path, statePath: path });
+}
+
 /** A content path the language does not translate */
 export function untranslated(locale: string, path: string): BuildError {
     return buildError('SUI-LOCALE-MISSING', { locale, path, statePath: path });

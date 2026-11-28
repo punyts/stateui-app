@@ -605,7 +605,7 @@ stroke or fades; the icon component strokes an outline with the `icon.stroke` to
 The owner tree (`knowledge-base/design/stateui-owner-tree-and-tools.md` in the ai-minion repo) splits an app into a blueprint and
 the owner's parts. `src/core/blueprint/` holds their types and the blueprint reader; `src/core/assemble/` assembles and validates an app.
 
-- **Types.** `AppBlueprint` (`title`, `uses`, `start`, `app`, `screens`, `logic`, `locales`, `icons`), `ThemePart`
+- **Types.** `AppBlueprint` (`title`, `uses`, `start`, `app`, `screens`, `logic`, `locale`, `locales`, `icons`), `ThemePart`
   (base `tokens`, `overlays` by name with a `kind` of `OVERLAY_KINDS`), `LogicModule` (`needs`, `params` and the logic
   units), `ModelPart` (`fields`), `DatasetPart` (`model?`, `records`), `ComposedPart` (a tree, `exposes` and the search
   keys) and `PatternPart` (read and checked under Patterns). `PART_KINDS` lists the owner roots and `PartRef` names a part by kind and name;
@@ -632,8 +632,8 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
   `uses.themes` (`appThemes` holds every listed theme by name), `data.{binding}` holds the bound dataset's records (for a person binding, the model's defaults over an
   empty map: `applyDefaults(model, {})`), `composed` holds
   the owner components that a node of the app node, a screen or another used component names (their trees with `exposes`,
-  without the search keys; an owner component wins over a library component of the same name), and `locales` are the
-  app's own. `logic` is the app's own units followed by each module of `uses.logic`, instantiated with its params
+  without the search keys; an owner component wins over a library component of the same name), and `locale` (the
+  language the app's texts are written in; absent when the blueprint has none) and `locales` are the app's own. `logic` is the app's own units followed by each module of `uses.logic`, instantiated with its params
   (`instantiateModule`, units named `{module}:{unit}`). Each need of a module must be bound under its own name
   (`SUI-USES-NEEDS`) to data of the model it names: a dataset's `model` or a person binding's (`SUI-USES-MODEL`, also
   for a dataset with no model). Two modules that need one name must name one model (`SUI-USES-MODEL`, naming both) and
@@ -663,8 +663,8 @@ the owner's parts. `src/core/blueprint/` holds their types and the blueprint rea
     and the whole tree is the screen `main` (a hidden-strip `tabs` deeper in it stays tabs).
   - State paths into moved nodes, whole values or inside `{{ }}`, follow them to `$.screens.{screen}` in nodes and
     logic. The document's locale overlays split the same way: a tab's part goes to its screen, the rest stays the app's.
-  - `theme.tokens` and `themes` become a theme named after the app; `theme.active` and `locale` are choices, not
-    definitions, and are dropped.
+  - `theme.tokens` and `themes` become a theme named after the app; `theme.active` is a choice, not a definition, and
+    is dropped. The document's `locale` (its default language) stays the blueprint's `locale`.
   - Each key of `data` becomes a dataset `{app}-{key}` with a model of the same name (`inferModel`), bound back under
     the key. The snapshot's `data` wins over the document's; its articulation under `app` is dropped. A list becomes
     records keyed by their `id` (a slug when the id is integer-like or repeated, `r{n}` without one).
@@ -821,7 +821,9 @@ Code is in `src/core/locale/` (exported from `./core`) and `src/dom/locale/`. `m
 
 `validateAppLocale(code, resolvedApp, componentOverlays, appOverrides, options)` returns the errors of the document's own overrides and a `SUI-LOCALE-MISSING` warning for each content path the language does not translate, in tree order, naming the language and state path. It lists at most `MAX_MISSING_PER_LANGUAGE` (50) and adds one `SUI-LOCALE-MORE` warning that counts the rest. Empty text is not counted, and a language with overlays for only some components is allowed. `validateDocument` runs the registered `locale` validator, which checks `document.locales` for `SUI-LOCALE-CONTENT`, `SUI-LOCALE-PATH` and `SUI-LOCALE-LINKED`; it cannot report missing content, because a document does not carry component overlays, so the server calls `validateAppLocale` for that.
 
-**Nodes created later.** `registerLocaleStep(componentOverlays)` registers a mount step. After `mountApp` it builds the overlay of each language (the base overlay for the mounted content, `buildAppOverlay` for the rest) for the app node and for each screen, and watches `$.app` and every `$.screens.{name}` (`createNodeLocale`'s `root` option names the root one localizer keeps). `handle.screenOverlays` holds the screens' overlays. A node written later (a keyed entry added to `children`, a `children` map added to a node, a composed node, a keyed entry such as a static select option) gets its component's overlay for the current `$.locale` in the same write, before it renders. Each language's overlay learns the new content, so `handle.switchTo(code)` keeps it translated and switching back restores the original text; a delete removes the node from the overlays. Text the author wrote that differs from the component default is kept, and the document's `locales` overrides for the path apply. Code that creates nodes itself (list and table rows, modals) calls `handle.nodes.prepare(path, node, instances?)` immediately before writing and writes what it returns; a composed node needs its `ResolveResult.instances`. Writing over an existing node is an update, not a creation, so add nodes under new keys.
+**The default language.** `document.locale` (a blueprint's `locale`, copied by `assembleApp`) names the language the app's own texts are written in; `en` when absent. Every language code matches `LANGUAGE_CODE` (`/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/`, exported with `isLanguageCode`): `readBlueprint` refuses another `locale` with `SUI-BLUEPRINT-SHAPE` at `$.locale`, `validateDocument` with `SUI-DOC-TYPE`, the runtime protocol drops a `load` or `locale` message with another code, and `scanLibrary` refuses a component locale file named with another code (`SUI-BUILD-ROLE`). The `locale` validator refuses an overlay in the default language, of the app node or of a screen, with `SUI-LOCALE-BASE` at `$.locales.<code>` or `$.screens.<name>.locales.<code>`: the nodes hold that language already. The locale step lays the components' overlay of the default language on the texts still at their component default, so an app with `locale: "de"` shows the components' German placeholders and empty states, and every other language puts those texts back.
+
+**Nodes created later.** `registerLocaleStep(componentOverlays)` registers a mount step. After `mountApp` it builds the overlay of each language (the base overlay for the mounted content with the components' overlay of the base language on top, which it applies at once; for the rest the base texts that overlay replaced, then `buildAppOverlay`) for the app node and for each screen, and watches `$.app` and every `$.screens.{name}` (`createNodeLocale`'s `root` option names the root one localizer keeps). `handle.screenOverlays` holds the screens' overlays. A node written later (a keyed entry added to `children`, a `children` map added to a node, a composed node, a keyed entry such as a static select option) gets its component's overlay for the current `$.locale` in the same write, before it renders. Each language's overlay learns the new content, so `handle.switchTo(code)` keeps it translated and switching back restores the original text; a delete removes the node from the overlays. Text the author wrote that differs from the component default is kept, and the document's `locales` overrides for the path apply. Code that creates nodes itself (list and table rows, modals) calls `handle.nodes.prepare(path, node, instances?)` immediately before writing and writes what it returns; a composed node needs its `ResolveResult.instances`. Writing over an existing node is an update, not a creation, so add nodes under new keys.
 
 ## State snapshot
 

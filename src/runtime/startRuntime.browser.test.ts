@@ -959,6 +959,41 @@ describe('startRuntime in Chromium', () => {
             expect(textOf(host)).toContain('Heading');
         });
 
+        it('should mount an app written in German with the components\' German texts and switch to its English overlay and back', () => {
+            // Arrange
+            let store: { get(path: string): unknown } | undefined;
+            const unregister = registerMountStep('test-base-locale', { start: (context) => void (store = context.store as never) });
+            const document: AppDocument = {
+                locale: 'de',
+                app: panel({ plain: { component: 'heading' }, own: { component: 'heading', _text: 'Kunden' } }),
+                locales: { en: { children: { own: { _text: 'Customers' } } } }
+            };
+
+            // Act
+            send(message('load', { document }));
+            unregister();
+            const mounted = { locale: store?.get('$.locale'), text: textOf(host) };
+            send(message('locale', { locale: 'en' }));
+            const english = { locale: store?.get('$.locale'), text: textOf(host) };
+            send(message('locale', { locale: 'fr' }));
+            const afterUnknown = { locale: store?.get('$.locale'), text: textOf(host) };
+            send(message('locale', { locale: 'de' }));
+
+            // Assert
+            expect(mounted).toEqual({ locale: 'de', text: expect.stringContaining('Ueberschrift') as unknown });
+            expect(mounted.text).toContain('Kunden');
+            expect(english.locale).toBe('en');
+            expect(english.text).toContain('Heading');
+            expect(english.text).toContain('Customers');
+            expect(english.text).not.toContain('Ueberschrift');
+            expect(afterUnknown).toEqual(english);
+            expect(errorCodes()).toEqual(['SUI-LOCALE-UNKNOWN']);
+            expect(textOf(host)).toContain('Ueberschrift');
+            expect(textOf(host)).toContain('Kunden');
+            const changed = ofType('change').map((entry) => (entry['change'] as { path: string }).path);
+            expect(changed.filter((path) => path.startsWith('$.app'))).toEqual([]);
+        });
+
         it('should change a token with the dark mode overlay and go back with light', () => {
             // Arrange
             send(message('load', { document: modalDoc() }));

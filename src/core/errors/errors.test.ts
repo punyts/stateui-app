@@ -39,6 +39,7 @@ describe('error catalog', () => {
             'SUI-LOCALE-UNKNOWN',
             'SUI-LOCALE-MORE',
             'SUI-LOCALE-LINKED',
+            'SUI-LOCALE-BASE',
             'SUI-STATE-SHARED',
             'SUI-BUILD-KEY',
             'SUI-BUILD-VALIDATOR',

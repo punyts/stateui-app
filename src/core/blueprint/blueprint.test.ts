@@ -209,6 +209,22 @@ describe('readBlueprint', () => {
         expect(errorsOf(storeWith('logic.rules', []))).toEqual(['SUI-BLUEPRINT-SHAPE $.logic.rules']);
     });
 
+    it('should read the default language and refuse one that is not a language code', () => {
+        // Arrange
+        const german = storeWith('locale', 'pt-BR');
+        const shouting = storeWith('locale', 'DE');
+        const notText = storeWith('locale', 7);
+
+        // Act
+        const read = readBlueprint(german);
+
+        // Assert
+        expect(read.errors).toEqual([]);
+        expect(read.blueprint?.locale).toBe('pt-BR');
+        expect(errorsOf(shouting)).toEqual(['SUI-BLUEPRINT-SHAPE $.locale']);
+        expect(errorsOf(notText)).toEqual(['SUI-BLUEPRINT-SHAPE $.locale']);
+    });
+
     it('should report every error of a blueprint at once and return no blueprint', () => {
         const json = storeWith('start', 'cart');
         (json['screens'] as JsonObject)['home'] = { title: 'Store' };

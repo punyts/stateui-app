@@ -20,6 +20,7 @@ import {
 } from './limits.js';
 import { CHANGE_OPS, FILE_ERROR_CODES, MAX_FLOATING, MESSAGE_TYPES, PROTOCOL_VERSION } from './messages.js';
 import { isAppEvent } from '../core/types.js';
+import { LANGUAGE_CODE } from '../core/locale/languageCode.js';
 import { MAX_REQUEST_ID, MAX_REQUEST_NOTE } from '../core/on/types.js';
 import { EXPORT_NAME_PATTERN, EXPORT_SOURCE_PATTERN, readExportRequest } from '../core/records/index.js';
 import type { MessageType, RuntimeMessage } from './messages.js';
@@ -42,7 +43,6 @@ const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 const NAME = /^[A-Za-z][A-Za-z0-9_.:-]*$/;
 /** A node's `@id` */
 const NODE_ID = /^[A-Za-z_][A-Za-z0-9_-]*$/;
-const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 /**
  * A key chord: modifiers in the order mod, shift, alt, then a letter, a digit, `-`, `=` or `escape`. A chord with no
  * `mod` (a bare key such as `v`, or `shift+s`) goes to the host only while the person is not typing
@@ -246,7 +246,7 @@ function isInspectedNode(value: unknown): boolean {
 }
 
 function isLocale(value: unknown): boolean {
-    return typeof value === 'string' && value.length <= MAX_NAME_LENGTH && LOCALE.test(value);
+    return typeof value === 'string' && value.length <= MAX_NAME_LENGTH && LANGUAGE_CODE.test(value);
 }
 
 /** The `active` of a `load`: theme overlay names by kind, a few at most */

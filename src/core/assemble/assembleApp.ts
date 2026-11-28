@@ -238,6 +238,7 @@ export function assembleApp(blueprint: AppBlueprint, parts: PartSource, options:
     if (marked.share.length > 0) document.share = marked.share;
     if (blueprint.uses?.external !== undefined && Object.keys(blueprint.uses.external).length > 0) document.external = cloneJson(blueprint.uses.external as unknown as JsonValue) as unknown as AppDocument['external'];
     if (blueprint.icons !== undefined && Object.keys(blueprint.icons).length > 0) document.icons = cloneJson(blueprint.icons as unknown as JsonValue) as unknown as AppDocument['icons'];
+    if (blueprint.locale !== undefined) document.locale = blueprint.locale;
     if (blueprint.locales !== undefined) document.locales = cloneJson(blueprint.locales as unknown as JsonValue) as AppDocument['locales'];
 
     if (started !== undefined) {

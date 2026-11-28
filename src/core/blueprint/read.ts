@@ -6,9 +6,10 @@ import { appIconProblems } from '../icons/appIcons.js';
 import { ephemeralProblems } from '../ephemeral/ephemeral.js';
 import { declarationProblems, isKeyName } from './declaration.js';
 import { isPartName } from './names.js';
+import { isLanguageCode } from '../locale/languageCode.js';
 import type { AppBlueprint } from './types.js';
 
-const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locales', 'icons', 'ephemeral'];
+const BLUEPRINT_KEYS = ['title', 'uses', 'start', 'app', 'screens', 'logic', 'locale', 'locales', 'icons', 'ephemeral'];
 const USES_KEYS = ['themes', 'data', 'logic', 'external'];
 
 /** The state roots another app's path may be read under */
@@ -71,6 +72,7 @@ class Reader {
         else if (typeof start !== 'string') this.shape('$.start', 'must name the first screen');
         else if (screens !== undefined && !Object.hasOwn(screens, start)) this.shape('$.start', `"${start}" names no screen`);
         if (json['logic'] !== undefined) this.logic(json['logic'], '$.logic');
+        if (json['locale'] !== undefined && !isLanguageCode(json['locale'])) this.shape('$.locale', 'must be a language code such as "en" or "pt-BR"');
         if (json['locales'] !== undefined) this.locales(json['locales'], '$.locales');
         if (json['icons'] !== undefined) for (const problem of appIconProblems(json['icons'], '$.icons')) this.shape(problem.path, problem.reason);
         if (json['ephemeral'] !== undefined) for (const problem of ephemeralProblems(json['ephemeral'], '$.ephemeral')) this.shape(problem.path, problem.reason);
@@ -201,8 +203,8 @@ class Reader {
 }
 
 /**
- * Reads an app blueprint: its keys, the shape of `uses`, the app and screen nodes, typed screen params, `start` and
- * the app's own `icons` (`appIconProblems`).
+ * Reads an app blueprint: its keys, the shape of `uses`, the app and screen nodes, typed screen params, `start`, the
+ * default language `locale` (`LANGUAGE_CODE`) and the app's own `icons` (`appIconProblems`).
  * The contents of `logic`, the parts `uses` names and the app node are checked when the app is assembled
  */
 export function readBlueprint(json: JsonValue): ReadBlueprintResult {

@@ -69,6 +69,20 @@ describe('assembleApp', () => {
         expect(document.locales).toEqual(STORE_APP.locales);
     });
 
+    it('should copy the default language to the document and leave it out when the blueprint has none', () => {
+        // Arrange
+        const french = { ...copy(STORE_APP), locale: 'fr' };
+
+        // Act
+        const withLocale = assembleApp(french, STORE_PARTS);
+        const without = assembleApp(STORE_APP, STORE_PARTS);
+
+        // Assert
+        expect(withLocale.errors).toEqual([]);
+        expect(withLocale.document.locale).toBe('fr');
+        expect(Object.hasOwn(without.document, 'locale')).toBe(false);
+    });
+
     it('should leave screens and start out of the document of an app with no screens, which is then valid', () => {
         // Arrange
         const app = copy(STORE_APP);
