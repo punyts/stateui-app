@@ -2,7 +2,7 @@
 
 ## Unreleased
 - **What Save a record writes runs as the editor expects** (docs/design/magnetic-editor-links-and-presses.md, stage L6).
-  Pinned, no code change: `save-data` reads `#title.value` through the node's name, a rule on the accepted result clears
+  Pinned, no code change: `save-data` reads `#title.value` through the node's name, a rule on the accepted result of a save with `await: 'applied'` clears
   and navigates, `{ form: '#entry' }` saves a record keyed by the form's field keys, and a press that went to another
   screen first still saves what was typed. An expression cannot name a node (`{{ coalesce(#pages.value, null) }}` is
   `SUI-LOGIC-EXPRESSION`), so a number source is the plain reference, which gives "" while the field is empty. Test:

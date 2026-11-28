@@ -51,7 +51,7 @@ const CLEAR: JsonValue[] = [{ command: 'set', target: '#title.value', value: '' 
 function saveRules(value: JsonValue, then: JsonValue[]): LogicDocument {
     return {
         rules: {
-            addBookPressed: { when: { path: '#addBook.pressed' }, do: [{ command: 'save-data', into: '$.data.books', value, as: 'addBookSaved' }] },
+            addBookPressed: { when: { path: '#addBook.pressed' }, do: [{ command: 'save-data', into: '$.data.books', value, as: 'addBookSaved', await: 'applied' }] },
             addBookSaved: { when: { result: 'addBookSaved', is: 'accepted' }, do: then }
         }
     } as unknown as LogicDocument;
