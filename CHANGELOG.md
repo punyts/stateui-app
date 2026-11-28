@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **A rule sets a text's content: `#count._text`** (docs/design/magnetic-editor-links-and-presses.md, stage L7).
+  Pinned, no code change: a rule triggered by `$.data.books` whose `set` writes `{{ string(size($.data.books)) }}`
+  into `#count._text` is accepted by `readLogic` with no error or warning, runs once at start and again when a record
+  is added, and `sum`, `min` and `max` over a field give their values as text. Test:
+  `src/core/logic/computedText.test.ts`.
 - **What Save a record writes runs as the editor expects** (docs/design/magnetic-editor-links-and-presses.md, stage L6).
   Pinned, no code change: `save-data` reads `#title.value` through the node's name, a rule on the accepted result of a save with `await: 'applied'` clears
   and navigates, `{ form: '#entry' }` saves a record keyed by the form's field keys, and a press that went to another
